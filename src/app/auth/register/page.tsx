@@ -62,9 +62,9 @@ export default function RegisterPage() {
         router.push('/auth/login');
       }, 2000);
       
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       console.error('Registration error:', err);
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }

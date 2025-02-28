@@ -46,9 +46,9 @@ export default function Dashboard() {
         
         const data = await response.json();
         setProfile(data.user);
-      } catch (err: any) {
+      } catch (err: Error | unknown) {
         console.error('Error fetching profile:', err);
-        setError(err.message || 'An error occurred while fetching your profile');
+        setError(err instanceof Error ? err.message : 'An error occurred while fetching your profile');
       } finally {
         setLoading(false);
       }

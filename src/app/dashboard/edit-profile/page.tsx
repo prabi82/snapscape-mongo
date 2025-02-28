@@ -42,9 +42,9 @@ export default function EditProfilePage() {
         
         setName(data.user.name || '');
         setEmail(data.user.email || '');
-      } catch (err: any) {
+      } catch (err: Error | unknown) {
         console.error('Error fetching profile:', err);
-        setError(err.message || 'An error occurred while fetching your profile');
+        setError(err instanceof Error ? err.message : 'An error occurred while fetching your profile');
       } finally {
         setLoading(false);
       }
@@ -93,9 +93,9 @@ export default function EditProfilePage() {
         router.refresh();
       }, 1000);
       
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       console.error('Update profile error:', err);
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setUpdating(false);
     }

@@ -72,9 +72,9 @@ export default function CreateAdminPage() {
       setPassword('');
       setConfirmPassword('');
       
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       console.error('Admin creation error:', err);
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
