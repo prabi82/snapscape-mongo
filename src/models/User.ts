@@ -19,7 +19,13 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
+    required: [
+      function() {
+        // Only require password for credentials provider (not social logins)
+        return !this.provider || this.provider === 'credentials';
+      },
+      'Please provide a password'
+    ],
     minlength: [6, 'Password must be at least 6 characters'],
     select: false, // Don't return password in queries by default
   },
@@ -28,15 +34,29 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
+  // Social provider fields
+  provider: {
+    type: String,
+    enum: ['credentials', 'google', 'facebook', 'apple', null],
+    default: 'credentials',
+  },
+  providerId: {
+    type: String,
+    default: null,
+  },
+  image: {
+    type: String,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
   },
 }, { timestamps: true });
 
-// Hash password before saving
+// Hash password before saving, but only if it's modified and exists
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
+  if (!this.isModified('password') || !this.password) {
     next();
     return;
   }

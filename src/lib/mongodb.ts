@@ -7,7 +7,7 @@ if (!process.env.MONGODB_URI) {
 const uri = process.env.MONGODB_URI;
 const options = {};
 
-let client;
+let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
 if (process.env.NODE_ENV === 'development') {
@@ -21,7 +21,8 @@ if (process.env.NODE_ENV === 'development') {
     client = new MongoClient(uri, options);
     globalWithMongo._mongoClientPromise = client.connect();
   }
-  clientPromise = globalWithMongo._mongoClientPromise;
+  // Ensure _mongoClientPromise is defined before assignment
+  clientPromise = globalWithMongo._mongoClientPromise as Promise<MongoClient>;
 } else {
   // In production mode, it's best to not use a global variable.
   client = new MongoClient(uri, options);
