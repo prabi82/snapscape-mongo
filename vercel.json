@@ -5,12 +5,12 @@
   "framework": "nextjs",
   "installCommand": "npm install",
   "env": {
-    "MONGODB_URI": "mongodb+srv://snap:C4U2QqNfr8OlzNjt@snapscape-mongo.gli1z.mongodb.net/?retryWrites=true&w=majority&appName=snapscape-mongo",
-    "NEXTAUTH_SECRET": "C4U2QqNfr8OlzNjt",
-    "NEXTAUTH_URL": "https://snapscape.onlyoman.com",
-    "CLOUDINARY_CLOUD_NAME": "dfhn6beii",
-    "CLOUDINARY_API_KEY": "781776385212242",
-    "CLOUDINARY_API_SECRET": "qsk6VO65Nwai70evD1nt6LZJuzw"
+    "MONGODB_URI": "mongodb+srv://username:password@cluster.example.mongodb.net/database",
+    "NEXTAUTH_SECRET": "your-auth-secret-here",
+    "NEXTAUTH_URL": "https://your-app-url.com",
+    "CLOUDINARY_CLOUD_NAME": "your-cloud-name",
+    "CLOUDINARY_API_KEY": "your-api-key",
+    "CLOUDINARY_API_SECRET": "your-api-secret"
   },
   "functions": {
     "src/app/api/**/*": {

@@ -2,7 +2,7 @@
 const { v2: cloudinary } = require('cloudinary');
 
 // Replace these with your actual Cloudinary credentials
-const CLOUD_NAME = "dfhn6beii"; // From your current configuration
+const CLOUD_NAME = "your-cloud-name"; // Replace with your cloud name
 const API_KEY = "REPLACE_WITH_YOUR_ACTUAL_API_KEY";
 const API_SECRET = "REPLACE_WITH_YOUR_ACTUAL_API_SECRET";
 

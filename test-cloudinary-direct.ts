@@ -8,7 +8,7 @@ import { v2 as cloudinary } from 'cloudinary';
 async function testCloudinaryDirectly(): Promise<void> {
   // REPLACE THESE VALUES WITH YOUR ACTUAL CREDENTIALS
   const credentials = {
-    cloudName: "dfhn6beii", // Keep your current cloud name
+    cloudName: "your-cloud-name", // Replace with your cloud name
     apiKey: "REPLACE_WITH_YOUR_ACTUAL_API_KEY",
     apiSecret: "REPLACE_WITH_YOUR_ACTUAL_API_SECRET"
   };
@@ -86,7 +86,7 @@ function maskString(input: string): string {
  * Validate the credentials format
  */
 function validateCredentials(credentials: { cloudName: string, apiKey: string, apiSecret: string }): { valid: boolean, message?: string } {
-  if (!credentials.cloudName || credentials.cloudName === "dfhn6beii") {
+  if (!credentials.cloudName || credentials.cloudName === "your-cloud-name") {
     return { valid: true }; // We're using the known cloud name
   }
   
