@@ -10,12 +10,13 @@ import Competition from '@/models/Competition';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept',
 };
 
 // Handle OPTIONS requests for CORS preflight
-export async function OPTIONS() {
-  return new NextResponse(null, {
+export async function OPTIONS(request: NextRequest) {
+  console.log('OPTIONS request received at /api/photos/upload');
+  return new Response(null, {
     status: 200,
     headers: corsHeaders,
   });
@@ -32,6 +33,8 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
+    console.log('Authentication check:', { hasSession: Boolean(session), hasUser: Boolean(session?.user) });
+    
     if (!session || !session.user) {
       console.log('Unauthorized access attempt');
       return NextResponse.json(
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
     } catch (formError) {
       console.error('Failed to parse FormData:', formError);
       return NextResponse.json(
-        { success: false, message: 'Failed to parse form data' },
+        { success: false, message: 'Failed to parse form data', error: formError.message },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -66,6 +69,7 @@ export async function POST(request: NextRequest) {
       hasTitle: Boolean(title),
       hasDescription: Boolean(description),
       competitionId,
+      photoName: photo?.name,
       photoType: photo?.type,
       photoSize: photo?.size,
     });
@@ -114,15 +118,18 @@ export async function POST(request: NextRequest) {
       const uniqueFilename = `${session.user.id}_${Date.now()}`;
 
       // Simple upload with minimal options
+      console.log('Starting Cloudinary upload with unique filename:', uniqueFilename);
       const uploadResult = await uploadToCloudinary(buffer, {
         folder: `snapscape/competitions/${competitionId}`,
         public_id: uniqueFilename,
       });
 
+      console.log('Cloudinary upload result received:', uploadResult ? 'success' : 'undefined');
+      
       if (!uploadResult || !uploadResult.secure_url) {
         console.error('No URL returned from Cloudinary');
         return NextResponse.json(
-          { success: false, message: 'Failed to upload image' },
+          { success: false, message: 'Failed to upload image', error: 'No URL returned from cloud storage' },
           { status: 500, headers: corsHeaders }
         );
       }
@@ -162,7 +169,8 @@ export async function POST(request: NextRequest) {
         { 
           success: false, 
           message: 'Error uploading image to cloud storage',
-          error: cloudinaryError.message 
+          error: cloudinaryError.message,
+          stack: cloudinaryError.stack 
         },
         { status: 500, headers: corsHeaders }
       );
@@ -170,7 +178,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Server error:', error);
     return NextResponse.json(
-      { success: false, message: 'Server error', error: error.message },
+      { success: false, message: 'Server error', error: error.message, stack: error.stack },
       { status: 500, headers: corsHeaders }
     );
   }

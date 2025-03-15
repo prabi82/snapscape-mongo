@@ -1,23 +1,96 @@
 import { v2 as cloudinary } from 'cloudinary';
 
-// Function to get Cloudinary config (called on-demand to ensure latest env vars)
-function getCloudinaryConfig() {
-  const config = {
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  };
+// Keep track of initialization status
+let isInitialized = false;
 
-  // Validate Cloudinary configuration
-  if (!config.cloud_name || !config.api_key || !config.api_secret) {
-    console.error('Missing Cloudinary configuration. Please check your environment variables.', {
-      cloud_name_exists: !!config.cloud_name,
-      api_key_exists: !!config.api_key,
-      api_secret_exists: !!config.api_secret
+// Configure Cloudinary once at startup
+function initializeCloudinary() {
+  try {
+    // Get the credentials from environment variables
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
+    const apiKey = process.env.CLOUDINARY_API_KEY || '';
+    const apiSecret = process.env.CLOUDINARY_API_SECRET || '';
+    
+    // Log availability of credentials (not the actual values for security)
+    console.log('Cloudinary initialization check:', {
+      hasCloudName: Boolean(cloudName),
+      cloudNameLength: cloudName.length,
+      hasApiKey: Boolean(apiKey),
+      apiKeyLength: apiKey.length,
+      hasApiSecret: Boolean(apiSecret),
+      apiSecretLength: apiSecret.length
     });
+    
+    // Validate credentials
+    if (!cloudName || !apiKey || !apiSecret) {
+      console.warn('⚠️ Missing Cloudinary credentials in environment variables');
+      return false;
+    }
+    
+    // Check for common format issues
+    if (apiSecret.includes('cloudinary://')) {
+      console.warn('⚠️ API Secret appears to be in URL format - should be just the secret value');
+      // Try to extract the secret from the URL
+      try {
+        const url = new URL(apiSecret);
+        const extractedSecret = url.password;
+        if (extractedSecret) {
+          console.log('Attempting to extract secret from URL format');
+          cloudinary.config({
+            cloud_name: cloudName,
+            api_key: apiKey,
+            api_secret: extractedSecret,
+            secure: true
+          });
+          isInitialized = true;
+          return true;
+        }
+      } catch (e) {
+        console.error('Failed to parse API secret as URL:', e);
+      }
+    }
+    
+    // Regular initialization
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      secure: true
+    });
+    
+    console.log('✅ Cloudinary initialized successfully');
+    isInitialized = true;
+    return true;
+  } catch (error) {
+    console.error('❌ Error initializing Cloudinary:', error);
+    return false;
   }
+}
 
-  return config;
+// Try to initialize Cloudinary right away
+initializeCloudinary();
+
+/**
+ * Check if Cloudinary is configured correctly by performing a simple API call
+ * @returns Promise that resolves to a boolean indicating if Cloudinary is working
+ */
+export async function verifyCloudinaryConnection(): Promise<boolean> {
+  try {
+    // Ensure Cloudinary is initialized
+    if (!isInitialized) {
+      const success = initializeCloudinary();
+      if (!success) {
+        return false;
+      }
+    }
+    
+    // Test the connection with a ping
+    const result = await cloudinary.api.ping();
+    return result && result.status === 'ok';
+  } catch (error) {
+    console.error('Cloudinary verification failed:', error);
+    return false;
+  }
 }
 
 /**
@@ -32,45 +105,49 @@ export async function uploadToCloudinary(
   options: any = {}
 ): Promise<any> {
   return new Promise((resolve, reject) => {
-    // Get latest config and configure cloudinary
-    const cloudinaryConfig = getCloudinaryConfig();
-    
-    // Always configure with latest config before each operation
-    cloudinary.config({
-      cloud_name: cloudinaryConfig.cloud_name || '',
-      api_key: cloudinaryConfig.api_key || '',
-      api_secret: cloudinaryConfig.api_secret || '',
-    });
-
-    // Check if Cloudinary is properly configured
-    if (!cloudinaryConfig.cloud_name || !cloudinaryConfig.api_key || !cloudinaryConfig.api_secret) {
-      return reject(new Error('Cloudinary is not properly configured. Check your environment variables.'));
+    // Ensure Cloudinary is initialized
+    if (!isInitialized) {
+      const success = initializeCloudinary();
+      if (!success) {
+        return reject(new Error('Cloudinary is not properly configured. Check your environment variables.'));
+      }
     }
 
-    console.log('Cloudinary config for upload:', {
-      cloud_name: cloudinaryConfig.cloud_name,
-      api_key_length: cloudinaryConfig.api_key?.length,
-      api_secret_length: cloudinaryConfig.api_secret?.length,
-      api_secret_first4: cloudinaryConfig.api_secret?.substring(0, 4),
+    // Log Cloudinary configuration (but not the actual secrets)
+    console.log('Cloudinary upload configuration:', {
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      options: {
+        folder: options.folder,
+        public_id: options.public_id,
+      }
     });
 
+    // Basic upload options
     const uploadOptions = {
       ...options,
-      // Don't use transformation here, it might be causing signature issues
       overwrite: true,
+      resource_type: 'auto'
     };
 
-    // Convert buffer to base64 for Cloudinary
-    const base64String = `data:image/png;base64,${buffer.toString('base64')}`;
+    // Convert buffer to base64 data URI (works better than raw buffers)
+    const base64Data = buffer.toString('base64');
+    const dataURI = `data:image/jpeg;base64,${base64Data}`;
 
+    // Use simple upload method
     cloudinary.uploader.upload(
-      base64String,
+      dataURI,
       uploadOptions,
       (error, result) => {
         if (error) {
           console.error('Cloudinary upload error:', error);
           return reject(error);
         }
+        console.log('Upload successful, result:', {
+          public_id: result.public_id,
+          url: result.secure_url,
+          format: result.format,
+          resource_type: result.resource_type
+        });
         return resolve(result);
       }
     );
@@ -85,21 +162,14 @@ export async function uploadToCloudinary(
  */
 export async function deleteFromCloudinary(publicId: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    // Get latest config and configure cloudinary
-    const cloudinaryConfig = getCloudinaryConfig();
-    
-    // Always configure with latest config before each operation
-    cloudinary.config({
-      cloud_name: cloudinaryConfig.cloud_name || '',
-      api_key: cloudinaryConfig.api_key || '',
-      api_secret: cloudinaryConfig.api_secret || '',
-    });
-    
-    // Check if Cloudinary is properly configured
-    if (!cloudinaryConfig.cloud_name || !cloudinaryConfig.api_key || !cloudinaryConfig.api_secret) {
-      return reject(new Error('Cloudinary is not properly configured. Check your environment variables.'));
+    // Ensure Cloudinary is initialized
+    if (!isInitialized) {
+      const success = initializeCloudinary();
+      if (!success) {
+        return reject(new Error('Cloudinary is not properly configured. Check your environment variables.'));
+      }
     }
-    
+
     cloudinary.uploader.destroy(publicId, (error, result) => {
       if (error) {
         console.error('Cloudinary delete error:', error);
@@ -121,15 +191,13 @@ export function getCloudinaryUrl(
   publicId: string,
   transformations: Record<string, any> = {}
 ): string {
-  // Get latest config and configure cloudinary
-  const cloudinaryConfig = getCloudinaryConfig();
-  
-  // Always configure with latest config before each operation
-  cloudinary.config({
-    cloud_name: cloudinaryConfig.cloud_name || '',
-    api_key: cloudinaryConfig.api_key || '',
-    api_secret: cloudinaryConfig.api_secret || '',
-  });
+  // Ensure Cloudinary is initialized
+  if (!isInitialized) {
+    initializeCloudinary();
+  }
   
   return cloudinary.url(publicId, transformations);
-} 
+}
+
+// Re-export the Cloudinary instance
+export default cloudinary; 

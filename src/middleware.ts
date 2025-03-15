@@ -33,6 +33,20 @@ export async function middleware(request: NextRequest) {
     }
   }
   
+  // Handle OPTIONS request for API endpoints
+  if (pathname.startsWith('/api') && request.method === 'OPTIONS') {
+    console.log('Middleware handling OPTIONS request for:', pathname);
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
+  }
+  
   return NextResponse.next();
 }
 
@@ -40,5 +54,6 @@ export const config = {
   matcher: [
     '/dashboard/:path*',
     '/admin/:path*',
+    '/api/:path*',
   ],
 }; 
