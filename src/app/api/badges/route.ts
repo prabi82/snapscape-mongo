@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { Badge, UserBadge } from '@/models/Badge';
+// Use the helper for model imports
+import { Badge, UserBadge, Notification, ensureModelsAreLoaded } from '@/lib/model-import-helper';
 import dbConnect from '@/lib/dbConnect';
 
 // GET all badges or user badges
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
+    // Ensure models are loaded
+    ensureModelsAreLoaded();
     const session = await getServerSession();
     
     const url = new URL(req.url);

@@ -70,6 +70,10 @@ const competitionSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  coverImage: {
+    type: String,
+    trim: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

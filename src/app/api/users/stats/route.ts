@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
-import Photo from '@/models/Photo';
-import Rating from '@/models/Rating';
-import { Badge, UserBadge } from '@/models/Badge';
-import Competition from '@/models/Competition';
-import Result from '@/models/Result';
+// Use the helper for model imports
+import { 
+  Photo, 
+  Rating, 
+  Badge, 
+  UserBadge, 
+  Competition, 
+  Result,
+  ensureModelsAreLoaded
+} from '@/lib/model-import-helper';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,6 +27,9 @@ export async function GET(req: NextRequest) {
     
     // Connect to the database
     await dbConnect();
+    
+    // Ensure models are loaded
+    ensureModelsAreLoaded();
     
     const userId = session.user.id;
     

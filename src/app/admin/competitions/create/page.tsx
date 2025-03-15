@@ -1,0 +1,641 @@
+'use client';
+
+import { useState, FormEvent, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+
+interface CompetitionFormData {
+  title: string;
+  description: string;
+  theme: string;
+  rules: string;
+  prizes: string;
+  startDate: string;
+  endDate: string;
+  votingEndDate: string;
+  submissionLimit: number;
+  votingCriteria: string;
+  status: 'upcoming' | 'active' | 'voting' | 'completed';
+}
+
+export default function CreateCompetition() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Initialize form data with default values
+  const [formData, setFormData] = useState<CompetitionFormData>({
+    title: '',
+    description: '',
+    theme: '',
+    rules: '',
+    prizes: '',
+    startDate: '',
+    endDate: '',
+    votingEndDate: '',
+    submissionLimit: 5,
+    votingCriteria: 'composition,creativity,technical',
+    status: 'upcoming',
+  });
+
+  // Add coverImage to the form state and file handling capability
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Add a new state for image upload validation
+  const [imageValidationError, setImageValidationError] = useState<string | null>(null);
+
+  // Check if user is authenticated and admin
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user?.role !== 'admin') {
+      router.push('/');
+    }
+  }, [status, session, router]);
+
+  // Helper function to set time to end of day in Muscat time (GMT+4)
+  const setEndOfDayMuscat = (dateString: string): string => {
+    if (!dateString) return '';
+    
+    try {
+      // When using input type="date", the format is YYYY-MM-DD
+      // Add the end of day time in Muscat time zone
+      const formattedDate = `${dateString}T23:59:59.999Z`;
+      
+      // Create a proper date object
+      const date = new Date(formattedDate);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date created:', dateString, formattedDate);
+        return '';
+      }
+      
+      console.log(`Original date: ${dateString}, Formatted date: ${date.toISOString()}`);
+      return date.toISOString();
+    } catch (err) {
+      console.error('Error formatting date:', err, dateString);
+      return '';
+    }
+  };
+
+  // Handle form input changes
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    // Convert to number for submission limit
+    if (name === 'submissionLimit') {
+      setFormData({
+        ...formData,
+        [name]: parseInt(value, 10) || 0,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
+  };
+
+  // Update the handleImageChange function to validate image file
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageValidationError(null);
+    const file = e.target.files?.[0] || null;
+    
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setImageValidationError('Please upload a valid image file (JPG, PNG or WebP)');
+        setCoverImage(null);
+        setCoverImagePreview(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        setImageValidationError('Image size must be less than 5MB');
+        setCoverImage(null);
+        setCoverImagePreview(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      
+      // Set the cover image and create preview
+      setCoverImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setCoverImage(null);
+      setCoverImagePreview(null);
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+    setImageValidationError(null);
+
+    try {
+      // Validate form data
+      if (!formData.title || !formData.description || !formData.theme || !formData.startDate || !formData.endDate || !formData.votingEndDate) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      console.log('Original form data:', formData);
+
+      // Prepare the form data with end-of-day times
+      const submissionData = {
+        ...formData,
+        startDate: setEndOfDayMuscat(formData.startDate),
+        endDate: setEndOfDayMuscat(formData.endDate),
+        votingEndDate: setEndOfDayMuscat(formData.votingEndDate)
+      };
+
+      console.log('Submission data with formatted dates:', submissionData);
+
+      // Check for missing required fields
+      if (!submissionData.startDate || !submissionData.endDate || !submissionData.votingEndDate) {
+        throw new Error('One or more dates are invalid. Please check the date formats.');
+      }
+
+      // Check date logic
+      const startDate = new Date(submissionData.startDate);
+      const endDate = new Date(submissionData.endDate);
+      const votingEndDate = new Date(submissionData.votingEndDate);
+
+      if (endDate <= startDate) {
+        throw new Error('End date must be after start date');
+      }
+
+      if (votingEndDate <= endDate) {
+        throw new Error('Voting end date must be after submission end date');
+      }
+
+      let response;
+
+      // Handle form submission based on whether there's a cover image
+      if (coverImage) {
+        // Do an additional check to ensure the image is valid
+        if (imageValidationError) {
+          throw new Error(imageValidationError);
+        }
+
+        const formDataWithImage = new FormData();
+        
+        // Add all form fields
+        Object.entries(submissionData).forEach(([key, value]) => {
+          formDataWithImage.append(key, value.toString());
+        });
+        
+        // Add cover image
+        formDataWithImage.append('coverImage', coverImage);
+        
+        // Submit form with image
+        console.log('Submitting with cover image:', coverImage.name, coverImage.size, coverImage.type);
+        response = await fetch('/api/competitions/with-cover', {
+          method: 'POST',
+          body: formDataWithImage,
+        });
+      } else {
+        // Submit form without image using regular JSON
+        response = await fetch('/api/competitions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(submissionData),
+        });
+      }
+
+      // Check if response is okay
+      if (!response.ok) {
+        let errorMessage = 'Failed to create competition';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          console.error('Could not parse error response', e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Parse the response to verify success
+      const responseData = await response.json();
+      console.log('Server response:', responseData);
+
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Failed to create competition');
+      }
+
+      // Verify the competition has a coverImage if one was uploaded
+      if (coverImage && !responseData.data?.coverImage) {
+        console.warn('Cover image was not saved properly in the server response');
+      }
+
+      // Handle success
+      setSuccessMessage(coverImage ? 'Competition created successfully with cover image!' : 'Competition created successfully');
+      
+      // Clear form
+      setFormData({
+        title: '',
+        description: '',
+        theme: '',
+        rules: '',
+        prizes: '',
+        startDate: '',
+        endDate: '',
+        votingEndDate: '',
+        submissionLimit: 5,
+        votingCriteria: 'composition,creativity,technical',
+        status: 'upcoming',
+      });
+
+      // Clear cover image
+      setCoverImage(null);
+      setCoverImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+      // Redirect to competitions management after a short delay
+      setTimeout(() => {
+        router.push('/admin/competitions');
+      }, 2000);
+
+    } catch (err: any) {
+      console.error('Error creating competition:', err);
+      setError(err.message || 'An error occurred while creating the competition');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (status === 'loading') {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Create Competition</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Set up a new photography competition for SnapScape users.
+          </p>
+        </div>
+        <Link
+          href="/admin/competitions"
+          className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+        >
+          Back to Competitions
+        </Link>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+          <p className="text-green-700">{successMessage}</p>
+        </div>
+      )}
+
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+            {/* Title */}
+            <div className="sm:col-span-4">
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                Title <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  type="text"
+                  name="title"
+                  id="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+
+            {/* Theme */}
+            <div className="sm:col-span-2">
+              <label htmlFor="theme" className="block text-sm font-medium text-gray-700">
+                Theme <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  type="text"
+                  name="theme"
+                  id="theme"
+                  value={formData.theme}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="sm:col-span-6">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Description <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={4}
+                  value={formData.description}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+            </div>
+
+            {/* Rules */}
+            <div className="sm:col-span-6">
+              <label htmlFor="rules" className="block text-sm font-medium text-gray-700">
+                Rules
+              </label>
+              <div className="mt-1">
+                <textarea
+                  id="rules"
+                  name="rules"
+                  rows={4}
+                  value={formData.rules}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+            </div>
+
+            {/* Prizes */}
+            <div className="sm:col-span-6">
+              <label htmlFor="prizes" className="block text-sm font-medium text-gray-700">
+                Prizes
+              </label>
+              <div className="mt-1">
+                <textarea
+                  id="prizes"
+                  name="prizes"
+                  rows={4}
+                  value={formData.prizes}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+            </div>
+
+            {/* Dates Section */}
+            <div className="sm:col-span-6">
+              <h3 className="text-lg font-medium text-gray-900">Important Dates</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                All dates will be set to end of day (Muscat time).
+              </p>
+            </div>
+
+            {/* Start Date */}
+            <div className="sm:col-span-2">
+              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+                Start Date <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  type="date"
+                  name="startDate"
+                  id="startDate"
+                  value={formData.startDate}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+
+            {/* End Date */}
+            <div className="sm:col-span-2">
+              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
+                Submission End Date <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  type="date"
+                  name="endDate"
+                  id="endDate"
+                  value={formData.endDate}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+
+            {/* Voting End Date */}
+            <div className="sm:col-span-2">
+              <label htmlFor="votingEndDate" className="block text-sm font-medium text-gray-700">
+                Voting End Date <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  type="date"
+                  name="votingEndDate"
+                  id="votingEndDate"
+                  value={formData.votingEndDate}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+
+            {/* Additional Settings */}
+            <div className="sm:col-span-6">
+              <h3 className="text-lg font-medium text-gray-900">Additional Settings</h3>
+            </div>
+
+            {/* Submission Limit */}
+            <div className="sm:col-span-2">
+              <label htmlFor="submissionLimit" className="block text-sm font-medium text-gray-700">
+                Submission Limit
+              </label>
+              <div className="mt-1">
+                <input
+                  type="number"
+                  name="submissionLimit"
+                  id="submissionLimit"
+                  value={formData.submissionLimit}
+                  onChange={handleChange}
+                  min={1}
+                  max={10}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Maximum photos per participant (1-10)</p>
+            </div>
+
+            {/* Status */}
+            <div className="sm:col-span-2">
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                Competition Status <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <select
+                  id="status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                >
+                  <option value="upcoming">Upcoming</option>
+                  <option value="active">Active</option>
+                  <option value="voting">Voting</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Voting Criteria */}
+            <div className="sm:col-span-6">
+              <label htmlFor="votingCriteria" className="block text-sm font-medium text-gray-700">
+                Voting Criteria
+              </label>
+              <div className="mt-1">
+                <input
+                  type="text"
+                  name="votingCriteria"
+                  id="votingCriteria"
+                  value={formData.votingCriteria}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                  placeholder="e.g. Creativity, Composition, Technical Quality (comma separated)"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Separate criteria with commas</p>
+            </div>
+
+            {/* Cover Image */}
+            <div className="sm:col-span-6">
+              <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700">
+                Cover Image
+              </label>
+              <div className="mt-2">
+                {coverImagePreview ? (
+                  <div className="relative">
+                    <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-300">
+                      <img
+                        src={coverImagePreview}
+                        alt="Competition cover"
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCoverImage(null);
+                        setCoverImagePreview(null);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = '';
+                        }
+                      }}
+                      className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-md hover:bg-gray-100"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex justify-center border-2 border-dashed border-gray-300 rounded-lg p-6">
+                    <div className="text-center">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="mt-1 text-sm text-gray-500">
+                        No cover image set
+                      </p>
+                      <input
+                        id="coverImage"
+                        name="coverImage"
+                        type="file"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mt-2 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        Upload Cover Image
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {coverImagePreview && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      Change Image
+                    </button>
+                  </div>
+                )}
+                {imageValidationError && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {imageValidationError}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Recommended size: 1200x600 pixels. The cover image will be displayed at the top of the competition page.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 flex justify-end">
+            <Link
+              href="/admin/competitions"
+              className="mr-4 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Cancel
+            </Link>
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {loading ? 'Creating...' : 'Create Competition'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+} 

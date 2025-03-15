@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
 import Competition from '@/models/Competition';
 import Photo from '@/models/Photo';
+import PhotoSubmission from '@/models/PhotoSubmission';
 
 // GET all competitions
 export async function GET(req: NextRequest) {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     
     // Parse query parameters
-    const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const skip = (page - 1) * limit;
     
@@ -44,11 +45,11 @@ export async function GET(req: NextRequest) {
     
     if (participated === 'true') {
       // Find competitions where the user has submitted photos
-      const userSubmissions = await Photo.distinct('competition', { user: session.user.id });
+      const userSubmissions = await PhotoSubmission.distinct('competition', { user: session.user.id });
       participatedFilter = { _id: { $in: userSubmissions } };
     } else if (participated === 'false') {
       // Find competitions where the user has not submitted photos
-      const userSubmissions = await Photo.distinct('competition', { user: session.user.id });
+      const userSubmissions = await PhotoSubmission.distinct('competition', { user: session.user.id });
       participatedFilter = { _id: { $nin: userSubmissions } };
     }
     
@@ -69,18 +70,28 @@ export async function GET(req: NextRequest) {
     // Get submission counts for each competition
     const competitionsWithSubmissionCount = await Promise.all(
       competitions.map(async (competition) => {
-        const submissionCount = await Photo.countDocuments({ competition: competition._id });
+        // Count submissions from both models
+        const photoCount = await Photo.countDocuments({ competition: competition._id });
+        const submissionCount = await PhotoSubmission.countDocuments({ competition: competition._id });
+        
+        // Total count is the sum of both models
+        const totalSubmissionCount = photoCount + submissionCount;
         
         // Check if the user has submitted to this competition
-        const userSubmission = await Photo.findOne({ 
+        const userPhotoSubmission = await Photo.findOne({ 
+          competition: competition._id, 
+          user: session.user.id 
+        });
+        
+        const userSubmission = await PhotoSubmission.findOne({ 
           competition: competition._id, 
           user: session.user.id 
         });
         
         return {
           ...competition,
-          submissionCount,
-          hasSubmitted: !!userSubmission
+          submissionCount: totalSubmissionCount,
+          hasSubmitted: !!(userPhotoSubmission || userSubmission)
         };
       })
     );
@@ -88,21 +99,28 @@ export async function GET(req: NextRequest) {
     // Get total count for pagination
     const totalCompetitions = await Competition.countDocuments(filter);
     
+    // Log competitions data to help debug submission count issues
+    console.log('Competitions data:', competitionsWithSubmissionCount.map(comp => ({
+      id: comp._id,
+      title: comp.title,
+      submissionCount: comp.submissionCount,
+      hasSubmitted: comp.hasSubmitted
+    })));
+    
     return NextResponse.json({
       success: true,
       data: competitionsWithSubmissionCount,
-      pagination: {
+      meta: {
         total: totalCompetitions,
         page,
         limit,
         pages: Math.ceil(totalCompetitions / limit)
       }
     });
-    
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching competitions:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to fetch competitions' },
+      { success: false, message: error.message || 'An error occurred while fetching competitions' },
       { status: 500 }
     );
   }
@@ -112,7 +130,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    // Use authOptions to get the proper session with user ID
+    const session = await getServerSession(authOptions);
+    
+    console.log('Session in POST competitions:', session);
 
     // Check authentication and admin role
     if (!session || !session.user) {
@@ -123,21 +144,21 @@ export async function POST(req: NextRequest) {
     }
     
     // In a real implementation, you would check if the user is an admin
-    // This is just a placeholder, you need to implement proper role checking
-    // const isAdmin = await checkIfUserIsAdmin(session.user.email);
-    // if (!isAdmin) {
-    //   return NextResponse.json(
-    //     { success: false, message: 'Not authorized' },
-    //     { status: 403 }
-    //   );
-    // }
+    if (session.user.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, message: 'Not authorized - admin role required' },
+        { status: 403 }
+      );
+    }
     
     const body = await req.json();
+    console.log('Competition data received:', body);
     
     // Validate required fields
-    const requiredFields = ['title', 'description', 'theme', 'rules', 'startDate', 'endDate', 'submissionLimit'];
+    const requiredFields = ['title', 'description', 'theme', 'startDate', 'endDate', 'votingEndDate'];
     for (const field of requiredFields) {
       if (!body[field]) {
+        console.error(`Missing required field: ${field}`);
         return NextResponse.json(
           { success: false, message: `${field} is required` },
           { status: 400 }
@@ -147,15 +168,18 @@ export async function POST(req: NextRequest) {
     
     // Set the createdBy field to the current user's ID
     body.createdBy = session.user.id;
+    console.log('Setting createdBy to:', session.user.id);
     
     // Create competition
     const competition = await Competition.create(body);
+    console.log('Competition created:', competition);
     
     return NextResponse.json(
       { success: true, data: competition },
       { status: 201 }
     );
   } catch (error: any) {
+    console.error('Error creating competition:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

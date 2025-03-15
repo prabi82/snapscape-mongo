@@ -292,7 +292,7 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Link 
-                          href={`/dashboard/competitions/${competition._id}/submit`}
+                          href={`/dashboard/competitions/${competition._id}?submit=true`}
                           className="text-indigo-600 hover:text-indigo-900"
                         >
                           {competition.status === 'active' ? 'Submit Photo' : 'View Details'}

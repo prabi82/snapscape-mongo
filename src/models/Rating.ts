@@ -1,38 +1,39 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, models, model } from 'mongoose';
 
-// Define the rating schema
-const ratingSchema = new mongoose.Schema({
-  score: {
-    type: Number,
-    required: [true, 'Please provide a rating score'],
-    min: [1, 'Rating must be at least 1'],
-    max: [5, 'Rating cannot be more than 5'],
-  },
-  comment: {
-    type: String,
-    trim: true,
-    maxlength: [200, 'Comment cannot be more than 200 characters'],
-  },
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Rating must belong to a user'],
-  },
-  photo: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Photo',
-    required: [true, 'Rating must belong to a photo'],
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-}, {
-  timestamps: true,
-});
+export interface RatingDocument extends mongoose.Document {
+  photo: mongoose.Types.ObjectId | string;
+  user: mongoose.Types.ObjectId | string;
+  score: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-// Prevent duplicate ratings (one user can rate a photo only once)
-ratingSchema.index({ user: 1, photo: 1 }, { unique: true });
+const ratingSchema = new Schema(
+  {
+    photo: {
+      type: Schema.Types.ObjectId,
+      ref: 'PhotoSubmission',
+      required: [true, 'Photo submission is required'],
+    },
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'User is required'],
+    },
+    score: {
+      type: Number,
+      required: [true, 'Score is required'],
+      min: [1, 'Score must be at least 1'],
+      max: [5, 'Score cannot be greater than 5'],
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Create a unique compound index to prevent duplicate ratings from the same user
+ratingSchema.index({ photo: 1, user: 1 }, { unique: true });
 
 // Static method to calculate average rating for a photo
 ratingSchema.statics.calcAverageRatings = async function(photoId) {
@@ -82,7 +83,4 @@ ratingSchema.post(/^findOneAnd/, async function() {
   await this.r.constructor.calcAverageRatings(this.r.photo);
 });
 
-// Create or get the Rating model
-const Rating = mongoose.models.Rating || mongoose.model('Rating', ratingSchema);
-
-export default Rating; 
+export default models.Rating || model<RatingDocument>('Rating', ratingSchema); 

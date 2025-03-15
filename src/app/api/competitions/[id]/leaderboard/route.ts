@@ -3,15 +3,16 @@ import { getServerSession } from 'next-auth';
 import Competition from '@/models/Competition';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import dbConnect from '@/lib/dbConnect';
+import User from '@/models/User';
 
 // GET competition leaderboard
 export async function GET(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
-    const { id } = params;
+    const id = params.id;
     
     const competition = await Competition.findById(id);
     
@@ -33,7 +34,7 @@ export async function GET(
       );
     }
     
-    const url = new URL(req.url);
+    const url = new URL(request.url);
     const limit = parseInt(url.searchParams.get('limit') || '10');
     
     // Get top-rated submissions
@@ -61,17 +62,18 @@ export async function GET(
     
     // Populate user details for top contributors
     const userIds = topContributors.map(contributor => contributor._id);
-    const users = await Promise.all(
-      userIds.map(async userId => {
-        const user = await (await import('@/models/User')).default.findById(userId).select('name');
-        return user;
-      })
-    );
+    const users = await User.find({ _id: { $in: userIds } }).select('name');
+    
+    // Create a map of user IDs to names for quick lookup
+    const userMap = users.reduce((map, user) => {
+      map[user._id.toString()] = user.name;
+      return map;
+    }, {} as Record<string, string>);
     
     // Map user names to top contributors
-    const contributorsWithNames = topContributors.map((contributor, index) => ({
+    const contributorsWithNames = topContributors.map(contributor => ({
       userId: contributor._id,
-      name: users[index]?.name || 'Unknown',
+      name: userMap[contributor._id.toString()] || 'Unknown',
       submissionCount: contributor.submissionCount,
       averageRating: contributor.totalRating / contributor.submissionCount
     }));

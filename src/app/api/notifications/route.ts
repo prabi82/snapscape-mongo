@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
-import Notification from '@/models/Notification';
+import { Notification, ensureModelsAreLoaded } from '@/lib/model-import-helper';
 
 // GET user notifications
 export async function GET(req: NextRequest) {
@@ -19,6 +19,9 @@ export async function GET(req: NextRequest) {
     
     // Connect to the database
     await dbConnect();
+    
+    // Ensure models are loaded
+    ensureModelsAreLoaded();
     
     const { searchParams } = new URL(req.url);
     

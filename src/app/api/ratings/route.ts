@@ -1,185 +1,155 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import connectDB from '@/lib/mongodb';
 import Rating from '@/models/Rating';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Competition from '@/models/Competition';
-import dbConnect from '@/lib/dbConnect';
 
 // GET ratings (for a specific submission or by user)
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    await dbConnect();
-    const session = await getServerSession();
-    
-    // Check authentication
+    // Check if user is authenticated
+    const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json(
-        { success: false, message: 'Not authenticated' },
+        { success: false, message: 'Unauthorized' },
         { status: 401 }
       );
     }
-    
-    const url = new URL(req.url);
-    const submissionId = url.searchParams.get('submission');
-    const competitionId = url.searchParams.get('competition');
-    const showUserRatings = url.searchParams.get('userRatings') === 'true';
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '10');
-    const skip = (page - 1) * limit;
-    
-    // Build query
-    const query: any = {};
-    
-    if (submissionId) {
-      query.photoSubmission = submissionId;
+
+    await connectDB();
+
+    const url = new URL(request.url);
+    const photoId = url.searchParams.get('photo');
+
+    if (!photoId) {
+      return NextResponse.json(
+        { success: false, message: 'Photo ID is required' },
+        { status: 400 }
+      );
     }
-    
-    if (competitionId) {
-      query.competition = competitionId;
-    }
-    
-    // Only show ratings for the current user's submissions or the user's own ratings
-    if (showUserRatings) {
-      query.user = session.user.id;
-    } else {
-      // Only show ratings for submissions that belong to the current user
-      if (!submissionId && !competitionId) {
-        const userSubmissions = await PhotoSubmission.find({ user: session.user.id }).select('_id');
-        const submissionIds = userSubmissions.map(sub => sub._id);
-        query.photoSubmission = { $in: submissionIds };
-      }
-    }
-    
-    const ratings = await Rating.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('user', 'name')
-      .populate('photoSubmission', 'title')
-      .populate('competition', 'title');
-      
-    const total = await Rating.countDocuments(query);
-    
+
+    // Find the user's rating for this photo
+    const rating = await Rating.findOne({
+      photo: photoId,
+      user: session.user.id,
+    });
+
     return NextResponse.json({
       success: true,
-      data: ratings,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
-      }
+      data: rating ? { score: rating.score } : null,
     });
   } catch (error: any) {
+    console.error('Error fetching rating:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, message: error.message || 'An error occurred while fetching your rating' },
       { status: 500 }
     );
   }
 }
 
 // POST create a new rating
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    await dbConnect();
-    const session = await getServerSession();
-    
-    // Check authentication
+    // Check if user is authenticated
+    const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json(
-        { success: false, message: 'Not authenticated' },
+        { success: false, message: 'Unauthorized' },
         { status: 401 }
       );
     }
-    
-    const body = await req.json();
-    
-    // Validate required fields
-    const requiredFields = ['photoSubmission', 'rating'];
-    for (const field of requiredFields) {
-      if (!body[field]) {
-        return NextResponse.json(
-          { success: false, message: `${field} is required` },
-          { status: 400 }
-        );
-      }
-    }
-    
-    // Validate rating value
-    if (body.rating < 1 || body.rating > 5) {
+
+    await connectDB();
+
+    const body = await request.json();
+    const { photo: photoId, score } = body;
+
+    // Validate input
+    if (!photoId || !score) {
       return NextResponse.json(
-        { success: false, message: 'Rating must be between 1 and 5' },
+        { success: false, message: 'Photo ID and score are required' },
         { status: 400 }
       );
     }
-    
-    // Get submission details
-    const submission = await PhotoSubmission.findById(body.photoSubmission);
-    if (!submission) {
+
+    if (typeof score !== 'number' || score < 1 || score > 5) {
       return NextResponse.json(
-        { success: false, message: 'Submission not found' },
+        { success: false, message: 'Score must be a number between 1 and 5' },
+        { status: 400 }
+      );
+    }
+
+    // Find the photo
+    const photo = await PhotoSubmission.findById(photoId);
+    if (!photo) {
+      return NextResponse.json(
+        { success: false, message: 'Photo not found' },
         { status: 404 }
       );
     }
-    
-    // Check if competition is active or closed (can only rate during active or closed phase)
-    const competition = await Competition.findById(submission.competition);
-    if (!competition || (competition.status !== 'active' && competition.status !== 'closed')) {
+
+    // Ensure the competition is in voting phase
+    const competition = await Competition.findById(photo.competition);
+    if (!competition || competition.status !== 'voting') {
       return NextResponse.json(
-        { success: false, message: 'Competition is not available for rating' },
+        { success: false, message: 'This competition is not in the voting phase' },
         { status: 400 }
       );
     }
-    
-    // Prevent users from rating their own submissions
-    if (submission.user.toString() === session.user.id) {
+
+    // Check if user is voting on their own photo
+    if (photo.user.toString() === session.user.id) {
       return NextResponse.json(
-        { success: false, message: 'You cannot rate your own submission' },
+        { success: false, message: 'You cannot vote on your own photo' },
         { status: 400 }
       );
     }
-    
-    // Set user and competition IDs
-    body.user = session.user.id;
-    body.competition = submission.competition;
-    
-    // Check if user has already rated this submission
+
+    // Check if user has already rated this photo
     const existingRating = await Rating.findOne({
+      photo: photoId,
       user: session.user.id,
-      photoSubmission: body.photoSubmission,
     });
-    
-    let rating;
-    
+
     if (existingRating) {
       // Update existing rating
-      const oldRating = existingRating.rating;
-      existingRating.rating = body.rating;
-      if (body.comment) {
-        existingRating.comment = body.comment;
-      }
-      rating = await existingRating.save();
-      
-      // Update submission average rating
-      submission.totalRatingSum = submission.totalRatingSum - oldRating + body.rating;
-      await submission.updateAverageRating();
+      existingRating.score = score;
+      await existingRating.save();
     } else {
       // Create new rating
-      rating = await Rating.create(body);
-      
-      // Update submission average rating
-      submission.totalRatingSum += body.rating;
-      submission.ratingCount += 1;
-      await submission.updateAverageRating();
+      await Rating.create({
+        photo: photoId,
+        user: session.user.id,
+        score,
+      });
     }
-    
-    return NextResponse.json(
-      { success: true, data: rating },
-      { status: existingRating ? 200 : 201 }
-    );
+
+    // Update the photo's average rating
+    const ratings = await Rating.find({ photo: photoId });
+    const totalScore = ratings.reduce((sum, rating) => sum + rating.score, 0);
+    const averageRating = totalScore / ratings.length;
+
+    photo.averageRating = averageRating;
+    photo.ratingsCount = ratings.length;
+    photo.totalRatingSum = totalScore;
+    await photo.save();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Rating submitted successfully',
+      data: {
+        photoId,
+        averageRating,
+        ratingsCount: ratings.length,
+        userRating: score,
+      },
+    });
   } catch (error: any) {
+    console.error('Error submitting rating:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, message: error.message || 'An error occurred while submitting your rating' },
       { status: 500 }
     );
   }
