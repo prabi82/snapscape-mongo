@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const photoId = url.searchParams.get('photo');
+    const detailed = url.searchParams.get('detailed') === 'true';
 
     if (!photoId) {
       return NextResponse.json(
@@ -30,16 +31,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find the user's rating for this photo
-    const rating = await Rating.findOne({
-      photo: photoId,
-      user: session.user.id,
-    });
+    // Check if admin and detailed mode
+    const isAdmin = session.user.role === 'admin';
+    
+    if (isAdmin && detailed) {
+      // For admins requesting detailed ratings, return all ratings for the photo with user details
+      const ratings = await Rating.find({ photo: photoId })
+        .populate('user', 'name email')
+        .sort({ createdAt: -1 });
+      
+      return NextResponse.json({
+        success: true,
+        data: ratings
+      });
+    } else {
+      // Regular behavior - find the user's rating for this photo
+      const rating = await Rating.findOne({
+        photo: photoId,
+        user: session.user.id,
+      });
 
-    return NextResponse.json({
-      success: true,
-      data: rating ? { score: rating.score } : null,
-    });
+      return NextResponse.json({
+        success: true,
+        data: rating ? { score: rating.score } : null,
+      });
+    }
   } catch (error: any) {
     console.error('Error fetching rating:', error);
     return NextResponse.json(

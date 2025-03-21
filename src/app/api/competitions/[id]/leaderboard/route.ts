@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     await dbConnect();
-    const id = params.id;
+    const { id } = params;
     
     const competition = await Competition.findById(id);
     

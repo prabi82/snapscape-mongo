@@ -193,7 +193,7 @@ export async function PATCH(
   try {
     await dbConnect();
     const session = await getServerSession();
-    const id = params.id;
+    const { id } = params;
     
     // Check authentication
     if (!session || !session.user) {

@@ -21,6 +21,7 @@ interface Competition {
   votingCriteria: string;
   status: string;
   coverImage?: string;
+  hideOtherSubmissions?: boolean;
 }
 
 export default function EditCompetition() {
@@ -46,7 +47,8 @@ export default function EditCompetition() {
     votingEndDate: '',
     submissionLimit: 5,
     votingCriteria: '',
-    status: 'upcoming'
+    status: 'upcoming',
+    hideOtherSubmissions: false
   });
 
   const [coverImage, setCoverImage] = useState<File | null>(null);
@@ -105,6 +107,13 @@ export default function EditCompetition() {
         const data = await response.json();
         setCompetition(data.data);
         
+        // Log detailed competition data for debugging
+        console.log('Fetched competition data detailed:', {
+          title: data.data.title,
+          hideOtherSubmissions: data.data.hideOtherSubmissions,
+          hideOtherSubmissionsType: typeof data.data.hideOtherSubmissions
+        });
+        
         // If competition has a cover image, set the preview
         if (data.data.coverImage) {
           setCoverImagePreview(data.data.coverImage);
@@ -122,7 +131,8 @@ export default function EditCompetition() {
           votingEndDate: formatDateForInput(data.data.votingEndDate),
           submissionLimit: data.data.submissionLimit || 5,
           votingCriteria: data.data.votingCriteria || '',
-          status: data.data.status
+          status: data.data.status,
+          hideOtherSubmissions: data.data.hideOtherSubmissions || false
         });
       } catch (error: any) {
         console.error('Error fetching competition:', error);
@@ -139,11 +149,19 @@ export default function EditCompetition() {
   
   // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    const { name, value, type } = e.target as HTMLInputElement;
+    
+    if (type === 'checkbox') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: (e.target as HTMLInputElement).checked
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
   
   // Handle image changes
@@ -175,6 +193,13 @@ export default function EditCompetition() {
 
       // Create copies of the form data with proper date handling
       const formDataWithDates = { ...formData };
+      
+      // Log form data for debugging with special focus on hideOtherSubmissions
+      console.log('Form data being submitted:', {
+        ...formDataWithDates,
+        hideOtherSubmissions: formDataWithDates.hideOtherSubmissions,
+        hideOtherSubmissionsType: typeof formDataWithDates.hideOtherSubmissions
+      });
       
       try {
         // Parse dates and set proper times
@@ -467,6 +492,35 @@ export default function EditCompetition() {
             {/* Additional Settings */}
             <div className="sm:col-span-6">
               <h3 className="text-lg font-medium text-gray-900">Additional Settings</h3>
+            </div>
+            
+            {/* Hide Other Submissions Checkbox */}
+            <div className="sm:col-span-6">
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="hideOtherSubmissions"
+                    name="hideOtherSubmissions"
+                    type="checkbox"
+                    checked={!!formData.hideOtherSubmissions}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        hideOtherSubmissions: e.target.checked
+                      }));
+                      console.log(`Checkbox changed to: ${e.target.checked} (${typeof e.target.checked})`);
+                    }}
+                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="hideOtherSubmissions" className="font-medium text-gray-700">
+                    Disable viewing others' submissions in active status
+                    {formData.hideOtherSubmissions ? ' (Enabled)' : ' (Disabled)'}
+                  </label>
+                  <p className="text-gray-500">When enabled, regular users will only be able to view their own submitted photos during the active phase.</p>
+                </div>
+              </div>
             </div>
             
             {/* Submission Limit */}

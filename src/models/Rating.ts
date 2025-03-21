@@ -52,14 +52,14 @@ ratingSchema.statics.calcAverageRatings = async function(photoId) {
 
   // Update photo with calculated stats
   if (stats.length > 0) {
-    await mongoose.model('Photo').findByIdAndUpdate(photoId, {
-      ratingsCount: stats[0].nRating,
+    await mongoose.model('PhotoSubmission').findByIdAndUpdate(photoId, {
+      ratingCount: stats[0].nRating,
       averageRating: stats[0].avgRating
     });
   } else {
     // If no ratings, set defaults
-    await mongoose.model('Photo').findByIdAndUpdate(photoId, {
-      ratingsCount: 0,
+    await mongoose.model('PhotoSubmission').findByIdAndUpdate(photoId, {
+      ratingCount: 0,
       averageRating: 0
     });
   }

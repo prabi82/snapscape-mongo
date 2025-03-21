@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import User from '@/models/User';
 import dbConnect from '@/lib/dbConnect';
+import { getPhotoCountByUser } from '@/lib/photoService';
+import { getSubmissionCountByUser } from '@/lib/submissionService';
 
 // GET user by ID (profile)
 export async function GET(
@@ -21,8 +23,8 @@ export async function GET(
       );
     }
     
-    // Only allow users to access their own profile
-    if (id !== session.user.id && session.user.role !== 'admin') {
+    // Only allow admins to access any profile, regular users only their own
+    if (!session.user.email && id !== session.user.id && session.user.role !== 'admin') {
       return NextResponse.json(
         { success: false, message: 'Not authorized to view this profile' },
         { status: 403 }
@@ -38,10 +40,21 @@ export async function GET(
       );
     }
     
-    return NextResponse.json({ success: true, data: user });
+    // Get additional user stats
+    const photoCount = await getPhotoCountByUser(id);
+    const submissionCount = await getSubmissionCountByUser(id);
+    
+    const userData = {
+      ...user.toObject(),
+      photoCount,
+      submissionCount
+    };
+    
+    return NextResponse.json({ success: true, user: userData });
   } catch (error: any) {
+    console.error('Error fetching user:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, message: error.message },
       { status: 500 }
     );
   }
@@ -65,7 +78,7 @@ export async function PUT(
       );
     }
     
-    // Only allow users to update their own profile
+    // Only allow users to update their own profile or admins to update any profile
     if (id !== session.user.id && session.user.role !== 'admin') {
       return NextResponse.json(
         { success: false, message: 'Not authorized to update this profile' },
@@ -84,8 +97,11 @@ export async function PUT(
     
     const body = await req.json();
     
-    // Only allow updating certain fields
-    const allowedUpdates = ['name'];
+    // If admin is updating, allow role changes
+    const allowedUpdates = session.user.role === 'admin' 
+      ? ['name', 'bio', 'role'] 
+      : ['name', 'bio'];
+      
     const updates: any = {};
     
     for (const field of allowedUpdates) {
@@ -104,11 +120,12 @@ export async function PUT(
     return NextResponse.json({ 
       success: true, 
       message: 'Profile updated successfully',
-      data: updatedUser 
+      user: updatedUser 
     });
   } catch (error: any) {
+    console.error('Error updating user:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, message: error.message },
       { status: 500 }
     );
   }

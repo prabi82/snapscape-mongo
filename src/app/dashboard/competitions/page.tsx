@@ -25,7 +25,7 @@ export default function UserCompetitions() {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('active');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [participationFilter, setParticipationFilter] = useState<string>('all');
 
   // Fetch competitions
@@ -216,7 +216,7 @@ export default function UserCompetitions() {
               <div className="bg-gray-50 px-6 py-4">
                 <Link
                   href={`/dashboard/competitions/${competition._id}?submit=true`}
-                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 mb-2"
                 >
                   {competition.status === 'active' && !competition.hasSubmitted 
                     ? 'Submit Photo' 
@@ -224,6 +224,15 @@ export default function UserCompetitions() {
                       ? 'Vote Now' 
                       : 'View Details'}
                 </Link>
+                
+                {competition.submissionCount > 0 && (
+                  <Link
+                    href={`/dashboard/competitions/${competition._id}/view-submissions`}
+                    className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    View Submissions
+                  </Link>
+                )}
               </div>
             </div>
           ))}

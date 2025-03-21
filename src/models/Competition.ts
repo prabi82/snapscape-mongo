@@ -33,6 +33,11 @@ const competitionSchema = new mongoose.Schema({
     enum: ['upcoming', 'active', 'voting', 'completed'],
     default: 'upcoming',
   },
+  hideOtherSubmissions: {
+    type: Boolean,
+    default: false,
+    description: 'If true, users can only see their own submissions during active status'
+  },
   startDate: {
     type: Date,
     required: [true, 'Please provide a start date'],

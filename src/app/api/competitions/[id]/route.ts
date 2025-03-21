@@ -14,8 +14,12 @@ export async function GET(
   try {
     await connectDB();
 
-    const competitionId = params.id;
-    if (!competitionId) {
+    // Get the user session for user-specific data
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    const { id } = params;
+    if (!id) {
       return NextResponse.json(
         { success: false, message: 'Competition ID is required' },
         { status: 400 }
@@ -23,7 +27,7 @@ export async function GET(
     }
 
     // Find the competition by ID and populate related data
-    const competition = await Competition.findById(competitionId)
+    const competition = await Competition.findById(id)
       .populate('createdBy', 'name email')
       .exec();
 
@@ -35,8 +39,8 @@ export async function GET(
     }
 
     // Get submission count for this competition from both models
-    const photoCount = await Photo.countDocuments({ competition: competitionId });
-    const submissionCount = await PhotoSubmission.countDocuments({ competition: competitionId });
+    const photoCount = await Photo.countDocuments({ competition: id });
+    const submissionCount = await PhotoSubmission.countDocuments({ competition: id });
     
     // Total count is the sum of both models
     const totalSubmissionCount = photoCount + submissionCount;
@@ -44,6 +48,33 @@ export async function GET(
     // Add submission count to competition data
     const competitionData = competition.toObject();
     competitionData.submissionCount = totalSubmissionCount;
+
+    // Add user-specific data if a user is logged in
+    if (userId) {
+      // Count the user's submissions for this competition
+      const userPhotoCount = await Photo.countDocuments({ 
+        competition: id,
+        user: userId
+      });
+      
+      const userSubmissionCount = await PhotoSubmission.countDocuments({ 
+        competition: id,
+        user: userId
+      });
+      
+      // Total user submissions
+      const totalUserSubmissions = userPhotoCount + userSubmissionCount;
+      
+      // Add user-specific data
+      competitionData.userSubmissionsCount = totalUserSubmissions;
+      competitionData.hasSubmitted = totalUserSubmissions > 0;
+      competitionData.canSubmitMore = totalUserSubmissions < competition.submissionLimit;
+    } else {
+      // Default values if no user is logged in
+      competitionData.userSubmissionsCount = 0;
+      competitionData.hasSubmitted = false;
+      competitionData.canSubmitMore = true;
+    }
 
     // Log the competition data for debugging
     console.log('Competition data:', {
@@ -53,7 +84,10 @@ export async function GET(
       coverImage: competitionData.coverImage,
       submissionCount: competitionData.submissionCount,
       photoCount,
-      photoSubmissionCount: submissionCount
+      photoSubmissionCount: submissionCount,
+      userSubmissionsCount: competitionData.userSubmissionsCount,
+      hasSubmitted: competitionData.hasSubmitted,
+      canSubmitMore: competitionData.canSubmitMore
     });
 
     return NextResponse.json({
@@ -102,6 +136,21 @@ export async function PUT(
     
     // Prepare update data
     const updateData = { ...body };
+    
+    // Ensure boolean fields are properly typed
+    if (typeof body.hideOtherSubmissions === 'string') {
+      updateData.hideOtherSubmissions = body.hideOtherSubmissions === 'true';
+    } else if (body.hideOtherSubmissions === undefined) {
+      // If hideOtherSubmissions is not provided in the request, preserve the existing value
+      updateData.hideOtherSubmissions = competition.hideOtherSubmissions;
+    }
+    
+    // Log the competition data before update
+    console.log('Existing competition data:', {
+      id: competition._id,
+      title: competition.title,
+      hideOtherSubmissions: competition.hideOtherSubmissions
+    });
     
     // Handle dates manually - parse all dates to ensure proper format
     const startDate = body.startDate ? new Date(body.startDate) : competition.startDate;
@@ -156,6 +205,7 @@ export async function PUT(
       startDate: updateData.startDate,
       endDate: updateData.endDate,
       votingEndDate: updateData.votingEndDate,
+      hideOtherSubmissions: updateData.hideOtherSubmissions,
     });
     
     // Update the competition using findOneAndReplace to bypass validators
@@ -166,6 +216,17 @@ export async function PUT(
       { runValidators: false }
     );
     
+    // Force update for hideOtherSubmissions if it's still not working
+    if (updateData.hideOtherSubmissions !== undefined) {
+      // Direct update with a separate operation to ensure it's saved
+      await Competition.updateOne(
+        { _id: id },
+        { $set: { hideOtherSubmissions: !!updateData.hideOtherSubmissions } },
+        { runValidators: false }
+      );
+      console.log('Forced update of hideOtherSubmissions:', !!updateData.hideOtherSubmissions);
+    }
+    
     if (result.modifiedCount === 0) {
       return NextResponse.json(
         { success: false, message: 'No changes were made' },
@@ -175,6 +236,12 @@ export async function PUT(
     
     // Fetch the updated competition
     const updatedCompetition = await Competition.findById(id);
+    
+    // Log the detailed competition data after update
+    console.log('Updated competition full data:', {
+      hideOtherSubmissions: updatedCompetition.hideOtherSubmissions,
+      hideOtherSubmissionsType: typeof updatedCompetition.hideOtherSubmissions
+    });
     
     return NextResponse.json({ success: true, data: updatedCompetition });
   } catch (error: any) {

@@ -12,10 +12,10 @@ export async function PUT(
   try {
     await connectDB();
     const session = await getServerSession(authOptions);
-    const competitionId = params.id;
+    const { id } = params;
     
     // Log debugging information
-    console.log('PUT with-cover for competition:', competitionId);
+    console.log('PUT with-cover for competition:', id);
     
     // Check authentication and admin role
     if (!session || !session.user) {
@@ -34,7 +34,7 @@ export async function PUT(
     }
     
     // Check if competition exists
-    const existingCompetition = await Competition.findById(competitionId);
+    const existingCompetition = await Competition.findById(id);
     if (!existingCompetition) {
       return NextResponse.json(
         { success: false, message: 'Competition not found' },
@@ -53,11 +53,27 @@ export async function PUT(
       }
     }
     
+    // Convert boolean fields from string to proper boolean
+    if (typeof updateData.hideOtherSubmissions === 'string') {
+      updateData.hideOtherSubmissions = updateData.hideOtherSubmissions === 'true';
+    } else if (updateData.hideOtherSubmissions === undefined && existingCompetition.hideOtherSubmissions !== undefined) {
+      // If not provided in the form, preserve the existing value
+      updateData.hideOtherSubmissions = existingCompetition.hideOtherSubmissions;
+    }
+    
+    // Log the detailed information about the hideOtherSubmissions field
+    console.log('hideOtherSubmissions details:', {
+      existingValue: existingCompetition.hideOtherSubmissions,
+      formValue: formData.get('hideOtherSubmissions'),
+      processedValue: updateData.hideOtherSubmissions
+    });
+    
     // Log the update data for debugging
     console.log('Competition update data:', {
-      id: competitionId,
+      id,
       ...updateData,
-      hasCoverImage: formData.has('coverImage')
+      hasCoverImage: formData.has('coverImage'),
+      hideOtherSubmissions: updateData.hideOtherSubmissions
     });
     
     // Handle cover image
@@ -147,7 +163,7 @@ export async function PUT(
     updateData.votingEndDate = votingEndDate;
     
     console.log('Final update data with parsed dates:', {
-      id: competitionId,
+      id,
       startDate: updateData.startDate,
       endDate: updateData.endDate,
       votingEndDate: updateData.votingEndDate
@@ -155,20 +171,32 @@ export async function PUT(
     
     // Update competition with new data
     const result = await Competition.updateOne(
-      { _id: competitionId },
+      { _id: id },
       { $set: updateData },
       { runValidators: false }
     );
     
+    // Force update for hideOtherSubmissions if it's still not working
+    if (updateData.hideOtherSubmissions !== undefined) {
+      // Direct update with a separate operation to ensure it's saved
+      await Competition.updateOne(
+        { _id: id },
+        { $set: { hideOtherSubmissions: !!updateData.hideOtherSubmissions } },
+        { runValidators: false }
+      );
+      console.log('Forced update of hideOtherSubmissions (with-cover):', !!updateData.hideOtherSubmissions);
+    }
+    
     // Fetch the updated competition
-    const updatedCompetition = await Competition.findById(competitionId);
+    const updatedCompetition = await Competition.findById(id);
     
     // Log the updated competition to verify cover image is saved
     console.log('Updated competition:', {
       id: updatedCompetition._id,
       title: updatedCompetition.title,
       hasCoverImage: !!updatedCompetition.coverImage,
-      coverImage: updatedCompetition.coverImage
+      coverImage: updatedCompetition.coverImage,
+      hideOtherSubmissions: updatedCompetition.hideOtherSubmissions
     });
     
     return NextResponse.json({

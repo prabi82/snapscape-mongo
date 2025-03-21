@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     if (competitionId) {
       query.competition = competitionId;
       
-      // Verify the competition exists and is in voting or completed status
+      // Verify the competition exists and check its status
       const competition = await Competition.findById(competitionId);
       if (!competition) {
         return NextResponse.json(
@@ -44,19 +44,33 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      // Only return approved submissions for competitions in voting or completed status
-      if (competition.status === 'voting' || competition.status === 'completed') {
+      // Check if the competition is in active status and has hideOtherSubmissions enabled
+      // Only apply this restriction to non-admin users
+      if (
+        competition.status === 'active' && 
+        competition.hideOtherSubmissions && 
+        session.user.role !== 'admin'
+      ) {
+        // If the user is not an admin and hideOtherSubmissions is enabled, they can only see their own submissions
+        query.user = session.user.id;
+      } else if (status === 'approved') {
         query.status = 'approved';
+      } else if (competition.status === 'voting' || competition.status === 'completed') {
+        // For non-approved status requests, only allow if competition is in voting/completed stage
+        if (status && status !== 'all') {
+          query.status = status;
+        }
       } else {
         // If checking own submissions (user is specified and matches current user)
         if (userId && userId === session.user.id) {
           // Allow viewing own submissions regardless of competition status
+          if (status && status !== 'all') {
+            query.status = status;
+          }
         } else {
-          // For other cases, block access to submissions for non-voting competitions
-          return NextResponse.json(
-            { success: false, message: 'Competition is not in voting phase' },
-            { status: 403 }
-          );
+          // For other non-approved status requests in non-voting competitions
+          // Default to only showing approved submissions
+          query.status = 'approved';
         }
       }
     }
@@ -88,6 +102,7 @@ export async function GET(request: NextRequest) {
     const total = await PhotoSubmission.countDocuments(query);
 
     // For each submission, check if the current user has rated it
+    // and remove user info unless it's the user's own submission or user is admin
     const submissionsWithUserRatings = await Promise.all(
       submissions.map(async (submission) => {
         const userRating = await Rating.findOne({
@@ -95,8 +110,17 @@ export async function GET(request: NextRequest) {
           user: session.user.id,
         });
         
+        // Create a new submission object without user details
+        const processedSubmission = { ...submission };
+        
+        // Only include user details if it's the user's own submission or user is admin
+        if (session.user.id !== submission.user._id.toString() && session.user.role !== 'admin') {
+          // Remove user details except for ID
+          processedSubmission.user = { _id: submission.user._id };
+        }
+        
         return {
-          ...submission,
+          ...processedSubmission,
           userRating: userRating ? userRating.score : undefined,
         };
       })
