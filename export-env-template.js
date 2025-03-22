@@ -1,0 +1,16 @@
+require('dotenv').config({ path: '.env.local' });
+
+const envTemplate = `NEXTAUTH_URL=http://localhost:3001
+NEXTAUTH_SECRET=your_nextauth_secret
+MONGODB_URI=your_mongodb_connection_string
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+# Add any other environment variables your application uses
+`;
+
+const fs = require('fs');
+fs.writeFileSync('.env.template', envTemplate);
+console.log('Environment template file created at .env.template'); 
