@@ -20,6 +20,10 @@ const photoSubmissionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please provide a thumbnail URL'],
   },
+  cloudinaryPublicId: {
+    type: String,
+    required: [true, 'Cloudinary public ID is required'],
+  },
   competition: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Competition',
@@ -48,6 +52,10 @@ const photoSubmissionSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending',
+  },
+  archived: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

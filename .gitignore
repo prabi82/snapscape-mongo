@@ -60,4 +60,7 @@ logs
 # OS specific
 Thumbs.db
 
+# Dotenv file
+.env
 .env*.local
+!.env.template

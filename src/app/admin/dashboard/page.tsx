@@ -43,7 +43,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     // Check if user is authenticated
     if (status === 'unauthenticated') {
-      router.push('/auth/login');
+      router.push('/');
       return;
     }
 

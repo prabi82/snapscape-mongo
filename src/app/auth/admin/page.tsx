@@ -59,7 +59,7 @@ export default function AdminSetupPage() {
       
       // Redirect to login page after successful registration
       setTimeout(() => {
-        router.push('/auth/login');
+        router.push('/');
       }, 2000);
       
     } catch (err: any) {

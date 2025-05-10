@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
         description,
         imageUrl: uploadResult.secure_url,
         thumbnailUrl,
+        cloudinaryPublicId: uploadResult.public_id,
         competition: competitionId,
         user: session.user.id,
         status: 'pending',

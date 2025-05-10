@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { photo: photoId, score } = body;
 
+    console.log('Received rating request:', { photoId, score, userId: session.user.id }); // Debug log
+
     // Validate input
     if (!photoId || !score) {
       return NextResponse.json(
@@ -129,13 +131,15 @@ export async function POST(request: NextRequest) {
       user: session.user.id,
     });
 
+    let rating;
     if (existingRating) {
       // Update existing rating
       existingRating.score = score;
       await existingRating.save();
+      rating = existingRating;
     } else {
       // Create new rating
-      await Rating.create({
+      rating = await Rating.create({
         photo: photoId,
         user: session.user.id,
         score,
@@ -148,9 +152,16 @@ export async function POST(request: NextRequest) {
     const averageRating = totalScore / ratings.length;
 
     photo.averageRating = averageRating;
-    photo.ratingsCount = ratings.length;
+    photo.ratingCount = ratings.length;
     photo.totalRatingSum = totalScore;
     await photo.save();
+
+    console.log('Rating saved successfully:', { 
+      photoId, 
+      averageRating, 
+      ratingCount: ratings.length,
+      userRating: score 
+    }); // Debug log
 
     return NextResponse.json({
       success: true,

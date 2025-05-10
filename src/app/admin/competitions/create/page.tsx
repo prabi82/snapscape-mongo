@@ -4,6 +4,8 @@ import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 interface CompetitionFormData {
   title: string;
@@ -45,6 +47,11 @@ export default function CreateCompetition() {
   const [coverImage, setCoverImage] = useState<File | null>(null);
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null); // Ref for the image element in the cropper
+
+  // Add new state for react-image-crop
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
 
   // Add a new state for image upload validation
   const [imageValidationError, setImageValidationError] = useState<string | null>(null);
@@ -103,6 +110,8 @@ export default function CreateCompetition() {
   // Update the handleImageChange function to validate image file
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setImageValidationError(null);
+    setCrop(undefined); // Clear previous crop
+    setCompletedCrop(undefined); // Clear previous completed crop
     const file = e.target.files?.[0] || null;
     
     if (file) {
@@ -125,18 +134,37 @@ export default function CreateCompetition() {
         return;
       }
       
-      // Set the cover image and create preview
+      // Set file for potential upload and preview for cropper
       setCoverImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setCoverImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
     } else {
       setCoverImage(null);
       setCoverImagePreview(null);
     }
   };
+
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const { width, height } = e.currentTarget;
+    const newCrop = centerCrop(
+      makeAspectCrop(
+        {
+          unit: '%',
+          width: 90, // Initial crop width percentage
+        },
+        4 / 3, // Aspect ratio
+        width,
+        height
+      ),
+      width,
+      height
+    );
+    setCrop(newCrop);
+  }
 
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
@@ -145,6 +173,41 @@ export default function CreateCompetition() {
     setError('');
     setSuccessMessage('');
     setImageValidationError(null);
+
+    if (!session?.user?.id) {
+      setError('User session not found. Please log in again.');
+      setLoading(false);
+      return;
+    }
+
+    const formDataToSubmit = new FormData();
+    Object.entries(formData).forEach(([key, value]) => {
+      if (value instanceof Date) {
+        formDataToSubmit.append(key, value.toISOString());
+      } else if (typeof value === 'boolean') {
+        formDataToSubmit.append(key, value.toString());
+      } else if (value !== null && value !== undefined) {
+        formDataToSubmit.append(key, value as string); // Ensure value is string or Blob
+      }
+    });
+
+    if (coverImage && completedCrop) {
+      formDataToSubmit.append('coverImage', coverImage);
+      // Add crop parameters
+      formDataToSubmit.append('cropX', String(Math.round(completedCrop.x)));
+      formDataToSubmit.append('cropY', String(Math.round(completedCrop.y)));
+      formDataToSubmit.append('cropWidth', String(Math.round(completedCrop.width)));
+      formDataToSubmit.append('cropHeight', String(Math.round(completedCrop.height)));
+    } else if (coverImage && !completedCrop) {
+      // If there's an image but no crop (e.g. user didn't interact with cropper)
+      // We might want to send the original image or prevent submission
+      // For now, let's assume a crop is always made if an image is present.
+      // Or, we can send default crop (e.g. full image, but that might not respect 4:3)
+      // This case should ideally be handled by onImageLoad setting an initial completedCrop.
+      setError('Image selected but crop data is missing. Please adjust the crop area.');
+      setLoading(false);
+      return;
+    }
 
     try {
       // Validate form data
@@ -184,39 +247,12 @@ export default function CreateCompetition() {
 
       let response;
 
-      // Handle form submission based on whether there's a cover image
-      if (coverImage) {
-        // Do an additional check to ensure the image is valid
-        if (imageValidationError) {
-          throw new Error(imageValidationError);
-        }
-
-        const formDataWithImage = new FormData();
-        
-        // Add all form fields
-        Object.entries(submissionData).forEach(([key, value]) => {
-          formDataWithImage.append(key, value.toString());
-        });
-        
-        // Add cover image
-        formDataWithImage.append('coverImage', coverImage);
-        
-        // Submit form with image
-        console.log('Submitting with cover image:', coverImage.name, coverImage.size, coverImage.type);
-        response = await fetch('/api/competitions/with-cover', {
-          method: 'POST',
-          body: formDataWithImage,
-        });
-      } else {
-        // Submit form without image using regular JSON
-        response = await fetch('/api/competitions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(submissionData),
-        });
-      }
+      // Submit form with image
+      console.log('Submitting with cover image:', coverImage?.name, coverImage?.size, coverImage?.type);
+      response = await fetch('/api/competitions/with-cover', {
+        method: 'POST',
+        body: formDataToSubmit,
+      });
 
       // Check if response is okay
       if (!response.ok) {
@@ -544,29 +580,44 @@ export default function CreateCompetition() {
               </label>
               <div className="mt-2">
                 {coverImagePreview ? (
-                  <div className="relative">
-                    <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-300">
-                      <img
-                        src={coverImagePreview}
-                        alt="Competition cover"
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCoverImage(null);
-                        setCoverImagePreview(null);
-                        if (fileInputRef.current) {
-                          fileInputRef.current.value = '';
-                        }
-                      }}
-                      className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-md hover:bg-gray-100"
+                  <div>
+                    <ReactCrop
+                      crop={crop}
+                      onChange={(_, percentCrop) => setCrop(percentCrop)}
+                      onComplete={(c) => setCompletedCrop(c)}
+                      aspect={4 / 3}
+                      className="w-full max-w-3xl mx-auto" // Added max-width and centering
+                      minWidth={100} // Example: min crop width in pixels
+                      minHeight={75}  // Example: min crop height in pixels
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                      <img
+                        ref={imgRef}
+                        alt="Crop preview"
+                        src={coverImagePreview}
+                        onLoad={onImageLoad}
+                        style={{ maxHeight: '70vh' }} // Limit image display height
+                      />
+                    </ReactCrop>
+                    <div className="flex justify-center mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoverImage(null);
+                          setCoverImagePreview(null);
+                          setCrop(undefined);
+                          setCompletedCrop(undefined);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
+                        }}
+                        className="rounded-full bg-red-500 text-white p-1 shadow-md hover:bg-red-600 text-xs"
+                        title="Remove image"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex justify-center border-2 border-dashed border-gray-300 rounded-lg p-6">
@@ -596,25 +647,11 @@ export default function CreateCompetition() {
                     </div>
                   </div>
                 )}
-                {coverImagePreview && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Change Image
-                    </button>
-                  </div>
-                )}
                 {imageValidationError && (
                   <p className="mt-2 text-sm text-red-600">
                     {imageValidationError}
                   </p>
                 )}
-                <p className="mt-1 text-xs text-gray-500">
-                  Recommended size: 1200x600 pixels. The cover image will be displayed at the top of the competition page.
-                </p>
               </div>
             </div>
           </div>

@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import PhotoSubmission from '@/models/PhotoSubmission';
-import Competition from '@/models/Competition';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const status = url.searchParams.get('status') || 'all';
+    const archived = url.searchParams.get('archived');
     
     // Parse pagination parameters
     const page = parseInt(url.searchParams.get('page') || '1');
@@ -36,6 +36,21 @@ export async function GET(request: NextRequest) {
       query.status = status;
     }
 
+    // Add archived filter if specified
+    if (archived === 'true') {
+      query.archived = true;
+    } else if (archived === 'false') {
+      query.$or = [{ archived: false }, { archived: { $exists: false } }];
+    }
+
+    // Add competition filter if specified
+    const competition = url.searchParams.get('competition');
+    if (competition) {
+      query.competition = competition;
+    }
+
+    console.log('Fetching submissions with query:', query);
+
     // Execute query with pagination and populate competition details
     const submissions = await PhotoSubmission.find(query)
       .sort({ createdAt: -1 })
@@ -48,6 +63,8 @@ export async function GET(request: NextRequest) {
       .lean();
     
     const total = await PhotoSubmission.countDocuments(query);
+
+    console.log(`Found ${submissions.length} submissions out of ${total} total`);
 
     return NextResponse.json({
       success: true,

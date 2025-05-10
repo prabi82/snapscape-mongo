@@ -5,6 +5,15 @@ import connectDB from '@/lib/mongodb';
 import Competition from '@/models/Competition';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Photo from '@/models/Photo';
+import formidable, { File as FormidableFile } from 'formidable';
+import fs from 'fs';
+import { PassThrough } from 'stream';
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
 // GET a single competition
 export async function GET(
@@ -106,12 +115,11 @@ export async function GET(
 // PUT update a competition (admin only)
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: { id } }: { params: { id: string } }
 ) {
   try {
     await connectDB();
     const session = await getServerSession(authOptions);
-    const { id } = params;
     
     // Check authentication and admin role
     if (!session || !session.user) {
@@ -130,119 +138,146 @@ export async function PUT(
         { status: 404 }
       );
     }
-    
-    // Parse the request body
-    const body = await req.json();
-    
-    // Prepare update data
-    const updateData = { ...body };
-    
-    // Ensure boolean fields are properly typed
-    if (typeof body.hideOtherSubmissions === 'string') {
-      updateData.hideOtherSubmissions = body.hideOtherSubmissions === 'true';
-    } else if (body.hideOtherSubmissions === undefined) {
-      // If hideOtherSubmissions is not provided in the request, preserve the existing value
-      updateData.hideOtherSubmissions = competition.hideOtherSubmissions;
-    }
-    
-    // Log the competition data before update
-    console.log('Existing competition data:', {
-      id: competition._id,
-      title: competition.title,
-      hideOtherSubmissions: competition.hideOtherSubmissions
+
+    // Parse multipart form data using formidable
+    const form = formidable({ multiples: false });
+
+    const fieldsAndFiles = await new Promise<{ fields: any; files: any }>((resolve, reject) => {
+      if (!req.body) {
+        return reject(new Error('Request body is null'));
+      }
+      
+      // Create a PassThrough stream
+      const passthrough = new PassThrough();
+      
+      // Pipe the NextRequest body (ReadableStream) to the PassThrough stream
+      const reader = req.body.getReader();
+      const pump = () => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            passthrough.end();
+            return;
+          }
+          passthrough.write(value);
+          pump();
+        }).catch(err => {
+          passthrough.emit('error', err);
+          reject(err);
+        });
+      };
+      pump();
+
+      // Add content-type and content-length headers manually if needed by formidable
+      // Formidable v3 should ideally infer this or handle it, but this can be a fallback
+      const headers = Object.fromEntries(req.headers);
+      (passthrough as any).headers = headers; // Attach headers for formidable
+      if (headers['content-type']) {
+        (passthrough as any).headers['content-type'] = headers['content-type'];
+      }
+      if (headers['content-length']) {
+        (passthrough as any).headers['content-length'] = headers['content-length'];
+      }
+      
+      form.parse(passthrough, (err, fields, files) => {
+        if (err) {
+          console.error('Formidable parsing error:', err);
+          return reject(err);
+        }
+        resolve({ fields, files });
+      });
     });
-    
-    // Handle dates manually - parse all dates to ensure proper format
-    const startDate = body.startDate ? new Date(body.startDate) : competition.startDate;
-    const endDate = body.endDate ? new Date(body.endDate) : competition.endDate;
-    const votingEndDate = body.votingEndDate ? new Date(body.votingEndDate) : competition.votingEndDate;
-    
-    // Validate date formats
-    if (startDate && isNaN(startDate.getTime())) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid start date format' },
-        { status: 400 }
-      );
+
+    const { fields, files } = fieldsAndFiles;
+
+    // Prepare update data
+    const updateData: any = {};
+    for (const key in fields) {
+      if (Object.prototype.hasOwnProperty.call(fields, key)) {
+        const value = fields[key];
+        // If the field is an array and we expect a string, take the first element
+        if (Array.isArray(value) && ['title', 'theme', 'description', 'rules', 'prizes', 'votingCriteria', 'status'].includes(key)) {
+          updateData[key] = value[0];
+        } else {
+          updateData[key] = value;
+        }
+      }
     }
-    
-    if (endDate && isNaN(endDate.getTime())) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid end date format' },
-        { status: 400 }
-      );
+
+    // Convert booleans and numbers specifically
+    if (updateData.hideOtherSubmissions !== undefined) {
+      updateData.hideOtherSubmissions = String(updateData.hideOtherSubmissions).toLowerCase() === 'true';
     }
-    
-    if (votingEndDate && isNaN(votingEndDate.getTime())) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid voting end date format' },
-        { status: 400 }
-      );
+    if (updateData.submissionLimit !== undefined) {
+      // If submissionLimit is an array (it shouldn't be, but defensive)
+      const limitValue = Array.isArray(updateData.submissionLimit) ? updateData.submissionLimit[0] : updateData.submissionLimit;
+      updateData.submissionLimit = Number(limitValue);
     }
+    // Handle dates
+    if (updateData.startDate) updateData.startDate = new Date(Array.isArray(updateData.startDate) ? updateData.startDate[0] : updateData.startDate);
+    if (updateData.endDate) updateData.endDate = new Date(Array.isArray(updateData.endDate) ? updateData.endDate[0] : updateData.endDate);
+    if (updateData.votingEndDate) updateData.votingEndDate = new Date(Array.isArray(updateData.votingEndDate) ? updateData.votingEndDate[0] : updateData.votingEndDate);
     
-    // Manually validate date relationships
-    if (endDate <= startDate) {
+    // The specific handling for status and votingCriteria might be redundant now with the loop,
+    // but keeping them for clarity or if specific logic was intended.
+    // If fields.status was already processed by the loop:
+    // if (fields.status) { 
+    //   updateData.status = Array.isArray(fields.status) ? fields.status[0] : fields.status;
+    // }
+    // if (fields.votingCriteria) {
+    //  updateData.votingCriteria = Array.isArray(fields.votingCriteria) ? fields.votingCriteria[0] : fields.votingCriteria;
+    // }
+
+    // Log updateData for debugging
+    console.log('Updating competition with data:', updateData);
+
+    // Handle cover image upload
+    if (files.coverImage) {
+      // You may want to upload to cloud storage here, for now just log
+      const file = files.coverImage as FormidableFile;
+      // TODO: Upload file to cloudinary or your storage, get URL
+      // For now, just log file path
+      console.log('Received cover image file:', file.filepath);
+      // updateData.coverImage = 'URL_FROM_UPLOAD';
+      // Handle crop params
+      ['cropX', 'cropY', 'cropWidth', 'cropHeight'].forEach((key) => {
+        if (fields[key] !== undefined) {
+          updateData[key] = Number(fields[key]);
+        }
+      });
+    } else {
+      // Remove crop params if no new image
+      ['cropX', 'cropY', 'cropWidth', 'cropHeight'].forEach((key) => {
+        delete updateData[key];
+      });
+    }
+
+    // Validate date relationships
+    if (updateData.endDate && updateData.startDate && updateData.endDate <= updateData.startDate) {
       return NextResponse.json(
         { success: false, message: 'End date must be after start date' },
         { status: 400 }
       );
     }
-    
-    if (votingEndDate <= endDate) {
+    if (updateData.votingEndDate && updateData.endDate && updateData.votingEndDate <= updateData.endDate) {
       return NextResponse.json(
         { success: false, message: 'Voting end date must be after submission end date' },
         { status: 400 }
       );
     }
-    
-    // Set the dates in the update data
-    updateData.startDate = startDate;
-    updateData.endDate = endDate;
-    updateData.votingEndDate = votingEndDate;
-    
-    console.log('Updating competition with data:', {
-      id: id,
-      title: updateData.title,
-      startDate: updateData.startDate,
-      endDate: updateData.endDate,
-      votingEndDate: updateData.votingEndDate,
-      hideOtherSubmissions: updateData.hideOtherSubmissions,
-    });
-    
-    // Update the competition using findOneAndReplace to bypass validators
-    // or use updateOne with runValidators: false
+
+    // Update the competition
     const result = await Competition.updateOne(
       { _id: id },
       { $set: updateData },
       { runValidators: false }
     );
-    
-    // Force update for hideOtherSubmissions if it's still not working
-    if (updateData.hideOtherSubmissions !== undefined) {
-      // Direct update with a separate operation to ensure it's saved
-      await Competition.updateOne(
-        { _id: id },
-        { $set: { hideOtherSubmissions: !!updateData.hideOtherSubmissions } },
-        { runValidators: false }
-      );
-      console.log('Forced update of hideOtherSubmissions:', !!updateData.hideOtherSubmissions);
-    }
-    
     if (result.modifiedCount === 0) {
       return NextResponse.json(
         { success: false, message: 'No changes were made' },
         { status: 400 }
       );
     }
-    
-    // Fetch the updated competition
     const updatedCompetition = await Competition.findById(id);
-    
-    // Log the detailed competition data after update
-    console.log('Updated competition full data:', {
-      hideOtherSubmissions: updatedCompetition.hideOtherSubmissions,
-      hideOtherSubmissionsType: typeof updatedCompetition.hideOtherSubmissions
-    });
-    
     return NextResponse.json({ success: true, data: updatedCompetition });
   } catch (error: any) {
     console.error('Error updating competition:', error);

@@ -101,10 +101,10 @@ export async function GET(req: NextRequest) {
     
     // Log competitions data to help debug submission count issues
     console.log('Competitions data:', competitionsWithSubmissionCount.map(comp => ({
-      id: comp._id,
-      title: comp.title,
-      submissionCount: comp.submissionCount,
-      hasSubmitted: comp.hasSubmitted
+      id: (comp as any)._id,
+      title: (comp as any).title,
+      submissionCount: (comp as any).submissionCount,
+      hasSubmitted: (comp as any).hasSubmitted
     })));
     
     return NextResponse.json({
@@ -156,13 +156,23 @@ export async function POST(req: NextRequest) {
     
     // Validate required fields
     const requiredFields = ['title', 'description', 'theme', 'startDate', 'endDate', 'votingEndDate'];
+    // Add crop fields if coverImage is present
+    if (body.coverImage) { // coverImage here would be the base64 string or a flag indicating a file was sent
+      requiredFields.push('cropX', 'cropY', 'cropWidth', 'cropHeight');
+    }
+
     for (const field of requiredFields) {
-      if (!body[field]) {
-        console.error(`Missing required field: ${field}`);
-        return NextResponse.json(
-          { success: false, message: `${field} is required` },
-          { status: 400 }
-        );
+      if (body[field] === undefined || body[field] === null) { // Check for undefined or null
+        // Special handling for crop parameters if coverImage is present but crop values are 0
+        if (['cropX', 'cropY', 'cropWidth', 'cropHeight'].includes(field) && body[field] === 0) {
+          // Allow 0 for crop parameters
+        } else {
+          console.error(`Missing required field: ${field}`);
+          return NextResponse.json(
+            { success: false, message: `${field} is required` },
+            { status: 400 }
+          );
+        }
       }
     }
     

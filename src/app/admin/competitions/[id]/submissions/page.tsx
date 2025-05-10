@@ -45,6 +45,10 @@ export default function CompetitionSubmissions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalSubmissions, setTotalSubmissions] = useState(0);
+  const submissionsPerPage = 12;
+  const [statusCounts, setStatusCounts] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
   
   // Fetch competition details
   useEffect(() => {
@@ -67,21 +71,19 @@ export default function CompetitionSubmissions() {
     }
   }, [competitionId]);
   
-  // Fetch submissions
+  // Fetch submissions (with pagination)
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
         setLoading(true);
-        
-        // Fetch PhotoSubmission model data
-        const submissionsResponse = await fetch(`/api/submissions?competition=${competitionId}&showAll=true${statusFilter !== 'all' ? `&status=${statusFilter}` : ''}`);
-        
+        // Fetch paginated submissions and total count from API
+        const submissionsResponse = await fetch(`/api/submissions?competition=${competitionId}&showAll=true&limit=${submissionsPerPage}&page=${currentPage}${statusFilter !== 'all' ? `&status=${statusFilter}` : ''}`);
         if (!submissionsResponse.ok) {
           throw new Error('Failed to fetch submissions');
         }
-        
         const submissionsData = await submissionsResponse.json();
         setSubmissions(submissionsData.data || []);
+        setTotalSubmissions(submissionsData.pagination?.total || 0);
         
         // Fetch Photo model data using our new API endpoint
         try {
@@ -110,7 +112,34 @@ export default function CompetitionSubmissions() {
     if (competitionId) {
       fetchSubmissions();
     }
-  }, [competitionId, statusFilter]);
+  }, [competitionId, statusFilter, currentPage]);
+  
+  // Fetch status counts for all submissions in this competition
+  useEffect(() => {
+    const fetchStatusCounts = async () => {
+      try {
+        const [totalRes, pendingRes, approvedRes, rejectedRes] = await Promise.all([
+          fetch(`/api/submissions?competition=${competitionId}&showAll=true&limit=1`),
+          fetch(`/api/submissions?competition=${competitionId}&showAll=true&status=pending&limit=1`),
+          fetch(`/api/submissions?competition=${competitionId}&showAll=true&status=approved&limit=1`),
+          fetch(`/api/submissions?competition=${competitionId}&showAll=true&status=rejected&limit=1`),
+        ]);
+        const totalData = await totalRes.json();
+        const pendingData = await pendingRes.json();
+        const approvedData = await approvedRes.json();
+        const rejectedData = await rejectedRes.json();
+        setStatusCounts({
+          total: totalData.pagination?.total || 0,
+          pending: pendingData.pagination?.total || 0,
+          approved: approvedData.pagination?.total || 0,
+          rejected: rejectedData.pagination?.total || 0,
+        });
+      } catch (err) {
+        // fallback: do nothing
+      }
+    };
+    if (competitionId) fetchStatusCounts();
+  }, [competitionId]);
   
   // Handle status update
   const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
@@ -174,6 +203,9 @@ export default function CompetitionSubmissions() {
     ? allSubmissions
     : allSubmissions.filter(sub => sub.status === statusFilter);
   
+  // Pagination logic
+  const totalPages = Math.ceil(totalSubmissions / submissionsPerPage);
+  
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -231,17 +263,17 @@ export default function CompetitionSubmissions() {
           
           <div className="sm:ml-4">
             <p className="block text-sm font-medium text-gray-700 mb-1">
-              Total Submissions: <span className="font-bold">{allSubmissions.length}</span>
+              Total Submissions: <span className="font-bold">{statusCounts.total}</span>
             </p>
             <div className="flex gap-2">
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                Pending: {allSubmissions.filter(sub => sub.status === 'pending').length}
+                Pending: {statusCounts.pending}
               </span>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Approved: {allSubmissions.filter(sub => sub.status === 'approved').length}
+                Approved: {statusCounts.approved}
               </span>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                Rejected: {allSubmissions.filter(sub => sub.status === 'rejected').length}
+                Rejected: {statusCounts.rejected}
               </span>
             </div>
           </div>
@@ -254,98 +286,122 @@ export default function CompetitionSubmissions() {
           <p className="text-gray-500">No submissions found for this competition.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSubmissions.map((submission) => (
-            <div key={submission._id} className="bg-white shadow rounded-lg overflow-hidden">
-              {/* Image preview */}
-              <div className="relative h-48 w-full">
-                <Image
-                  src={submission.imageUrl}
-                  alt={submission.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  className="object-cover"
-                  unoptimized={true}
-                />
-                <div className="absolute top-2 right-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(submission.status)}`}>
-                    {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
-                  </span>
-                </div>
-              </div>
-              
-              {/* Content */}
-              <div className="p-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-1">{submission.title}</h3>
-                
-                {submission.description && (
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{submission.description}</p>
-                )}
-                
-                <div className="mb-3">
-                  <p className="text-sm text-gray-500">
-                    <span className="font-medium">Submitted by:</span> {submission.user?.name || 'Unknown'}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    <span className="font-medium">Submitted on:</span> {formatDate(submission.createdAt)}
-                  </p>
-                  {submission.averageRating > 0 && (
-                    <p className="text-sm text-gray-500">
-                      <span className="font-medium">Rating:</span> {submission.averageRating.toFixed(1)} ({submission.ratingCount} votes)
-                    </p>
-                  )}
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSubmissions.map((submission) => (
+              <div key={submission._id} className="bg-white shadow rounded-lg overflow-hidden">
+                {/* Image preview */}
+                <div className="relative h-48 w-full">
+                  <Image
+                    src={submission.imageUrl}
+                    alt={submission.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="object-cover"
+                    unoptimized={true}
+                  />
+                  <div className="absolute top-2 right-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(submission.status)}`}>
+                      {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
+                    </span>
+                  </div>
                 </div>
                 
-                {/* Actions */}
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <a
-                    href={submission.imageUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                  >
-                    View Full Size
-                  </a>
+                {/* Content */}
+                <div className="p-4">
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">{submission.title}</h3>
                   
-                  {submission.status === 'pending' && (
-                    <>
-                      <button
-                        onClick={() => handleUpdateStatus(submission._id, 'approved')}
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-                      >
-                        Approve
-                      </button>
+                  {submission.description && (
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{submission.description}</p>
+                  )}
+                  
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-500">
+                      <span className="font-medium">Submitted by:</span> {submission.user?.name || 'Unknown'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      <span className="font-medium">Submitted on:</span> {formatDate(submission.createdAt)}
+                    </p>
+                    {submission.averageRating > 0 && (
+                      <p className="text-sm text-gray-500">
+                        <span className="font-medium">Rating:</span> {submission.averageRating.toFixed(1)} ({submission.ratingCount} votes)
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <a
+                      href={submission.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      View Full Size
+                    </a>
+                    
+                    {submission.status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => handleUpdateStatus(submission._id, 'approved')}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleUpdateStatus(submission._id, 'rejected')}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    
+                    {submission.status === 'approved' && (
                       <button
                         onClick={() => handleUpdateStatus(submission._id, 'rejected')}
                         className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
                       >
                         Reject
                       </button>
-                    </>
-                  )}
-                  
-                  {submission.status === 'approved' && (
-                    <button
-                      onClick={() => handleUpdateStatus(submission._id, 'rejected')}
-                      className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
-                    >
-                      Reject
-                    </button>
-                  )}
-                  
-                  {submission.status === 'rejected' && (
-                    <button
-                      onClick={() => handleUpdateStatus(submission._id, 'approved')}
-                      className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-                    >
-                      Approve
-                    </button>
-                  )}
+                    )}
+                    
+                    {submission.status === 'rejected' && (
+                      <button
+                        onClick={() => handleUpdateStatus(submission._id, 'approved')}
+                        className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                      >
+                        Approve
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 mt-8">
+              <button
+                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="px-2 text-sm font-medium">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -6,6 +6,8 @@ import { useSession } from 'next-auth/react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import Image from 'next/image';
+import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 interface Competition {
   _id: string;
@@ -54,6 +56,12 @@ export default function EditCompetition() {
   const [coverImage, setCoverImage] = useState<File | null>(null);
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+
+  const [imageValidationError, setImageValidationError] = useState<string | null>(null);
 
   // Format date for input fields (YYYY-MM-DD)
   const formatDateForInput = (dateString: string) => {
@@ -166,113 +174,119 @@ export default function EditCompetition() {
   
   // Handle image changes
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageValidationError(null);
+    setCrop(undefined);
+    setCompletedCrop(undefined);
     const file = e.target.files?.[0] || null;
-    setCoverImage(file);
     
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setImageValidationError('Image size must be less than 5MB');
+        setCoverImage(null);
+        setCoverImagePreview(competition?.coverImage || null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      setCoverImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setCoverImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+    } else {
+      setCoverImage(null);
+      setCoverImagePreview(competition?.coverImage || null);
     }
   };
+
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const { width, height } = e.currentTarget;
+    if (coverImagePreview && !crop) { 
+      const newCrop = centerCrop(
+        makeAspectCrop(
+          {
+            unit: '%',
+            width: 90,
+          },
+          4 / 3,
+          width,
+          height
+        ),
+        width,
+        height
+      );
+      setCrop(newCrop);
+    }
+  }
   
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
+    setLoading(true);
     setError('');
     setSuccess('');
+
+    // Log form data and crop data for debugging
+    console.log('Submitting competition edit:', {
+      formData,
+      coverImage,
+      completedCrop,
+      coverImagePreview
+    });
+
+    // Validate required fields
+    if (!formData.title || !formData.theme || !formData.description || !formData.startDate || !formData.endDate || !formData.votingEndDate || !formData.status) {
+      setError('Please fill in all required fields.');
+      setLoading(false);
+      return;
+    }
+
+    const formDataToSubmit = new FormData();
+
+    // Append all non-file fields from formData state
+    Object.entries(formData).forEach(([key, value]) => {
+      // Always append all fields, including status
+      if (key === 'coverImage' || key === 'coverImageUrl') return; // Handled separately
+      if (typeof value === 'boolean') {
+        formDataToSubmit.append(key, value ? 'true' : 'false');
+      } else if (value !== null && value !== undefined) {
+        formDataToSubmit.append(key, String(value));
+      }
+    });
+
+    // Handle new cover image upload with crop parameters
+    if (coverImage && completedCrop) {
+      formDataToSubmit.append('coverImage', coverImage);
+      formDataToSubmit.append('cropX', String(Math.round(completedCrop.x)));
+      formDataToSubmit.append('cropY', String(Math.round(completedCrop.y)));
+      formDataToSubmit.append('cropWidth', String(Math.round(completedCrop.width)));
+      formDataToSubmit.append('cropHeight', String(Math.round(completedCrop.height)));
+    } else if (coverImage && !completedCrop && coverImagePreview) {
+        setError('New image selected but crop data is missing. Please ensure the crop is set.');
+        setLoading(false);
+        return;
+    }
     
     try {
-      // Validate that all required dates are provided
-      if (!formData.startDate || !formData.endDate || !formData.votingEndDate) {
-        throw new Error('All dates are required');
-      }
-
-      // Create copies of the form data with proper date handling
-      const formDataWithDates = { ...formData };
-      
-      // Log form data for debugging with special focus on hideOtherSubmissions
-      console.log('Form data being submitted:', {
-        ...formDataWithDates,
-        hideOtherSubmissions: formDataWithDates.hideOtherSubmissions,
-        hideOtherSubmissionsType: typeof formDataWithDates.hideOtherSubmissions
+      const res = await fetch(`/api/competitions/${competitionId}`, {
+        method: 'PUT',
+        body: formDataToSubmit,
       });
-      
-      try {
-        // Parse dates and set proper times
-        const startDate = parseDateString(formData.startDate);
-        startDate.setUTCHours(0, 0, 0, 0);
-        formDataWithDates.startDate = startDate.toISOString();
 
-        const endDate = parseDateString(formData.endDate);
-        endDate.setUTCHours(23, 59, 59, 999);
-        formDataWithDates.endDate = endDate.toISOString();
-
-        const votingEndDate = parseDateString(formData.votingEndDate);
-        votingEndDate.setUTCHours(23, 59, 59, 999);
-        formDataWithDates.votingEndDate = votingEndDate.toISOString();
-
-        // Log dates for debugging
-        console.log('Parsed dates:', {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          votingEndDate: votingEndDate.toISOString()
-        });
-
-        // Validate date order using UTC timestamps
-        if (endDate.getTime() <= startDate.getTime()) {
-          throw new Error('End date must be after start date');
+      if (!res.ok) {
+        let errorData;
+        try {
+          errorData = await res.json();
+        } catch (jsonErr) {
+          errorData = { message: await res.text() };
         }
-        
-        if (votingEndDate.getTime() <= endDate.getTime()) {
-          throw new Error('Voting end date must be after submission end date');
-        }
-      } catch (dateError: any) {
-        console.error('Date parsing error:', dateError);
-        throw new Error(dateError.message || 'Invalid date format. Please check all dates are entered correctly.');
-      }
-
-      let response;
-
-      // Check if we need to handle file upload
-      if (coverImage) {
-        const updateFormData = new FormData();
-        
-        // Add all form fields with the properly formatted dates
-        Object.entries(formDataWithDates).forEach(([key, value]) => {
-          updateFormData.append(key, value.toString());
-        });
-        
-        // Add cover image
-        updateFormData.append('coverImage', coverImage);
-        
-        // Submit form with image
-        response = await fetch(`/api/competitions/${competitionId}/with-cover`, {
-          method: 'PUT',
-          body: updateFormData,
-        });
-      } else {
-        // Submit form without image using regular JSON
-        response = await fetch(`/api/competitions/${competitionId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formDataWithDates),
-        });
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
+        console.error('Backend error:', errorData);
         throw new Error(errorData.message || 'Failed to update competition');
       }
 
       setSuccess(coverImage ? 'Competition updated successfully with new cover image!' : 'Competition updated successfully!');
-      
-      // Redirect after success
       setTimeout(() => {
         router.push('/admin/competitions');
       }, 1500);
@@ -281,7 +295,7 @@ export default function EditCompetition() {
       console.error('Error updating competition:', error);
       setError(error.message || 'An error occurred while updating the competition');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
   
@@ -584,42 +598,58 @@ export default function EditCompetition() {
               <p className="mt-1 text-xs text-gray-500">Separate criteria with commas</p>
             </div>
             
-            {/* Cover Image */}
+            {/* Cover Image - REPLACEMENT START */}
             <div className="sm:col-span-6">
               <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700">
                 Cover Image
               </label>
               <div className="mt-2">
                 {coverImagePreview ? (
-                  <div className="relative">
-                    <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-300">
-                      <Image 
-                        src={coverImagePreview}
-                        alt="Competition cover"
-                        fill
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        className="object-cover"
-                        unoptimized={true}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCoverImage(null);
-                        // Only clear preview if it's not from the database
-                        if (coverImagePreview !== competition?.coverImage) {
-                          setCoverImagePreview(competition?.coverImage || null);
-                        }
-                        if (fileInputRef.current) {
-                          fileInputRef.current.value = '';
-                        }
-                      }}
-                      className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-md hover:bg-gray-100"
+                  <div>
+                    <ReactCrop
+                      crop={crop}
+                      onChange={(_, percentCrop) => setCrop(percentCrop)}
+                      onComplete={(c) => setCompletedCrop(c)}
+                      aspect={4 / 3}
+                      className="w-full max-w-3xl mx-auto"
+                      minWidth={100}
+                      minHeight={75}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                      <img
+                        ref={imgRef}
+                        alt="Crop preview"
+                        src={coverImagePreview}
+                        onLoad={onImageLoad}
+                        style={{ maxHeight: '70vh' }}
+                      />
+                    </ReactCrop>
+                    <div className="flex justify-center mt-2 space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoverImage(null);
+                          setCoverImagePreview(competition?.coverImage || null);
+                          setCrop(undefined);
+                          setCompletedCrop(undefined);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
+                        }}
+                        className="rounded-full bg-gray-300 text-gray-700 p-1 shadow-md hover:bg-gray-400 text-xs"
+                        title="Remove/Reset image"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M15.707 4.293a1 1 0 010 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 011.414-1.414L10 8.586l4.293-4.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                     <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                      >
+                        Change Image
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex justify-center border-2 border-dashed border-gray-300 rounded-lg p-6">
@@ -649,22 +679,14 @@ export default function EditCompetition() {
                     </div>
                   </div>
                 )}
-                {coverImagePreview && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Change Image
-                    </button>
-                  </div>
+                {imageValidationError && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {imageValidationError}
+                  </p>
                 )}
-                <p className="mt-1 text-xs text-gray-500">
-                  Recommended size: 1200x600 pixels. The cover image will be displayed at the top of the competition page.
-                </p>
               </div>
             </div>
+            {/* Cover Image - REPLACEMENT END */}
           </div>
           
           <div className="mt-8 flex justify-end">

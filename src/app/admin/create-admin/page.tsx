@@ -18,7 +18,8 @@ export default function CreateAdminPage() {
 
   // Redirect if not admin
   if (status === 'unauthenticated') {
-    router.push('/auth/login');
+    router.push('/');
+    return;
   } else if (status === 'authenticated' && session?.user?.role !== 'admin') {
     router.push('/dashboard');
   }

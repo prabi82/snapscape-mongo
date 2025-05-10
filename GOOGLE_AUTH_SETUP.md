@@ -29,10 +29,10 @@ To properly enable Google authentication, follow these steps:
    - Set an appropriate name like "SnapScape Development"
 
 2. **Configure Authorized Origins**:
-   - Add `http://localhost:3002` to "Authorized JavaScript origins"
+   - Add `http://localhost:3000` to "Authorized JavaScript origins"
    
 3. **Configure Redirect URIs**:
-   - Add `http://localhost:3002/api/auth/callback/google` to "Authorized redirect URIs"
+   - Add `http://localhost:3000/api/auth/callback/google` to "Authorized redirect URIs"
    - This is the callback URL that NextAuth.js uses to complete the authentication process
 
 4. **Add Credentials to Environment File**:
@@ -57,7 +57,7 @@ When running locally, Next.js loads environment variables from these files in or
 4. `.env.development.local` (highest priority for development)
 
 Your local development should use `.env.development.local` with these settings:
-- `NEXTAUTH_URL="http://localhost:3002"`
+- `NEXTAUTH_URL="http://localhost:3000"`
 - `NEXTAUTH_SECRET="your_secret_here"`
 - `GOOGLE_CLIENT_ID="your_client_id_here"`
 - `GOOGLE_CLIENT_SECRET="your_client_secret_here"`
@@ -65,7 +65,7 @@ Your local development should use `.env.development.local` with these settings:
 ## Testing Authentication
 
 Once set up:
-1. Navigate to http://localhost:3002/auth/login
+1. Navigate to http://localhost:3000/auth/login
 2. Click "Sign in with Google"
 3. Complete the Google authentication flow
 4. You should be redirected back to your application

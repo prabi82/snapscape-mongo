@@ -15,15 +15,12 @@ export default function AuthLayout({
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="flex items-center">
-            <span className="text-2xl font-bold text-indigo-600">SnapScape</span>
-          </Link>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-end items-center">
           <div className="flex space-x-4">
             <Link 
-              href="/auth/login" 
+              href="/" 
               className={`text-sm font-medium ${
-                pathname === '/auth/login' 
+                pathname === '/' 
                   ? 'text-indigo-600' 
                   : 'text-gray-500 hover:text-gray-900'
               }`}

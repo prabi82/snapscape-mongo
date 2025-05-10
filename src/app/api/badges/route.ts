@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         .sort({ awardedAt: -1 })
         .populate('badge')
         .populate('competition', 'title')
-        .populate('photoSubmission', 'title');
+        .populate('photo', 'title');
         
       return NextResponse.json({
         success: true,
@@ -33,7 +33,8 @@ export async function GET(req: NextRequest) {
       // Public view of user badges (fewer details)
       const userBadges = await UserBadge.find({ user: userId })
         .sort({ awardedAt: -1 })
-        .populate('badge', includeDetails ? undefined : 'name icon');
+        .populate('badge', includeDetails ? undefined : 'name icon')
+        .populate('photo', 'title');
         
       return NextResponse.json({
         success: true,

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
+import React from 'react';
 
 interface Competition {
   _id: string;
@@ -61,6 +62,43 @@ export default function CompetitionDetail() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
+  const [fileSizeError, setFileSizeError] = useState('');
+
+  // New state for user's submissions to this competition
+  const [userSubmissions, setUserSubmissions] = useState<Submission[]>([]);
+  const [modalImage, setModalImage] = useState<string | null>(null);
+
+  // Add modal navigation logic
+  const currentModalIndex = modalImage ? userSubmissions.findIndex(img => img._id === modalImage) : -1;
+  const showNextImage = useCallback(() => {
+    if (currentModalIndex >= 0 && currentModalIndex < userSubmissions.length - 1) {
+      setModalImage(userSubmissions[currentModalIndex + 1]._id);
+    }
+  }, [currentModalIndex, userSubmissions]);
+  const showPrevImage = useCallback(() => {
+    if (currentModalIndex > 0) {
+      setModalImage(userSubmissions[currentModalIndex - 1]._id);
+    }
+  }, [currentModalIndex, userSubmissions]);
+  // Listen for wheel and arrow key events when modal is open
+  useEffect(() => {
+    if (!modalImage) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY > 0) showNextImage();
+      else if (e.deltaY < 0) showPrevImage();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') showNextImage();
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') showPrevImage();
+      if (e.key === 'Escape') setModalImage(null);
+    };
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [modalImage, showNextImage, showPrevImage]);
 
   // Fetch competition and submissions data
   useEffect(() => {
@@ -100,6 +138,22 @@ export default function CompetitionDetail() {
     }
   }, [competitionId, status]);
 
+  // Fetch user's submissions for this competition
+  useEffect(() => {
+    const fetchUserSubmissions = async () => {
+      if (!session?.user || !competitionId) return;
+      try {
+        const response = await fetch(`/api/user/submissions?competition=${competitionId}&limit=100`);
+        if (!response.ok) throw new Error('Failed to fetch user submissions');
+        const data = await response.json();
+        setUserSubmissions(data.data || []);
+      } catch (err) {
+        setUserSubmissions([]);
+      }
+    };
+    fetchUserSubmissions();
+  }, [session, competitionId]);
+
   // Modify the useEffect to show the form based on URL parameter
   useEffect(() => {
     if (showSubmitParam === 'true' && competition?.status === 'active' && !competition?.hasSubmitted) {
@@ -113,11 +167,20 @@ export default function CompetitionDetail() {
     setIsSubmitting(true);
     setSubmitError('');
     setSubmitSuccess('');
+    setFileSizeError('');
     
     try {
       // Validate input
       if (!photoTitle || !photoDescription || !photoFile) {
         throw new Error('Please fill in all fields and select a photo');
+      }
+      
+      // Check file size (limit: 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (photoFile.size > maxSize) {
+        setFileSizeError('The selected image is above the 10MB limit. Please choose a smaller file.');
+        setIsSubmitting(false);
+        return;
       }
       
       console.log('Creating FormData for photo upload');
@@ -275,6 +338,21 @@ export default function CompetitionDetail() {
     return format(new Date(dateString), 'MMMM d, yyyy');
   };
 
+  // Handle file input change with file size check
+  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileSizeError('');
+    const file = e.target.files?.[0] || null;
+    if (file) {
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        setFileSizeError('The selected image is above the 10MB limit. Please choose a smaller file.');
+        setPhotoFile(null);
+        return;
+      }
+    }
+    setPhotoFile(file);
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -302,12 +380,12 @@ export default function CompetitionDetail() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-4">
+    <div className="container mx-auto px-4 py-4 bg-[#e6f0f3] min-h-screen">
       {/* Back button */}
       <div className="mb-4">
         <Link 
           href="/dashboard/competitions"
-          className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-900"
+          className="inline-flex items-center text-sm text-[#1a4d5c] hover:text-[#2699a6] font-semibold"
         >
           <svg className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -316,387 +394,291 @@ export default function CompetitionDetail() {
         </Link>
       </div>
       
-      {/* Competition header with minimal info */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-4">
-        <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{competition.title}</h1>
-              <p className="mt-1 text-sm text-gray-500">Theme: {competition.theme}</p>
-            </div>
-            <span
-              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                competition.status === 'upcoming' ? 'bg-blue-100 text-blue-800' : 
+      {/* Competition header and details in 2 columns */}
+      <div className="bg-white border-2 border-[#e0c36a] shadow rounded-2xl overflow-hidden mb-4 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left: Image and main info */}
+          <div className="flex flex-col items-start gap-3">
+            {competition.coverImage && (
+              <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden border border-[#e0c36a] bg-[#e6f0f3] relative mb-4">
+                <Image
+                  src={competition.coverImage}
+                  alt={competition.title}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              </div>
+            )}
+            {/* View All Submissions button below the image */}
+            {competition.submissionCount > 0 && (
+              <Link 
+                href={`/dashboard/competitions/${competition._id}/view-submissions`}
+                className="block w-full"
+              >
+                <button className="mt-2 w-full px-3 py-2 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg text-[#1a4d5c] text-sm font-semibold hover:bg-[#e6f0f3]">
+                  View All Submissions ({competition.submissionCount})
+                </button>
+              </Link>
+            )}
+          </div>
+          {/* Right: Details */}
+          <div className="flex flex-col gap-3 text-sm">
+            {/* Title and status at the top */}
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-xl font-bold text-[#1a4d5c] m-0 p-0">{competition.title}</h1>
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold shadow ${
                 competition.status === 'active' ? 'bg-green-100 text-green-800' :
+                competition.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
                 competition.status === 'voting' ? 'bg-yellow-100 text-yellow-800' :
                 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {competition.status.charAt(0).toUpperCase() + competition.status.slice(1)}
-            </span>
-          </div>
-        </div>
-        
-        {/* Submit photo section for active competitions - MOVED TO TOP */}
-        {competition.status === 'active' && (
-          <div className="px-4 py-4 sm:px-6 bg-gray-50 border-t border-gray-200">
-            <div className="text-center">
-              {/* Show submission count */}
-              <div className="mb-3">
-                <p className="text-gray-700">
-                  Your submissions: <span className="font-medium">{competition.userSubmissionsCount}</span> of <span className="font-medium">{competition.submissionLimit}</span>
-                </p>
-                {competition.hasSubmitted && !competition.canSubmitMore && (
-                  <p className="text-red-600 font-medium mt-1">
-                    You've reached the maximum number of submissions for this competition.
-                  </p>
-                )}
-                {competition.hasSubmitted && competition.canSubmitMore && (
-                  <p className="text-green-600 font-medium mt-1">
-                    You can submit {competition.submissionLimit - competition.userSubmissionsCount} more photo{competition.submissionLimit - competition.userSubmissionsCount !== 1 ? 's' : ''}.
-                  </p>
-                )}
-              </div>
-
-              {showSubmitForm ? (
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-3">Submit Your Photo</h3>
-                  
-                  {submitError && (
-                    <div className="bg-red-50 border-l-4 border-red-400 p-3 mb-3 text-left">
-                      <p className="text-red-700">{submitError}</p>
-                    </div>
-                  )}
-                  
-                  <form onSubmit={handleSubmitPhoto} className="max-w-md mx-auto text-left">
-                    <div className="mb-3">
-                      <label htmlFor="photoTitle" className="block text-sm font-medium text-gray-700 mb-1">
-                        Photo Title <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        id="photoTitle"
-                        value={photoTitle}
-                        onChange={(e) => setPhotoTitle(e.target.value)}
-                        className="mt-1 block w-full shadow-sm sm:text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 py-2"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="photoDescription" className="block text-sm font-medium text-gray-700 mb-1">
-                        Description <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        id="photoDescription"
-                        value={photoDescription}
-                        onChange={(e) => setPhotoDescription(e.target.value)}
-                        rows={3}
-                        className="mt-1 block w-full shadow-sm sm:text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 py-2"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="photoFile" className="block text-sm font-medium text-gray-700 mb-1">
-                        Photo <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="file"
-                        id="photoFile"
-                        accept="image/*"
-                        onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                        required
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        JPG, PNG or GIF up to 10MB
-                      </p>
-                    </div>
-                    
-                    <div className="flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowSubmitForm(false)}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                      >
-                        {isSubmitting ? 'Submitting...' : 'Submit Photo'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              ) : (
-                <div>
-                  {submitSuccess && (
-                    <div className="bg-green-50 border-l-4 border-green-400 p-3 mb-3">
-                      <p className="text-green-700">{submitSuccess}</p>
-                    </div>
-                  )}
-                  
-                  {competition.canSubmitMore ? (
-                    <button
-                      onClick={() => setShowSubmitForm(true)}
-                      className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-                    >
-                      {competition.hasSubmitted ? 'Submit Another Photo' : 'Submit Your Photo'}
-                    </button>
-                  ) : (
-                    <p className="text-gray-500">
-                      You've reached the maximum number of submissions for this competition.
-                    </p>
-                  )}
-                  
-                  <p className="mt-2 text-sm text-gray-500">
-                    Submission period ends on {formatDate(competition.endDate)}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Important Dates - MOVED UP */}
-        <div className="px-4 py-4 sm:px-6 border-t border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900 mb-2">Important Dates</h2>
-          <div className="bg-gray-50 rounded-md p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Submission Start</p>
-              <p className="text-gray-900">{formatDate(competition.startDate)}</p>
+              }`}>
+                {competition.status.charAt(0).toUpperCase() + competition.status.slice(1)}
+              </span>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Submission End</p>
-              <p className="text-gray-900">{formatDate(competition.endDate)}</p>
+              <h2 className="font-bold text-[#1a4d5c] mb-1 text-base">Description</h2>
+              <p className="text-gray-700 whitespace-pre-line line-clamp-3">{competition.description}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Voting End</p>
-              <p className="text-gray-900">{formatDate(competition.votingEndDate)}</p>
+              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Rules & Regulations</h3>
+              <div className="text-gray-700 whitespace-pre-line line-clamp-3">{competition.rules || 'Standard rules apply.'}</div>
             </div>
-          </div>
-        </div>
-
-        {/* View submissions button - only show if there are submissions */}
-        {competition.submissionCount > 0 && (
-          <div className="px-4 py-3 sm:px-6 border-t border-gray-200 flex justify-center">
-            <Link 
-              href={`/dashboard/competitions/${competitionId}/view-submissions`}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <svg className="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              View All Submissions ({competition.submissionCount})
-            </Link>
-          </div>
-        )}
-      </div>
-      
-      {/* Competition cover image */}
-      {competition.coverImage && (
-        <div className="relative w-full h-48 md:h-64 mb-4 overflow-hidden rounded-lg shadow-md">
-          <Image
-            src={competition.coverImage}
-            alt={competition.title}
-            fill
-            priority
-            className="object-cover"
-          />
-        </div>
-      )}
-      
-      {/* Navigation tabs */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-4">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
-            <a href="#details" className="border-indigo-500 text-indigo-600 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
-              DETAILS
-            </a>
-            <a href="#prizes" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
-              PRIZES
-            </a>
-            <a href="#rules" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
-              RULES
-            </a>
-            <a href="#rank" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
-              RANK
-            </a>
-          </nav>
-        </div>
-        
-        <div className="px-4 py-4 sm:p-6">
-          <div id="details" className="mb-4">
-            <h2 className="text-lg font-medium text-gray-900 mb-2">Description</h2>
-            <p className="text-gray-600 whitespace-pre-line">{competition.description}</p>
-          </div>
-          
-          {/* Competition details in more compact format */}
-          <div className="space-y-4">
-            {/* Submission Limit */}
-            <div className="border-b pb-3 flex">
-              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                <span className="text-gray-700 font-bold">4</span>
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Submission Limit</h3>
-                <p className="text-gray-600">{competition.submissionLimit || 4} photo submits per participant</p>
-              </div>
+            <div>
+              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Prizes</h3>
+              <div className="text-gray-700 whitespace-pre-line line-clamp-2">{competition.prizes || 'No prize information is available for this competition.'}</div>
             </div>
-            
-            {/* Submission Rules */}
-            <div className="border-b pb-3 flex" id="rules">
-              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Submission Rules</h3>
-                {competition.rules ? (
-                  <div className="text-gray-600 whitespace-pre-line">{competition.rules}</div>
-                ) : (
-                  <div className="text-gray-600">
-                    <p>Do not post:</p>
-                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                      <li>Non-relevant images</li>
-                      <li>Similar images: Images with the same combination of subject, background, foreground and location are not allowed. Images must be distinct</li>
-                      <li>AI images</li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div id="prizes" className="mb-4 border-b pb-3">
-              <h2 className="text-lg font-medium text-gray-900 mb-2">Prizes</h2>
-              {competition.prizes ? (
-                <p className="text-gray-600 whitespace-pre-line">{competition.prizes}</p>
-              ) : (
-                <p className="text-gray-600">No prize information is available for this competition.</p>
-              )}
-            </div>
-            
-            {/* Voting Criteria */}
             {competition.votingCriteria && (
-              <div className="mb-4 border-b pb-3" id="rank">
-                <h2 className="text-lg font-medium text-gray-900 mb-2">Voting Criteria</h2>
+              <div>
+                <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Voting Criteria</h3>
                 <div className="flex flex-wrap gap-2">
                   {competition.votingCriteria.split(',').map((criteria, index) => (
-                    <span 
-                      key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800"
-                    >
+                    <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-[#e6f0f3] text-[#1a4d5c] border border-[#e0c36a]">
                       {criteria.trim()}
                     </span>
                   ))}
                 </div>
               </div>
             )}
-            
-            {/* Submission Format */}
-            <div className="border-b pb-3 flex">
-              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Submission Format</h3>
-                <p className="text-gray-600">JPEG, minimum resolution of 700px × 700px, maximum size 25MB</p>
-              </div>
+            <div>
+              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Submission Format</h3>
+              <div className="text-gray-700">JPEG, minimum resolution of 700px × 700px, maximum size 25MB</div>
             </div>
-            
-            {/* Copyright */}
-            <div className="border-b pb-3 flex">
-              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Copyright</h3>
-                <p className="text-gray-600">You maintain the copyrights to all photos you submit. You must own all submitted images.</p>
-              </div>
+            <div>
+              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Copyright</h3>
+              <div className="text-gray-700">You maintain the copyrights to all photos you submit. You must own all submitted images.</div>
             </div>
           </div>
         </div>
       </div>
       
-      {/* Submissions display for voting phase */}
-      {(competition.status === 'voting' || competition.status === 'completed') && (
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-4">
-          <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-800">
-            {competition.status === 'voting' ? 'Vote on Submissions' : 'Competition Submissions'}
-          </h2>
-          </div>
-          
-          <div className="px-4 py-4 sm:px-6">
-          {submissions.length === 0 ? (
-              <div className="text-center py-4">
-              <p className="text-gray-500">No submissions available for this competition.</p>
+      {/* Submit photo section for active competitions - MOVED TO TOP */}
+      {competition.status === 'active' && (
+        <div className="px-6 py-6 bg-[#fffbe6] border-t-2 border-[#e0c36a]">
+          <div className="text-center">
+            {/* Show submission count */}
+            <div className="mb-3">
+              <p className="text-[#1a4d5c] font-semibold">
+                Your submissions: <span className="font-bold">{competition.userSubmissionsCount}</span> of <span className="font-bold">{competition.submissionLimit}</span>
+              </p>
+              {competition.hasSubmitted && !competition.canSubmitMore && (
+                <p className="text-red-600 font-semibold mt-1">
+                  You've reached the maximum number of submissions for this competition.
+                </p>
+              )}
+              {competition.hasSubmitted && competition.canSubmitMore && (
+                <p className="text-green-600 font-semibold mt-1">
+                  You can submit {competition.submissionLimit - competition.userSubmissionsCount} more photo{competition.submissionLimit - competition.userSubmissionsCount !== 1 ? 's' : ''}.
+                </p>
+              )}
             </div>
-          ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {submissions.map((submission) => (
-                  <div key={submission._id} className="bg-white border rounded-lg overflow-hidden">
-                    <div className="relative h-40 w-full overflow-hidden">
-                    <Image 
-                      src={submission.imageUrl} 
-                      alt={submission.title}
-                      fill
-                      className="object-cover"
+
+            {showSubmitForm ? (
+              <div>
+                <h3 className="text-xl font-bold text-[#1a4d5c] mb-3">Submit Your Photo</h3>
+                
+                {submitError && (
+                  <div className="bg-red-50 border-l-4 border-red-400 p-3 mb-3 text-left rounded-md">
+                    <p className="text-red-700 font-semibold">{submitError}</p>
+                  </div>
+                )}
+                
+                {fileSizeError && (
+                  <div className="bg-red-50 border-l-4 border-red-400 p-2 mt-2 rounded-md">
+                    <p className="text-red-700 text-sm font-semibold">{fileSizeError}</p>
+                  </div>
+                )}
+                
+                <form onSubmit={handleSubmitPhoto} className="max-w-md mx-auto text-left">
+                  <div className="mb-3">
+                    <label htmlFor="photoTitle" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
+                      Photo Title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="photoTitle"
+                      value={photoTitle}
+                      onChange={(e) => setPhotoTitle(e.target.value)}
+                      className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
+                      required
                     />
                   </div>
                   
-                    <div className="p-3">
-                      <h3 className="text-md font-medium text-gray-900">{submission.title}</h3>
-                      <p className="text-xs text-gray-500 mb-1">By {submission.user.name}</p>
-                      <p className="text-xs text-gray-600 mb-2 line-clamp-2">{submission.description}</p>
-                    
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center">
-                        <span className="text-yellow-500 mr-1">
-                          ★
-                        </span>
-                        <span className="text-sm text-gray-700">
-                          {submission.averageRating?.toFixed(1) || 'No ratings'} 
-                          {submission.ratingsCount > 0 && ` (${submission.ratingsCount})`}
-                        </span>
-                      </div>
-                      
-                      {competition.status === 'voting' && (
-                        <div className="flex items-center space-x-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              key={star}
-                              onClick={() => handleRatePhoto(submission._id, star)}
-                                className={`text-lg focus:outline-none ${
-                                submission.userRating && submission.userRating >= star 
-                                  ? 'text-yellow-500' 
-                                  : 'text-gray-300 hover:text-yellow-500'
-                              }`}
-                              aria-label={`Rate ${star} stars`}
-                            >
-                              ★
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  <div className="mb-3">
+                    <label htmlFor="photoDescription" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="photoDescription"
+                      value={photoDescription}
+                      onChange={(e) => setPhotoDescription(e.target.value)}
+                      rows={3}
+                      className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
+                      required
+                    />
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                  
+                  <div className="mb-3">
+                    <label htmlFor="photoFile" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
+                      Photo <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="file"
+                      id="photoFile"
+                      accept="image/*"
+                      onChange={handlePhotoFileChange}
+                      className="mt-1 block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border-[#e0c36a]"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      JPG, PNG or GIF up to 10MB
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSubmitForm(false)}
+                      className="inline-flex items-center px-4 py-2 border-2 border-[#e0c36a] shadow-sm text-sm font-semibold rounded-lg text-[#1a4d5c] bg-[#fffbe6] hover:bg-[#e6f0f3]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Submitting...' : 'Submit Photo'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <div>
+                {submitSuccess && (
+                  <div className="bg-green-50 border-l-4 border-green-400 p-3 mb-3 rounded-md">
+                    <p className="text-green-700 font-semibold">{submitSuccess}</p>
+                  </div>
+                )}
+                
+                {competition.canSubmitMore ? (
+                  <button
+                    onClick={() => setShowSubmitForm(true)}
+                    className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c]"
+                  >
+                    {competition.hasSubmitted ? 'Submit Another Photo' : 'Submit Your Photo'}
+                  </button>
+                ) : (
+                  <p className="text-gray-500">
+                    You've reached the maximum number of submissions for this competition.
+                  </p>
+                )}
+                
+                <p className="mt-2 text-sm text-gray-500">
+                  Submission period ends on {formatDate(competition.endDate)}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Important Dates - MOVED UP */}
+      <div className="px-6 py-6 border-t-2 border-[#e0c36a] bg-[#e6f0f3] rounded-b-2xl">
+        <h2 className="text-lg font-bold text-[#1a4d5c] mb-2">Important Dates</h2>
+        <div className="bg-[#fffbe6] rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm font-semibold text-[#2699a6]">Submission Start</p>
+            <p className="text-[#1a4d5c] font-bold">{formatDate(competition.startDate)}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#2699a6]">Submission End</p>
+            <p className="text-[#1a4d5c] font-bold">{formatDate(competition.endDate)}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#2699a6]">Voting End</p>
+            <p className="text-[#1a4d5c] font-bold">{formatDate(competition.votingEndDate)}</p>
+          </div>
+        </div>
+      </div>
+      {/* User's Submitted Images for this Competition */}
+      {userSubmissions.length > 0 && (
+        <div className="mt-12 px-6">
+          <h2 className="text-lg font-bold text-[#1a4d5c] mb-3">My Submitted Images for this Competition</h2>
+          <div className="grid grid-cols-3 gap-0">
+            {userSubmissions.map((img) => (
+              <div
+                key={img._id}
+                className="relative w-full aspect-[4/3] group overflow-hidden cursor-pointer"
+                onClick={() => setModalImage(img._id)}
+              >
+                <img
+                  src={img.imageUrl}
+                  alt={img.title}
+                  className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-110"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center text-white p-4">
+                  <div className="font-bold text-base mb-1 truncate w-full text-center">{img.title}</div>
+                  <div className="text-xs w-full text-center">Uploaded: {img.createdAt ? new Date(img.createdAt).toLocaleDateString() : ''}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Modal for full image with sidebar */}
+      {modalImage && (() => {
+        const currentImg = userSubmissions.find(img => img._id === modalImage);
+        if (!currentImg) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setModalImage(null)}>
+            <div className="relative w-full h-full flex flex-col md:flex-row items-center justify-center" onClick={e => e.stopPropagation()}>
+              <button className="absolute top-4 right-8 z-10 bg-white/80 hover:bg-white text-[#1a4d5c] rounded-full p-2 shadow" onClick={() => setModalImage(null)} aria-label="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              {/* Image on the left */}
+              <div className="flex-1 h-full relative modal-image-area" key={currentImg._id}>
+                <img
+                  src={currentImg.imageUrl}
+                  alt={currentImg.title}
+                  className="object-contain w-full h-full modal-image"
+                />
+              </div>
+              {/* Sidebar on the right */}
+              <div className="w-full md:w-64 h-full flex flex-col justify-center bg-black/70 p-6 md:rounded-none rounded-b-2xl md:rounded-r-2xl modal-sidebar">
+                <div className="font-bold text-2xl text-white mb-2 text-center md:text-left">{currentImg.title}</div>
+                <div className="text-xs text-gray-200 mb-4 text-center md:text-left">Uploaded: {currentImg.createdAt ? new Date(currentImg.createdAt).toLocaleDateString() : ''}</div>
+                {currentImg.description && (
+                  <div className="text-sm text-gray-100 mt-2 text-center md:text-left">{currentImg.description}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 } 

@@ -62,9 +62,9 @@ export default function DashboardLayout({
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   
   useEffect(() => {
-    // Redirect to login if not authenticated
+    // Redirect to homepage if not authenticated
     if (status === 'unauthenticated') {
-      router.push('/auth/login');
+      router.push('/');
     }
     
     // Fetch unread notification count
@@ -116,13 +116,13 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Mobile menu button */}
-      <div className="lg:hidden p-4 flex items-center justify-between bg-white shadow-sm">
-        <Link href="/" className="text-xl font-bold text-indigo-600">
-          SnapScape
+      <div className="lg:hidden p-4 flex items-center justify-center bg-white shadow-sm relative">
+        <Link href="/" className="flex items-center justify-center w-full">
+          <img src="/logo.png" alt="SnapScape Logo" className="w-16 h-16 rounded-full border-2 border-[#e0c36a] bg-white" />
         </Link>
         <button
           type="button"
-          className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+          className="absolute right-4 p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
           <span className="sr-only">Open menu</span>
@@ -133,47 +133,46 @@ export default function DashboardLayout({
       </div>
       
       {/* Sidebar for desktop */}
-      <div className="fixed inset-y-0 left-0 bg-white shadow-lg z-10 w-64 hidden lg:block">
+      <div className="fixed inset-y-0 left-0 bg-[#e6f0f3] border-r-2 border-[#e0c36a] z-10 w-64 hidden lg:block rounded-tr-3xl rounded-br-3xl shadow-xl">
         <div className="h-full flex flex-col">
-          <div className="h-16 flex items-center px-6 border-b border-gray-200">
-            <Link href="/" className="text-xl font-bold text-indigo-600">
-              SnapScape
+          <div className="h-36 flex items-center justify-center border-b-2 border-[#e0c36a] bg-white rounded-tr-3xl">
+            <Link href="/" className="flex flex-col items-center justify-center">
+              <img src="/logo.png" alt="SnapScape Logo" className="w-24 h-24 rounded-full border-4 border-[#e0c36a] shadow mb-1 bg-white" />
             </Link>
           </div>
-          
           <div className="flex-grow overflow-y-auto">
-            <nav className="px-3 mt-6">
-              <div className="space-y-1">
+            <nav className="px-4 mt-8">
+              <div className="space-y-2">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
                     href={item.href}
                     className={`
-                      flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group
-                      ${pathname.startsWith(item.href) 
-                        ? 'bg-indigo-50 text-indigo-600' 
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
+                      flex items-center gap-3 px-4 py-3 text-base font-semibold rounded-xl transition-all
+                      ${
+                        (item.href === '/dashboard' && pathname === '/dashboard') ||
+                        (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                          ? 'bg-gradient-to-r from-[#e0c36a]/30 to-[#fffbe6] text-[#1a4d5c] shadow border-l-4 border-[#e0c36a]'
+                          : 'text-[#1a4d5c] hover:bg-[#e0c36a]/10 hover:text-[#2699a6]'
+                      }
                     `}
                   >
-                    <div className="flex items-center">
-                      <span className="mr-3">
+                    <span className="flex items-center justify-center w-6 h-6">
                         <item.icon />
                       </span>
-                      {item.name}
-                    </div>
+                    <span>{item.name}</span>
                     {item.badge && (
-                      <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs">
+                      <span className="ml-auto bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs">
                         {item.badge}
                       </span>
                     )}
                   </Link>
                 ))}
-                
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-gray-900 group"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-base font-semibold text-[#1a4d5c] rounded-xl hover:bg-[#e0c36a]/10 hover:text-[#2699a6] transition-all mt-2"
                 >
-                  <span className="mr-3">
+                  <span className="flex items-center justify-center w-6 h-6">
                     <LogoutIcon />
                   </span>
                   Logout
@@ -181,22 +180,21 @@ export default function DashboardLayout({
               </div>
             </nav>
           </div>
-          
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-5 border-t-2 border-[#e0c36a] bg-white rounded-br-3xl">
             {session?.user && (
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-indigo-200 flex items-center justify-center">
-                    <span className="text-indigo-600 font-medium">
+                  <div className="h-10 w-10 rounded-full bg-[#e0c36a]/20 flex items-center justify-center border-2 border-[#e0c36a]">
+                    <span className="text-[#1a4d5c] font-bold text-lg">
                       {session.user.name?.charAt(0).toUpperCase() || '?'}
                     </span>
                   </div>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-700 truncate">
+                  <p className="text-base font-semibold text-[#1a4d5c] truncate">
                     {session.user.name}
                   </p>
-                  <p className="text-xs font-medium text-gray-500 truncate">
+                  <p className="text-xs font-medium text-[#2699a6] truncate">
                     {session.user.email}
                   </p>
                 </div>
@@ -224,9 +222,9 @@ export default function DashboardLayout({
               </button>
             </div>
             
-            <div className="h-16 flex items-center px-6 border-b border-gray-200">
-              <Link href="/" className="text-xl font-bold text-indigo-600">
-                SnapScape
+            <div className="h-20 flex items-center justify-center px-6 border-b border-gray-200">
+              <Link href="/" className="flex items-center justify-center w-full">
+                <img src="/logo.png" alt="SnapScape Logo" className="w-16 h-16 rounded-full border-2 border-[#e0c36a] bg-white" />
               </Link>
             </div>
             
@@ -305,6 +303,25 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+      {/* Mobile Bottom Nav - visible on all dashboard pages */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#e0c36a] flex justify-around items-center py-2 md:hidden">
+        <Link href="/dashboard" className="flex flex-col items-center text-[#1a4d5c]">
+          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+          <span className="text-xs">Feed</span>
+        </Link>
+        <Link href="/dashboard/competitions" className="flex flex-col items-center text-[#1a4d5c]">
+          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} /></svg>
+          <span className="text-xs">Competitions</span>
+        </Link>
+        <Link href="/dashboard/submissions" className="flex flex-col items-center text-[#1a4d5c]">
+          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          <span className="text-xs">Submissions</span>
+        </Link>
+        <Link href="/dashboard/profile" className="flex flex-col items-center text-[#1a4d5c]">
+          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          <span className="text-xs">Profile</span>
+        </Link>
+      </nav>
     </div>
   );
 } 

@@ -24,8 +24,7 @@ export default function EditProfilePage() {
   useEffect(() => {
     // Check if user is authenticated
     if (status === 'unauthenticated') {
-      router.push('/auth/login');
-      return;
+      router.push('/');
     }
 
     // Fetch user profile to pre-fill the form
