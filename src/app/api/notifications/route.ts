@@ -4,13 +4,23 @@ import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
 import { Notification, ensureModelsAreLoaded } from '@/lib/model-import-helper';
 
+// Define interface for extended session
+interface ExtendedSession {
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    image?: string;
+  };
+}
+
 // GET user notifications
 export async function GET(req: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession;
     
-    if (!session || !session.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
@@ -77,11 +87,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession() as ExtendedSession;
     
     // This endpoint would typically be protected and only accessible by the system
     // or admins. For simplicity, we'll just check for authentication.
-    if (!session || !session.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
@@ -119,9 +129,9 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession;
     
-    if (!session || !session.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
@@ -192,9 +202,9 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession;
     
-    if (!session || !session.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }

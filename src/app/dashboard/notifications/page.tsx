@@ -270,13 +270,39 @@ export default function NotificationsPage() {
       }
       
       // Remove deleted notifications from the UI
-      setNotifications(notifications.filter(notification => 
+      const remainingNotifications = notifications.filter(notification => 
         !selectedNotifications.includes(notification._id)
-      ));
+      );
+      
+      setNotifications(remainingNotifications);
       
       // Clear selection
       setSelectedNotifications([]);
       setIsSelectAll(false);
+      
+      // Check if we've deleted all notifications on this page
+      if (remainingNotifications.length === 0) {
+        // Refetch notifications to get the updated pagination
+        const fetchResponse = await fetch(`/api/notifications?page=1`);
+        if (fetchResponse.ok) {
+          const data = await fetchResponse.json();
+          // If there are no more notifications at all
+          if (data.pagination.total === 0) {
+            setNotifications([]);
+            setTotalPages(0);
+            setCurrentPage(1);
+          } else {
+            // If there are still notifications, either go to previous page or stay on page 1
+            if (currentPage > 1 && currentPage > data.pagination.pages) {
+              // If current page is now beyond the total pages, go to the last page
+              setCurrentPage(data.pagination.pages);
+            } else {
+              // Otherwise refetch the current page
+              fetchNotifications(currentPage);
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('Error deleting notifications:', err);
       setError('Failed to delete notifications. Please try again.');
