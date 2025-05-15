@@ -48,12 +48,13 @@ interface Competition {
 
 interface RecentActivity {
   _id: string;
-  type: 'submission' | 'rating' | 'badge' | 'win';
+  type: 'submission' | 'rating' | 'badge' | 'win' | 'notification' | 'result';
   title: string;
   date: string;
   details?: string;
   photoUrl?: string;
   competitionId?: string;
+  read?: boolean;
 }
 
 interface Submission {
@@ -85,14 +86,19 @@ interface CompetitionFeedItem extends FeedItemBase {
 }
 
 interface ActivityFeedItem extends FeedItemBase {
-  type: 'activity';
-  data: RecentActivity; // Original activity data
+  type: 'activity' | 'notification';
+  data: RecentActivity | any; // Original activity data or notification data
 }
 
 export type FeedItem = CompetitionFeedItem | ActivityFeedItem;
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
+  
+  // Add a type assertion for session.user to fix TypeScript errors
+  // Cast session.user to include id property from next-auth.d.ts
+  const userId = (session?.user as { id?: string })?.id || '';
+  
   const [stats, setStats] = useState<UserStats>({
     totalSubmissions: 0,
     photosRated: 0,
@@ -117,20 +123,51 @@ export default function DashboardPage() {
 
   // New state for combined and sorted feed items
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  
+  // New state for hidden feed items
+  const [hiddenFeedItems, setHiddenFeedItems] = useState<Set<string>>(new Set());
+  
+  // New state for application settings
+  const [appSettings, setAppSettings] = useState({
+    allowNotificationDeletion: true
+  });
 
   const fetchActivities = async (page = 1) => {
     setActivitiesLoading(true);
     try {
-      const res = await fetch(`/api/users/activities?page=${page}&limit=10`);
+      const res = await fetch(`/api/users/activities?page=${page}&limit=20`); // Increased limit to get more activities
       if (!res.ok) throw new Error('Failed to load recent activities');
       const data = await res.json();
+      
+      // Add comprehensive debug logging to help diagnose the issue
+      console.log('Activities data loaded:', {
+        count: data.data?.length,
+        types: data.data?.map((item: any) => item.type)
+      });
+      
+      console.log('Activities details:', 
+        data.data?.map((item: any) => ({ 
+          id: item._id,
+          type: item.type, 
+          title: item.title,
+          hasPhoto: !!item.photoUrl
+        }))
+      );
+      
+      const activities = data.data || [];
+      
       if (page === 1) {
-        setActivities(data.data || []);
+        console.log(`Setting ${activities.length} activities`);
+        setActivities(activities);
       } else {
-        setActivities(prev => [...prev, ...(data.data || [])]);
+        setActivities(prev => {
+          console.log(`Adding ${activities.length} activities to existing ${prev.length}`);
+          return [...prev, ...activities];
+        });
       }
-      setActivitiesHasMore((data.data?.length || 0) === 10);
+      setActivitiesHasMore((data.data?.length || 0) === 20);
     } catch (err) {
+      console.error('Error fetching activities:', err);
       if (page === 1) setActivities([]);
       setActivitiesHasMore(false);
     } finally {
@@ -147,7 +184,6 @@ export default function DashboardPage() {
     completedCompetitions.forEach(comp => {
       if (uniqueIds.has(comp._id)) return;
       const results = completedResults[comp._id] || [];
-      const userId = session?.user?.id;
       const userSubs = results.filter(sub => String(sub.user?._id) === userId);
 
       allFeedItems.push({
@@ -194,22 +230,43 @@ export default function DashboardPage() {
     });
 
     // 4. Add Activities
+    console.log('Adding activities to feed, total:', activities.length);
+    
+    if (activities.length === 0) {
+      console.warn('No activities found to add to feed!');
+    }
+    
+    // Count by type before adding
+    const typeCounts = activities.reduce((acc: Record<string, number>, act) => {
+      acc[act.type] = (acc[act.type] || 0) + 1;
+      return acc;
+    }, {});
+    console.log('Activity types to add:', typeCounts);
+    
     activities.forEach(activity => {
-      // Activities might not always have unique IDs in the same way as competitions,
-      // depending on their source. If they are unique by _id, this check is fine.
-      // If not, ensure activities are not added if they somehow represent an already added competition event.
-      if (uniqueIds.has(activity._id) && !activity.type.startsWith('competition')) {
-        //This check might need refinement based on activity types and IDs
-      } else {
+      // Debug this specific activity
+      console.log(`Adding activity to feed: ${activity.type} - "${activity.title}" (dated: ${activity.date})`);
+      
+      // Generate a unique id for this activity to avoid duplicates
+      const activityId = activity._id || (activity.competitionId ? `${activity.competitionId}-${activity.type}` : `activity-${activity.title}-${activity.date}`);
+      
+      // Skip if we've already added an item with this ID (avoid duplicates)
+      if (uniqueIds.has(activityId)) {
+        console.log(`Skipping duplicate activity: ${activityId}`);
+        return;
+      }
+      
+      // Make sure all activities get properly added to the feed
          allFeedItems.push({
-            id: activity._id, // Ensure activity._id is unique and suitable as a key
+        id: activityId, 
             type: 'activity',
             sortDate: activity.date,
             data: activity,
           });
-         // uniqueIds.add(activity._id); // Add if activities should also be unique in the feed by their own ID
-      }
+      uniqueIds.add(activityId);
     });
+    
+    console.log(`After adding activities, allFeedItems has ${allFeedItems.length} items`);
 
     // Sort all feed items by sortDate descending
     allFeedItems.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
@@ -218,12 +275,38 @@ export default function DashboardPage() {
 
   }, [competitions, votingCompetitions, completedCompetitions, completedResults, activities, session]);
 
+  // Add effect to load hidden items from localStorage on initial load
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.id) {
+    // Only run on client side
+    if (typeof window !== 'undefined') {
+      const savedHiddenItems = localStorage.getItem('hiddenFeedItems');
+      if (savedHiddenItems) {
+        try {
+          const parsedItems = JSON.parse(savedHiddenItems);
+          setHiddenFeedItems(new Set(parsedItems));
+        } catch (e) {
+          console.error('Failed to parse hidden feed items from localStorage:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Add effect to save hidden items to localStorage when they change
+  useEffect(() => {
+    // Only run on client side and when hiddenFeedItems has been initialized
+    if (typeof window !== 'undefined' && hiddenFeedItems.size > 0) {
+      localStorage.setItem('hiddenFeedItems', JSON.stringify(Array.from(hiddenFeedItems)));
+    }
+  }, [hiddenFeedItems]);
+
+  useEffect(() => {
+    if (status === 'authenticated' && userId) {
       fetchDashboardData();
       fetchVotingCompetitions();
       fetchCompletedCompetitions();
       fetchActivities(1);
+      fetchAppSettings(); // Add new function call to fetch app settings
+      
       // Polling: auto-refresh stats every 30 seconds
       const interval = setInterval(() => {
         fetchDashboardData();
@@ -233,7 +316,7 @@ export default function DashboardPage() {
       }, 30000);
       return () => clearInterval(interval);
     }
-  }, [status, session]);
+  }, [status, userId]);
 
   // Fetch results for each completed competition
   useEffect(() => {
@@ -290,8 +373,8 @@ export default function DashboardPage() {
         console.error('Failed to load competitions:', competitionsRes.status, text);
         throw new Error('Failed to load competitions: ' + competitionsRes.status + ' ' + text);
       }
-      // Fetch recent activities
-      const activitiesRes = await fetch('/api/users/activities?limit=5');
+      // Fetch recent activities - Changed from 5 to 20 for the initial load
+      const activitiesRes = await fetch('/api/users/activities?limit=20');
       if (!activitiesRes.ok) {
         const text = await activitiesRes.text();
         console.error('Failed to load recent activities:', activitiesRes.status, text);
@@ -300,6 +383,12 @@ export default function DashboardPage() {
       const statsData = await statsRes.json();
       const competitionsData = await competitionsRes.json();
       const activitiesData = await activitiesRes.json();
+      
+      console.log('Dashboard API fetched activities count:', activitiesData.data?.length);
+      console.log('Dashboard API fetched activities types:', 
+        activitiesData.data?.map((item: any) => ({ type: item.type, title: item.title }))
+      );
+      
       setStats(statsData.data || {
         totalSubmissions: 0,
         photosRated: 0,
@@ -309,6 +398,10 @@ export default function DashboardPage() {
       });
       setCompetitions(competitionsData.data || []);
       setActivities(activitiesData.data || []);
+      // Set activities has more based on returned data
+      setActivitiesHasMore((activitiesData.data?.length || 0) === 20);
+      // Reset activities page to 1 since we're loading fresh data
+      setActivitiesPage(1);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data. Please try again later. ' + (err instanceof Error ? err.message : ''));
@@ -338,6 +431,22 @@ export default function DashboardPage() {
     } catch (err) {
       setCompletedCompetitions([]);
     }
+  };
+
+  // Add function to hide a feed item
+  const hideFeedItem = (itemId: string) => {
+    // Only allow deletion if the setting is enabled
+    if (!appSettings.allowNotificationDeletion) {
+      console.log('Notification deletion is disabled by administrator');
+      return;
+    }
+    
+    // Update the set of hidden feed items
+    setHiddenFeedItems(prev => {
+      const newSet = new Set(prev);
+      newSet.add(itemId);
+      return newSet;
+    });
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -392,6 +501,21 @@ export default function DashboardPage() {
             </svg>
           </div>
         );
+    }
+  };
+
+  // Add function to fetch application settings
+  const fetchAppSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setAppSettings(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch app settings:', error);
     }
   };
 
@@ -473,20 +597,62 @@ export default function DashboardPage() {
         {activeTab === 'feed' && (
           <>
             <div className="grid gap-6 grid-cols-1"> {/* Changed to always be grid-cols-1 */}
-              {/* FEED CONTENT - RENDER FROM feedItems STATE */}
               {(() => {
                 // This code only runs if activeTab === 'feed'
+                
+                // DEBUG: Check the raw activities we have
+                console.log('Raw activities available:', 
+                  activities.map(a => ({
+                    id: a._id,
+                    type: a.type,
+                    title: a.title,
+                    hasPhotoUrl: !!a.photoUrl
+                  }))
+                );
+                
                 const filteredFeedItems = feedItems.filter(item => {
+                  // Always include all competition-related items
                   if (item.type === 'competition_voting') return true;
                   if (item.type === 'competition_completed_results') return true;
                   if (item.type === 'competition_active') return true;
                   if (item.type === 'competition_upcoming') return true;
+
+                  // Include all activity items EXCEPT ratings
+                  // Debug each activity item to understand what's happening
                   if (item.type === 'activity') {
                     const activityData = item.data as RecentActivity;
-                    return ['submission', 'badge', 'win'].includes(activityData.type);
+                    console.log('Activity filter check:', {
+                      id: activityData._id,
+                      type: activityData.type,
+                      title: activityData.title,
+                      date: activityData.date ? formatTimeSince(new Date(activityData.date)) : 'unknown'
+                    });
+                    
+                    // Only exclude rating activities
+                    if (activityData.type === 'rating') {
+                      return false;
+                    }
+                    
+                    // Include all important activities
+                    return true;
                   }
+                  
+                  // Include any notification or result type items
+                  if (item.type === 'notification' || item.type === 'result') {
+                    return true;
+                  }
+                  
                   return false;
                 });
+
+                // Debug the filtered feed items
+                console.log('Filtered Feed Items:', 
+                  filteredFeedItems.map(item => ({
+                    type: item.type,
+                    dataType: item.type === 'activity' ? (item.data as any).type : null,
+                    title: item.type === 'activity' ? (item.data as any).title : null
+                  }))
+                );
 
                 if (filteredFeedItems.length === 0 && !isLoading) {
                   return (
@@ -500,22 +666,241 @@ export default function DashboardPage() {
                   );
                 }
 
-                return filteredFeedItems.map((item) => {
-                  switch (item.type) {
-                    case 'competition_completed_results':
-                      const compData = item.data as Competition; // Use compData for item.data
-                      const allSubmissionsForRank = item.allRankedSubmissions || [];
-                      const userSubmissions = item.userSubmissions || [];
-                      // const userId = session?.user?.id; // Already available if needed from outer scope, or use item.userSubmissions directly
+                // SPECIAL HANDLING: Add direct rendering of all activities to ensure they show up
+                // Use this if the regular filtering mechanism isn't working
+                const importantActivities = activities.filter(activity => {
+                  // Exclude rating activities
+                  if (activity.type === 'rating') {
+                    return false;
+                  }
+                  
+                  // Always include these important activity types
+                  return activity.type === 'notification' || 
+                         activity.type === 'submission' || 
+                         activity.type === 'badge' || 
+                         activity.type === 'win' ||
+                         activity.type === 'result';
+                });
+                
+                console.log(`Found ${importantActivities.length} important activities to directly render`, 
+                  importantActivities.map(a => ({ 
+                    type: a.type, 
+                    title: a.title,
+                    date: formatTimeSince(new Date(a.date))
+                  })));
+                
+                // Define proper type for feed content items
+                type FeedContentItem = 
+                  | { id: string; date: Date; item: FeedItem; activity?: undefined }
+                  | { id: string; date: Date; activity: RecentActivity; item?: undefined };
+                
+                const feedContent: FeedContentItem[] = [];
+                
+                // Get all competition IDs currently displayed in the feed
+                const displayedCompetitionIds = new Set<string>();
+                
+                // Track activities we've already added to prevent duplicates
+                const addedActivitySignatures = new Set<string>();
+                
+                // First add all the competition items and track their IDs
+                filteredFeedItems.forEach(item => {
+                  if (item.type.startsWith('competition_')) {
+                    const itemDate = new Date(item.sortDate);
+                    feedContent.push({
+                      id: item.id,
+                      date: itemDate,
+                      item: item
+                    });
+                    
+                    // Keep track of competition IDs
+                    displayedCompetitionIds.add(item.id);
+                  }
+                });
+                
+                // Then add all the direct activity items, EVEN if they're related to completed competitions
+                importantActivities.forEach(activity => {
+                  // We want to include all important activities regardless of their competitionId
+                  const activityDate = new Date(activity.date);
+                  
+                  // Create a signature to detect duplicates - include competition ID if present
+                  // For win activities, use competitionId+type+position to detect duplicate win notifications
+                  let activitySignature = '';
+                  if (activity.type === 'win' && activity.competitionId) {
+                    // Extract position information from the title (1st/2nd/3rd place)
+                    const positionMatch = activity.title.match(/Won|Runner-up|Third place/);
+                    const position = positionMatch ? positionMatch[0] : '';
+                    activitySignature = `${activity.competitionId}-${activity.type}-${position}`;
+                  } else if (activity.competitionId) {
+                    activitySignature = `${activity.competitionId}-${activity.type}`;
+                  } else {
+                    activitySignature = `${activity._id}-${activity.type}`;
+                  }
+                  
+                  // Skip if we've already added this activity
+                  if (addedActivitySignatures.has(activitySignature)) {
+                    console.log(`Skipping duplicate activity: ${activity.type} - "${activity.title}" (signature: ${activitySignature})`);
+                    return;
+                  }
+                  
+                  // Log each activity being added to help debug
+                  console.log(`Adding activity to feed content: ${activity.type} - "${activity.title}"${activity.competitionId ? ` (Competition: ${activity.competitionId})` : ''} (signature: ${activitySignature})`)
+                  
+                  feedContent.push({
+                    id: activity._id,
+                    date: activityDate,
+                    activity: activity
+                  });
+                  
+                  // Add to tracked signatures
+                  addedActivitySignatures.add(activitySignature);
+                });
+                
+                // Sort everything by date
+                feedContent.sort((a, b) => b.date.getTime() - a.date.getTime());
+                
+                // Filter out hidden items
+                const visibleFeedContent = feedContent.filter(content => 
+                  !hiddenFeedItems.has(content.id)
+                );
+                
+                return visibleFeedContent.map(content => {
+                  if (content.item) {
+                    // This is a filtered feed item (competition)
+                    const item = content.item;
+                    
+                    switch (item.type) {
+                      case 'competition_completed_results':
+                        const compData = item.data as Competition; // Use compData for item.data
+                        const allSubmissionsForRank = item.allRankedSubmissions || [];
+                        const userSubmissions = item.userSubmissions || [];
+                        // const userId = session?.user?.id; // Already available if needed from outer scope, or use item.userSubmissions directly
 
-                      // If no results at all, show a simplified card (similar to original feed item)
-                      if (allSubmissionsForRank.length === 0) {
+                        // If no results at all, show a simplified card (similar to original feed item)
+                        if (allSubmissionsForRank.length === 0) {
+                          return (
+                            <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-green-50 border-l-4 border-green-400 flex flex-col p-4 mb-4 relative">
+                              {/* Delete Button - Only show if allowed by settings */}
+                              {appSettings.allowNotificationDeletion && (
+                                <button 
+                                  onClick={() => hideFeedItem(item.id)} 
+                                  className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                                  aria-label="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                              
+                              <div className="flex-1">
+                                <div className="font-bold text-lg text-[#1a4d5c] mb-1">Competition Completed: {compData.title}</div>
+                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(item.sortDate))}</p>
+                                <div className="text-sm text-gray-700 mb-2">The competition you participated in has ended. Results are being processed or are not available.</div>
+                                <Link 
+                                  href={`/dashboard/competitions/${compData._id}/view-submissions?result=1`}
+                                  className="mt-3 inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
+                                >
+                                  View Full Results
+                                </Link>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
-                          <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-green-50 border-l-4 border-green-400 flex flex-col p-4 mb-4">
-                            <div className="flex-1">
+                          <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-green-50 border-l-4 border-green-400 flex flex-col md:flex-row items-center p-4 mb-4 relative">
+                            {/* Delete Button - Only show if allowed by settings */}
+                            {appSettings.allowNotificationDeletion && (
+                              <button 
+                                onClick={() => hideFeedItem(item.id)} 
+                                className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                                aria-label="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            
+                            <div className="relative w-32 h-24 mr-4 flex-shrink-0">
+                              {compData.coverImage ? (
+                                <Image src={compData.coverImage} alt={compData.title} fill className="object-cover rounded-lg" />
+                              ) : (
+                                <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
+                                  <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1"> {/* Changed from flex-grow md:mt-0 */}
                               <div className="font-bold text-lg text-[#1a4d5c] mb-1">Competition Completed: {compData.title}</div>
                               <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(item.sortDate))}</p>
-                              <div className="text-sm text-gray-700 mb-2">The competition you participated in has ended. Results are being processed or are not available.</div>
+                              <div className="text-sm text-gray-700 mb-2">The competition you participated in has ended.</div>
+                              
+                              {userSubmissions.length > 0 ? (
+                                <div className="mt-2">
+                                  <div className="font-semibold text-sm text-[#1a4d5c] mb-1">Your Result{userSubmissions.length > 1 ? 's' : ''}:</div>
+                                  <div className="flex flex-wrap gap-4">
+                                    {userSubmissions.map((sub) => {
+                                      let actualDenseRank = 0;
+                                      let lastAvgRating = -Infinity;
+                                      let lastRatingCount = -Infinity;
+                                      for (let i = 0; i < allSubmissionsForRank.length; i++) {
+                                        const currentResultSub = allSubmissionsForRank[i];
+                                        if (currentResultSub.averageRating !== lastAvgRating || (currentResultSub.ratingCount || 0) !== lastRatingCount) {
+                                          actualDenseRank++;
+                                        }
+                                        if (currentResultSub._id === sub._id) {
+                                          break;
+                                        }
+                                        lastAvgRating = currentResultSub.averageRating;
+                                        lastRatingCount = (currentResultSub.ratingCount || 0);
+                                      }
+
+                                      let badgeIcon: React.ReactNode = null;
+                                      let badgeText = '';
+                                      let badgeColor = 'bg-gray-700';
+
+                                      if (actualDenseRank === 1) { 
+                                        badgeIcon = <span className="mr-1">🥇</span>; badgeText = '1st'; badgeColor = 'bg-yellow-400'; 
+                                      } else if (actualDenseRank === 2) { 
+                                        badgeIcon = <span className="mr-1">🥈</span>; badgeText = '2nd'; badgeColor = 'bg-gray-300'; 
+                                      } else if (actualDenseRank === 3) { 
+                                        badgeIcon = <span className="mr-1">🥉</span>; badgeText = '3rd'; badgeColor = 'bg-orange-400'; 
+                                      } else {
+                                        if (actualDenseRank > 0) {
+                                           if (actualDenseRank % 100 >= 11 && actualDenseRank % 100 <= 13) {
+                                             badgeText = `${actualDenseRank}th`;
+                                           } else {
+                                             switch (actualDenseRank % 10) {
+                                               case 1: badgeText = `${actualDenseRank}st`; break;
+                                               case 2: badgeText = `${actualDenseRank}nd`; break;
+                                               case 3: badgeText = `${actualDenseRank}rd`; break;
+                                               default: badgeText = `${actualDenseRank}th`; break;
+                                             }
+                                           }
+                                        } else {
+                                           badgeText = 'N/A'; 
+                                        }
+                                      }
+                                      
+                                      return (
+                                        <div key={sub._id} className="flex flex-col items-center w-24">
+                                          <div className="relative w-20 h-16 mb-1">
+                                            <Image src={sub.thumbnailUrl || sub.imageUrl} alt={sub.title} fill className="object-cover rounded" />
+                                          </div>
+                                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${badgeColor}`}>
+                                            {badgeIcon}
+                                            {badgeText} Rank
+                                          </span>
+                                          <span className="text-xs text-gray-500 mt-1">{sub.averageRating?.toFixed(1) ?? '0.0'} pts</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-700 mt-2">You did not participate or your submission was not ranked.</div>
+                              )}
                               <Link 
                                 href={`/dashboard/competitions/${compData._id}/view-submissions?result=1`}
                                 className="mt-3 inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
@@ -525,202 +910,396 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         );
-                      }
 
-                      return (
-                        <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-green-50 border-l-4 border-green-400 flex flex-col md:flex-row items-center p-4 mb-4">
-                          <div className="relative w-32 h-24 mr-4 flex-shrink-0">
-                            {compData.coverImage ? (
-                              <Image src={compData.coverImage} alt={compData.title} fill className="object-cover rounded-lg" />
-                            ) : (
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
-                                <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1"> {/* Changed from flex-grow md:mt-0 */}
-                            <div className="font-bold text-lg text-[#1a4d5c] mb-1">Competition Completed: {compData.title}</div>
-                            <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(item.sortDate))}</p>
-                            <div className="text-sm text-gray-700 mb-2">The competition you participated in has ended.</div>
-                            
-                            {userSubmissions.length > 0 ? (
-                              <div className="mt-2">
-                                <div className="font-semibold text-sm text-[#1a4d5c] mb-1">Your Result{userSubmissions.length > 1 ? 's' : ''}:</div>
-                                <div className="flex flex-wrap gap-4">
-                                  {userSubmissions.map((sub) => {
-                                    let actualDenseRank = 0;
-                                    let lastAvgRating = -Infinity;
-                                    let lastRatingCount = -Infinity;
-                                    for (let i = 0; i < allSubmissionsForRank.length; i++) {
-                                      const currentResultSub = allSubmissionsForRank[i];
-                                      if (currentResultSub.averageRating !== lastAvgRating || (currentResultSub.ratingCount || 0) !== lastRatingCount) {
-                                        actualDenseRank++;
-                                      }
-                                      if (currentResultSub._id === sub._id) {
-                                        break;
-                                      }
-                                      lastAvgRating = currentResultSub.averageRating;
-                                      lastRatingCount = (currentResultSub.ratingCount || 0);
-                                    }
-
-                                    let badgeIcon: React.ReactNode = null;
-                                    let badgeText = '';
-                                    let badgeColor = 'bg-gray-700';
-
-                                    if (actualDenseRank === 1) { 
-                                      badgeIcon = <span className="mr-1">🥇</span>; badgeText = '1st'; badgeColor = 'bg-yellow-400'; 
-                                    } else if (actualDenseRank === 2) { 
-                                      badgeIcon = <span className="mr-1">🥈</span>; badgeText = '2nd'; badgeColor = 'bg-gray-300'; 
-                                    } else if (actualDenseRank === 3) { 
-                                      badgeIcon = <span className="mr-1">🥉</span>; badgeText = '3rd'; badgeColor = 'bg-orange-400'; 
-                                    } else {
-                                      if (actualDenseRank > 0) {
-                                         if (actualDenseRank % 100 >= 11 && actualDenseRank % 100 <= 13) {
-                                           badgeText = `${actualDenseRank}th`;
-                                         } else {
-                                           switch (actualDenseRank % 10) {
-                                             case 1: badgeText = `${actualDenseRank}st`; break;
-                                             case 2: badgeText = `${actualDenseRank}nd`; break;
-                                             case 3: badgeText = `${actualDenseRank}rd`; break;
-                                             default: badgeText = `${actualDenseRank}th`; break;
-                                           }
-                                         }
-                                      } else {
-                                         badgeText = 'N/A'; 
-                                      }
-                                    }
-                                    
-                                    return (
-                                      <div key={sub._id} className="flex flex-col items-center w-24">
-                                        <div className="relative w-20 h-16 mb-1">
-                                          <Image src={sub.thumbnailUrl || sub.imageUrl} alt={sub.title} fill className="object-cover rounded" />
-                                        </div>
-                                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${badgeColor}`}>
-                                          {badgeIcon}
-                                          {badgeText} Rank
-                                        </span>
-                                        <span className="text-xs text-gray-500 mt-1">{sub.averageRating?.toFixed(1) ?? '0.0'} pts</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-sm text-gray-700 mt-2">You did not participate or your submission was not ranked.</div>
-                            )}
-                            <Link 
-                              href={`/dashboard/competitions/${compData._id}/view-submissions?result=1`}
-                              className="mt-3 inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
-                            >
-                              View Full Results
-                            </Link>
-                          </div>
-                        </div>
-                      );
-
-                    case 'competition_voting':
-                      const votingComp = item.data as Competition;
-                      return (
-                        <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-yellow-50 border-l-4 border-yellow-400 flex flex-col md:flex-row items-center p-4 mb-4">
-                          <div className="relative w-full md:w-32 h-24 md:mr-4 mb-3 md:mb-0 flex-shrink-0">
-                            <Image src={votingComp.coverImage || '/default-cover.jpg'} alt={votingComp.title} fill className="object-cover rounded-lg" />
-                          </div>
-                          <div className="flex-1 text-left w-full">
-                            <div className="font-bold text-lg text-[#1a4d5c] mb-1">Voting Open: {votingComp.title}</div>
-                            {/* Use item.sortDate for the timestamp */}
-                            <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(item.sortDate))}</p>
-                            <div className="text-sm text-gray-700 mb-2">Voting is now open for a competition you participated in! Cast your vote for your favorite photos.</div>
-                            <Link 
-                              href={`/dashboard/competitions/${votingComp._id}/view-submissions`}
-                              className="inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
-                            >
-                              Vote Now
-                            </Link>
-                          </div>
-                        </div>
-                      );
-                    
-                    case 'competition_active':
-                    case 'competition_upcoming':
-                      const activeComp = item.data as Competition;
-                      const createdAtDate = (activeComp as any).createdAt; // Attempt to get createdAt
-                      return (
-                        <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-sky-50 border-l-4 border-sky-400 flex flex-col md:flex-row items-start p-4 mb-4 group">
-                          {/* Image Container */}
-                          <div className="relative w-full md:w-2/5 h-48 flex-shrink-0 mb-4 md:mb-0 md:mr-4 rounded-lg overflow-hidden">
-                            {activeComp.coverImage ? (
-                              <Image 
-                                src={activeComp.coverImage} 
-                                alt={activeComp.title} 
-                                fill 
-                                className="object-cover" 
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
-                                <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                              </div>
-                            )}
-                          </div>
-                          {/* Details Container */}
-                          <div className="w-full md:w-3/5 flex flex-col">
-                            <div className="flex-grow">
-                              <div className="flex justify-between items-start mb-1">
-                                <h3 className="text-lg font-bold text-[#1a4d5c] truncate" title={activeComp.title}>{activeComp.title}</h3>
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStatusBadgeColor(activeComp.status)}`}>
-                                  {activeComp.status.charAt(0).toUpperCase() + activeComp.status.slice(1)}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(createdAtDate || item.sortDate))}</p>
-                              <p className="text-sm text-gray-600 mb-1">Theme: {activeComp.theme}</p>
-                              <p className="text-sm text-gray-500 mb-2">
-                                {activeComp.status === 'upcoming' ? `Starts: ${new Date(activeComp.startDate).toLocaleDateString()}` : `Ends: ${new Date(activeComp.endDate).toLocaleDateString()}`}
-                              </p>
-                            </div>
-                            <div className="mt-auto flex justify-between items-center">
-                              <p className="text-sm text-gray-500">{activeComp.submissionCount || 0} submissions</p>
-                              <Link 
-                                href={`/dashboard/competitions/${activeComp._id}`}
-                                className="inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition text-xs md:text-sm"
+                      case 'competition_voting':
+                        const votingComp = item.data as Competition;
+                        return (
+                          <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-yellow-50 border-l-4 border-yellow-400 flex flex-col md:flex-row items-center p-4 mb-4 relative">
+                            {/* Delete Button - Only show if allowed by settings */}
+                            {appSettings.allowNotificationDeletion && (
+                              <button 
+                                onClick={() => hideFeedItem(item.id)} 
+                                className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                                aria-label="Delete"
                               >
-                                {activeComp.status === 'upcoming' ? 'View Details' : 'View & Submit'}
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            
+                            <div className="relative w-full md:w-32 h-24 md:mr-4 mb-3 md:mb-0 flex-shrink-0">
+                              <Image src={votingComp.coverImage || '/default-cover.jpg'} alt={votingComp.title} fill className="object-cover rounded-lg" />
+                            </div>
+                            <div className="flex-1 text-left w-full">
+                              <div className="font-bold text-lg text-[#1a4d5c] mb-1">Voting Open: {votingComp.title}</div>
+                              {/* Use item.sortDate for the timestamp */}
+                              <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(item.sortDate))}</p>
+                              <div className="text-sm text-gray-700 mb-2">Voting is now open for a competition you participated in! Cast your vote for your favorite photos.</div>
+                              <Link 
+                                href={`/dashboard/competitions/${votingComp._id}/view-submissions`}
+                                className="inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
+                              >
+                                Vote Now
                               </Link>
                             </div>
                           </div>
-                        </div>
-                      );
+                        );
+                      
+                      case 'competition_active':
+                      case 'competition_upcoming':
+                        const activeComp = item.data as Competition;
+                        const createdAtDate = (activeComp as any).createdAt; // Attempt to get createdAt
+                        return (
+                          <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-sky-50 border-l-4 border-sky-400 flex flex-col md:flex-row items-start p-4 mb-4 group relative">
+                            {/* Delete Button - Only show if allowed by settings */}
+                            {appSettings.allowNotificationDeletion && (
+                              <button 
+                                onClick={() => hideFeedItem(item.id)} 
+                                className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity z-10"
+                                aria-label="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            
+                            {/* Image Container */}
+                            <div className="relative w-full md:w-2/5 h-48 flex-shrink-0 mb-4 md:mb-0 md:mr-4 rounded-lg overflow-hidden">
+                              {activeComp.coverImage ? (
+                                <Image 
+                                  src={activeComp.coverImage} 
+                                  alt={activeComp.title} 
+                                  fill 
+                                  className="object-cover" 
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
+                                  <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                </div>
+                              )}
+                            </div>
+                            {/* Details Container */}
+                            <div className="w-full md:w-3/5 flex flex-col">
+                              <div className="flex-grow">
+                                <div className="flex justify-between items-start mb-1">
+                                  <h3 className="text-lg font-bold text-[#1a4d5c] truncate" title={activeComp.title}>{activeComp.title}</h3>
+                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStatusBadgeColor(activeComp.status)}`}>
+                                    {activeComp.status.charAt(0).toUpperCase() + activeComp.status.slice(1)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(createdAtDate || item.sortDate))}</p>
+                                <p className="text-sm text-gray-600 mb-1">Theme: {activeComp.theme}</p>
+                                <p className="text-sm text-gray-500 mb-2">
+                                  {activeComp.status === 'upcoming' ? `Starts: ${new Date(activeComp.startDate).toLocaleDateString()}` : `Ends: ${new Date(activeComp.endDate).toLocaleDateString()}`}
+                                </p>
+                              </div>
+                              <div className="mt-auto flex justify-between items-center">
+                                <p className="text-sm text-gray-500">{activeComp.submissionCount || 0} submissions</p>
+                                <Link 
+                                  href={`/dashboard/competitions/${activeComp._id}`}
+                                  className="inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition text-xs md:text-sm"
+                                >
+                                  {activeComp.status === 'upcoming' ? 'View Details' : 'View & Submit'}
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        );
 
-                    case 'activity':
-                      const activity = item.data as RecentActivity;
+                        default:
+                          return null;
+                      }
+                    } else if (content.activity) {
+                      // This is a direct activity
+                      const activity = content.activity;
                       const activityDate = new Date(activity.date);
                       const timeSince = formatTimeSince(activityDate);
-                      return (
-                        <div key={item.id} className="bg-white p-3 rounded-xl shadow-md flex items-start space-x-3 hover:shadow-lg transition-shadow duration-200">
-                          {getActivityIcon(activity.type)}
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-800">{activity.title}</p>
-                            {activity.details && <p className="text-xs text-gray-500">{activity.details}</p>}
-                            <p className="text-xs text-gray-400 mt-0.5">{timeSince}</p>
-                          </div>
-                          {activity.photoUrl && (
-                            <div className="w-12 h-12 rounded-md overflow-hidden flex-shrink-0">
-                              <Image src={activity.photoUrl} alt="Activity image" width={48} height={48} className="object-cover" />
+                      
+                      // Special case for image submissions
+                      if (activity.type === 'submission' || activity.title?.includes('Submitted photo')) {
+                        return (
+                          <div key={activity._id} className="bg-white p-3 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 border-l-4 border-blue-500 mb-4 relative">
+                            {/* Delete Button - Only show if allowed by settings */}
+                            {appSettings.allowNotificationDeletion && (
+                              <button 
+                                onClick={() => hideFeedItem(content.id)} 
+                                className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                                aria-label="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            
+                            <div className="flex items-start space-x-3">
+                              {/* Image thumbnail */}
+                              {activity.photoUrl && (
+                                <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 rounded-md overflow-hidden border border-gray-200 bg-gray-100">
+                                  <img 
+                                    src={activity.photoUrl}
+                                    alt="Submitted photo"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.src = 'https://picsum.photos/300/200';
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Content */}
+                              <div className="flex-1">
+                                <div className="flex items-center mb-1">
+                                  <div className="p-1.5 rounded-full bg-blue-100 text-blue-600 mr-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-800">{activity.title}</p>
+                                </div>
+                                <p className="text-xs text-gray-500">{activity.details}</p>
+                                <p className="text-xs text-gray-400 mt-0.5 mb-2">{timeSince}</p>
+                                
+                                {activity.competitionId && (
+                                  <div className="flex justify-end mt-1">
+                                    <Link 
+                                      href={`/dashboard/competitions/${activity.competitionId}`} 
+                                      className="text-xs text-teal-600 hover:text-teal-700 bg-teal-50 rounded-md px-2 py-1 border border-teal-100 font-medium"
+                                    >
+                                      View Competition
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
                             </div>
+                          </div>
+                        );
+                      }
+                      
+                      // Special case for Photo Approved/Rejected notifications
+                      if (activity.type === 'notification' && 
+                          (activity.title === 'Photo Approved' || 
+                           activity.title?.includes('approved') || 
+                           activity.title === 'Photo Rejected' || 
+                           activity.title?.includes('rejected'))) {
+                        
+                        const borderColorClass = activity.title?.includes('Rejected') ? 
+                                                'border-red-500' : 'border-green-500';
+                        
+                        return (
+                          <div key={activity._id} className={`bg-white p-3 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 border-l-4 ${borderColorClass} mb-4 relative`}>
+                            {/* Delete Button - Only show if allowed by settings */}
+                            {appSettings.allowNotificationDeletion && (
+                              <button 
+                                onClick={() => hideFeedItem(content.id)} 
+                                className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                                aria-label="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            
+                            <div className="flex items-start space-x-3">
+                              {/* Left side - Image thumbnail */}
+                              {activity.photoUrl && (
+                                <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 rounded-md overflow-hidden border border-gray-200 bg-gray-100">
+                                  <img 
+                                    src={activity.photoUrl}
+                                    alt={activity.title}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      console.error('Image failed to load:', e.currentTarget.src);
+                                      e.currentTarget.src = 'https://picsum.photos/300/200';
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Right side - Notification content */}
+                              <div className="flex-1">
+                                <div className="flex items-center mb-1">
+                                  <div className={`p-1.5 rounded-full ${activity.title?.includes('Rejected') ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} mr-2`}>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                      {activity.title?.includes('Rejected') 
+                                        ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      }
+                                    </svg>
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-800">{activity.title}</p>
+                                </div>
+                                <p className="text-xs text-gray-500">{activity.details}</p>
+                                <p className="text-xs text-gray-400 mt-0.5 mb-2">{timeSince}</p>
+                                
+                                {activity.competitionId && (
+                                  <div className="flex justify-end mt-1">
+                                    <Link 
+                                      href={`/dashboard/competitions/${activity.competitionId}`} 
+                                      className="text-xs text-teal-600 hover:text-teal-700 bg-teal-50 rounded-md px-2 py-1 border border-teal-100 font-medium"
+                                    >
+                                      View Competition
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      // Special case for Competition Results and win notifications
+                      if ((activity.type === 'result' || activity.type === 'notification') && 
+                          (activity.title === 'Competition Results' || 
+                           activity.title?.includes('Congratulations') || 
+                           activity.title?.includes('Won') || 
+                           activity.title?.includes('Results') ||
+                           activity.title?.includes('Place'))) {
+                        
+                        // Determine appropriate styling based on placement
+                        let borderColor = 'border-blue-400';
+                        let bgColor = 'bg-blue-50';
+                        let iconBg = 'bg-blue-100';
+                        let iconColor = 'text-blue-600';
+                        
+                        // Check if it's a winning notification
+                        if (activity.title?.includes('Won') || activity.title?.includes('1st') || activity.title?.includes('First')) {
+                          borderColor = 'border-yellow-400';
+                          bgColor = 'bg-yellow-50';
+                          iconBg = 'bg-yellow-100';
+                          iconColor = 'text-yellow-600';
+                        } else if (activity.title?.includes('Second') || activity.title?.includes('2nd')) {
+                          borderColor = 'border-gray-400';
+                          bgColor = 'bg-gray-50';
+                          iconBg = 'bg-gray-200';
+                          iconColor = 'text-gray-600';
+                        } else if (activity.title?.includes('Third') || activity.title?.includes('3rd')) {
+                          borderColor = 'border-orange-400';
+                          bgColor = 'bg-orange-50';
+                          iconBg = 'bg-orange-100';
+                          iconColor = 'text-orange-600';
+                        }
+                        
+                        return (
+                          <div key={activity._id} className={`p-3 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 border-l-4 ${borderColor} mb-4 ${bgColor} relative`}>
+                            {/* Delete Button - Only show if allowed by settings */}
+                            {appSettings.allowNotificationDeletion && (
+                              <button 
+                                onClick={() => hideFeedItem(content.id)} 
+                                className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                                aria-label="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            
+                            <div className="flex items-start space-x-3">
+                              <div className={`p-2 rounded-full ${iconBg} ${iconColor}`}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                </svg>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-800">{activity.title}</p>
+                                <p className="text-xs text-gray-500">{activity.details}</p>
+                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{timeSince}</p>
+                                
+                                {activity.photoUrl && (
+                                  <div className="mt-2 w-full max-w-xs rounded-md overflow-hidden mb-2">
+                                    <img 
+                                      src={activity.photoUrl} 
+                                      alt="Competition result" 
+                                      className="w-full h-auto object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.src = 'https://picsum.photos/300/200';
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                
+                                {activity.competitionId && (
+                                  <div className="flex justify-end mt-1">
+                                    <Link 
+                                      href={`/dashboard/competitions/${activity.competitionId}/view-submissions?result=1`}
+                                      className="text-xs text-teal-600 hover:text-teal-700 bg-teal-50 rounded-md px-2 py-1 border border-teal-100 font-medium"
+                                    >
+                                      View Results
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      // Any other activity types
+                      return (
+                        <div key={activity._id} className="bg-white p-3 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 border-l-4 border-blue-400 mb-4 relative">
+                          {/* Delete Button - Only show if allowed by settings */}
+                          {appSettings.allowNotificationDeletion && (
+                            <button 
+                              onClick={() => hideFeedItem(content.id)} 
+                              className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                              aria-label="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
                           )}
-                          {activity.competitionId && activity.type !== 'submission' && (
-                             <Link href={`/dashboard/competitions/${activity.competitionId}`} className="text-xs text-teal-500 hover:text-teal-600 self-end">
-                               View Competition
-                             </Link>
-                          )}
+                          
+                          <div className="flex items-start space-x-3">
+                            <div className="p-2 rounded-full bg-teal-100 text-teal-600">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v10a2 2 0 01-2 2H7a2 2 0 01-2-2V10m6 0V4" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-800">{activity.title}</p>
+                              <p className="text-xs text-gray-500">{activity.details}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{timeSince}</p>
+                              
+                              {activity.photoUrl && (
+                                <div className="mt-2 w-full max-w-xs rounded-md overflow-hidden">
+                                  <img 
+                                    src={activity.photoUrl} 
+                                    alt="Notification image"
+                                    className="w-full h-auto object-cover" 
+                                    onError={(e) => {
+                                      e.currentTarget.src = 'https://picsum.photos/300/200';
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              
+                              {activity.competitionId && (
+                                <div className="mt-2">
+                                  <Link 
+                                    href={`/dashboard/competitions/${activity.competitionId}`} 
+                                    className="text-xs text-teal-600 hover:text-teal-700 bg-teal-50 rounded-md px-2 py-1 border border-teal-100 font-medium"
+                                  >
+                                    View Competition
+                                  </Link>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       );
-                    default:
-                      return null;
-                  }
-                });
-              })()}
-            </div>
-          </>
-        )}
+                    }
+                    
+                    return null;
+                  });
+                })()}
+              </div>
+            </>
+          )}
         {activeTab === 'competitions' && (
           <>
             {/* Column Toggle for Desktop */}
@@ -762,29 +1341,113 @@ export default function DashboardPage() {
           </>
         )}
         {activeTab === 'activity' && (
-          <div className="space-y-6">
-            {activities.map((activity) => (
-              <div key={activity._id} className="rounded-2xl shadow-lg overflow-hidden bg-white flex items-center p-4">
-                <div className="mr-4">{getActivityIcon(activity.type)}</div>
-                <div>
-                  <div className="font-semibold text-[#1a4d5c]">{activity.title}</div>
-                  <div className="text-xs text-gray-500">{activity.date}</div>
-                  {activity.details && <div className="text-sm text-gray-700 mt-1">{activity.details}</div>}
-                </div>
+          <div>
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-[#1a4d5c]">Your Recent Activity</h3>
+              <p className="text-sm text-gray-500">Track your recent actions and notifications</p>
+            </div>
+            
+            {/* Activity items */}
+            {activitiesLoading && activities.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 border-4 border-[#2699a6] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading activities...</p>
               </div>
-            ))}
-            {activitiesHasMore && (
-              <div className="flex justify-center">
-                <button
-                  className="px-4 py-2 rounded bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
-                  onClick={() => {
-                    if (!activitiesLoading) fetchActivities(activitiesPage + 1); setActivitiesPage(p => p + 1);
-                  }}
-                  disabled={activitiesLoading}
-                >
-                  {activitiesLoading ? 'Loading...' : 'Load More'}
-                </button>
-              </div>
+            ) : activities.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">No recent activities</div>
+            ) : (
+              <>
+                {/* Filter out duplicate activities using the same approach as in the feed tab */}
+                {(() => {
+                  const addedActivitySignatures = new Set<string>();
+                  const uniqueActivities: RecentActivity[] = [];
+                  
+                  activities.forEach(activity => {
+                    // Create a signature to detect duplicates - include competition ID if present
+                    let activitySignature = '';
+                    if (activity.type === 'win' && activity.competitionId) {
+                      // Extract position information from the title (1st/2nd/3rd place)
+                      const positionMatch = activity.title.match(/Won|Runner-up|Third place/);
+                      const position = positionMatch ? positionMatch[0] : '';
+                      activitySignature = `${activity.competitionId}-${activity.type}-${position}`;
+                    } else if (activity.competitionId) {
+                      activitySignature = `${activity.competitionId}-${activity.type}`;
+                    } else {
+                      activitySignature = `${activity._id}-${activity.type}`;
+                    }
+                    
+                    // Skip if we've already added this activity
+                    if (addedActivitySignatures.has(activitySignature)) {
+                      return;
+                    }
+                    
+                    uniqueActivities.push(activity);
+                    addedActivitySignatures.add(activitySignature);
+                  });
+                  
+                  return uniqueActivities.map((activity, index) => (
+                    <div
+                      key={activity._id || index}
+                      className="mb-4 p-4 bg-white rounded-lg shadow flex items-start gap-4 hover:bg-gray-50 transition-colors relative"
+                    >
+                      {/* Delete Button - Only show if allowed by settings */}
+                      {appSettings.allowNotificationDeletion && (
+                        <button 
+                          onClick={() => hideFeedItem(activity._id || `activity-${index}`)} 
+                          className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
+                          aria-label="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                      
+                      {getActivityIcon(activity.type)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                          <h4 className="font-medium text-gray-900">{activity.title}</h4>
+                          <span className="text-xs text-gray-500 mt-1 sm:mt-0">
+                            {formatTimeSince(new Date(activity.date))}
+                          </span>
+                        </div>
+                        {activity.details && <p className="text-sm text-gray-600 mt-1">{activity.details}</p>}
+                        {activity.photoUrl && (
+                          <div className="mt-2 relative h-24 w-32 rounded overflow-hidden">
+                            <Image
+                              src={activity.photoUrl}
+                              alt={activity.details || 'Activity photo'}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        )}
+                        {activity.competitionId && (
+                          <Link
+                            href={`/dashboard/competitions/${activity.competitionId}`}
+                            className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-800"
+                          >
+                            View Competition
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ));
+                })()}
+                
+                {/* Load more button */}
+                {activitiesHasMore && (
+                  <div className="mt-4 text-center">
+                    <button
+                      onClick={() => fetchActivities(activitiesPage + 1)}
+                      disabled={activitiesLoading}
+                      className="px-4 py-2 bg-[#1a4d5c] text-white rounded-lg hover:bg-[#2699a6] transition-colors disabled:opacity-50"
+                    >
+                      {activitiesLoading ? 'Loading...' : 'Load More'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
