@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
 import { Notification, ensureModelsAreLoaded } from '@/lib/model-import-helper';
@@ -184,6 +184,52 @@ export async function PUT(req: NextRequest) {
     console.error('Error updating notifications:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to update notifications' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, message: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+    
+    // Connect to the database
+    await dbConnect();
+    
+    const body = await req.json();
+    const { ids } = body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'No notification IDs provided' },
+        { status: 400 }
+      );
+    }
+    
+    // Delete the specified notifications
+    const deleteResult = await Notification.deleteMany({
+      _id: { $in: ids },
+      user: session.user.id // Ensure user can only delete their own notifications
+    });
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Notifications deleted successfully',
+      deletedCount: deleteResult.deletedCount
+    });
+    
+  } catch (error) {
+    console.error('Error deleting notifications:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to delete notifications' },
       { status: 500 }
     );
   }

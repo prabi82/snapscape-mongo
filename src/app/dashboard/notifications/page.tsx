@@ -26,6 +26,7 @@ export default function NotificationsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedNotifications, setSelectedNotifications] = useState<string[]>([]);
   const [isSelectAll, setIsSelectAll] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -244,6 +245,46 @@ export default function NotificationsPage() {
     }
   };
 
+  // Add delete function
+  const deleteNotifications = async () => {
+    try {
+      if (selectedNotifications.length === 0) {
+        return;
+      }
+      
+      // Set deleting state to show loading UI
+      setIsDeleting(true);
+      
+      const response = await fetch('/api/notifications', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ids: selectedNotifications,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete notifications');
+      }
+      
+      // Remove deleted notifications from the UI
+      setNotifications(notifications.filter(notification => 
+        !selectedNotifications.includes(notification._id)
+      ));
+      
+      // Clear selection
+      setSelectedNotifications([]);
+      setIsSelectAll(false);
+    } catch (err) {
+      console.error('Error deleting notifications:', err);
+      setError('Failed to delete notifications. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -265,6 +306,13 @@ export default function NotificationsPage() {
         <div className="flex space-x-2">
           {selectedNotifications.length > 0 ? (
             <>
+              <button
+                onClick={deleteNotifications}
+                disabled={isDeleting}
+                className="px-3 py-1 text-sm bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
               <button
                 onClick={markAsRead}
                 className="px-3 py-1 text-sm bg-green-50 text-green-700 border border-green-200 rounded-md hover:bg-green-100"
