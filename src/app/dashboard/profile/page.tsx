@@ -166,27 +166,6 @@ export default function ProfilePage() {
         console.log('[PROFILE-PAGE] Initial load - refreshing achievements data');
         await fetchAchievements();
         
-        // Force a sync of all competitions for this user to ensure up-to-date achievements
-        try {
-          console.log('[PROFILE-PAGE] Syncing all competition achievements');
-          const syncResponse = await fetch(`/api/debug/sync-results?userId=${typedSession.user.id}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (syncResponse.ok) {
-            console.log('[PROFILE-PAGE] Sync successful, refreshing achievements');
-            // Refresh achievements after sync
-            await fetchAchievements();
-          } else {
-            console.error('[PROFILE-PAGE] Sync failed:', await syncResponse.text());
-          }
-        } catch (error) {
-          console.error('[PROFILE-PAGE] Error syncing achievements:', error);
-        }
-        
         // For each competition, ensure we have the direct results
         if (achievements && achievements.achievements) {
           await Promise.all(
@@ -380,81 +359,7 @@ export default function ProfilePage() {
     }
   };
   
-  // Add a new state for data version tracking
-  const [dataVersion, setDataVersion] = useState<number>(0);
-  const [calculationComplete, setCalculationComplete] = useState<boolean>(false);
-  
-  // Add a useEffect to coordinate calculations after data loading
-  useEffect(() => {
-    // Only run calculations when all necessary data is loaded
-    if (achievements && pointsBreakdown) {
-      console.log('[POINTS-SYNC] Running coordinated calculations with dataVersion:', dataVersion);
-      
-      // Deduplicate details entries by photo ID, keeping the highest rank
-      const photoEntries = new Map();
-    
-      if (pointsBreakdown.details && pointsBreakdown.details.length > 0) {
-        pointsBreakdown.details.forEach(detail => {
-          const photoId = detail.id;
-          if (!photoEntries.has(photoId) || detail.position < photoEntries.get(photoId).position) {
-            photoEntries.set(photoId, detail);
-          }
-        });
-      }
-      
-      // Create deduplicated details array
-      const deduplicatedDetails = Array.from(photoEntries.values());
-      console.log('[POINTS-SYNC] Deduplicated entries:', deduplicatedDetails.length, 'from original:', pointsBreakdown.details?.length || 0);
-      
-      // Recalculate points from scratch
-      let firstPlacePoints = 0;
-      let secondPlacePoints = 0;
-      let thirdPlacePoints = 0;
-      let otherPoints = 0;
-      
-      // Process ranked submissions first with deduplicated entries
-      deduplicatedDetails.forEach(detail => {
-        const multiplier = detail.position === 1 ? 5 : 
-                          detail.position === 2 ? 3 : 
-                          detail.position === 3 ? 2 : 1;
-        
-        const points = detail.totalRating * multiplier;
-        
-        if (detail.position === 1) firstPlacePoints += points;
-        else if (detail.position === 2) secondPlacePoints += points;
-        else if (detail.position === 3) thirdPlacePoints += points;
-        else otherPoints += points;
-        
-        console.log(`[POINTS-SYNC] Calculated: ${detail.title}, position ${detail.position}, rating ${detail.totalRating}, points ${points}`);
-      });
-      
-      // Process other submissions - deduplicate against high ranked ones
-      if (pointsBreakdown.otherSubmissions && pointsBreakdown.otherSubmissions.length > 0) {
-        // Filter out any submissions that appear in deduplicatedDetails
-        const otherPhotoIds = new Set(deduplicatedDetails.map(d => d.id));
-        const filteredOtherSubmissions = pointsBreakdown.otherSubmissions.filter(sub => !otherPhotoIds.has(sub.id));
-        
-        filteredOtherSubmissions.forEach(sub => {
-          const points = sub.totalRating * 1;
-          otherPoints += points;
-          console.log(`[POINTS-SYNC] Other submission: ${sub.title}, rating ${sub.totalRating}, points ${points}`);
-        });
-      }
-      
-      // Store calculated values in state
-      const votingPoints = pointsBreakdown.votingPoints;
-      const newTotal = Math.round(firstPlacePoints + secondPlacePoints + thirdPlacePoints + otherPoints + votingPoints);
-      
-      console.log(`[POINTS-SYNC] Final calculations: 1st=${Math.round(firstPlacePoints)}, 2nd=${Math.round(secondPlacePoints)}, 3rd=${Math.round(thirdPlacePoints)}, other=${Math.round(otherPoints)}, voting=${votingPoints}, total=${newTotal}`);
-      
-      // Update the state with consistent values
-      setCorrectedTotalPoints(newTotal);
-      setOtherSubmissionsPoints(otherPoints);
-      setCalculationComplete(true);
-    }
-  }, [achievements, pointsBreakdown, dataVersion]);
-  
-  // Modify the fetchAchievements function to increment the data version
+  // Modify the fetchAchievements function to also fetch direct competition results
   const fetchAchievements = async () => {
     const userId = getUserId();
     if (!userId) return;
@@ -466,7 +371,6 @@ export default function ProfilePage() {
     const isInitialLoad = !achievements;
     if (isInitialLoad) {
       setAchievementsLoading(true);
-      setCalculationComplete(false);
     }
     
     try {
@@ -482,15 +386,10 @@ export default function ProfilePage() {
         
         // For each competition, also fetch direct results
         if (data.data && data.data.achievements) {
-          await Promise.all(
-            data.data.achievements.map((competition: any) => 
-              fetchCompetitionResults(competition.competitionId)
-            )
-          );
+          data.data.achievements.forEach((competition: any) => {
+            fetchCompetitionResults(competition.competitionId);
+          });
         }
-        
-        // Increment the data version to trigger recalculation
-        setDataVersion(prev => prev + 1);
       }
     } catch (error) {
       console.error('Error fetching achievements:', error);
@@ -540,15 +439,13 @@ export default function ProfilePage() {
     return positions;
   };
   
-  // Modify fetchUserStats to also trigger recalculation
+  // New function to fetch user stats
   const fetchUserStats = async () => {
     const userId = getUserId();
     if (!userId) return;
     
     setStatsLoading(true);
     setStatsError('');
-    setCalculationComplete(false);
-    
     try {
       const response = await fetch(`/api/users/${userId}/stats`);
       if (!response.ok) {
@@ -558,17 +455,92 @@ export default function ProfilePage() {
       const data = await response.json();
       if (data.success) {
         setTotalSubmissions(data.data.totalSubmissions);
-        
-        // Store original points from API
-        const apiTotalPoints = data.data.totalPoints;
-        setTotalPoints(apiTotalPoints);
+        setTotalPoints(data.data.totalPoints);
         setBadgesEarned(data.data.badgesEarned || 0);
         setCompetitionsEntered(data.data.competitionsEntered || 0);
         setCompetitionsWon(data.data.competitionsWon || 0);
         setPointsBreakdown(data.data.pointsBreakdown);
         
-        // Increment the data version to trigger recalculation
-        setDataVersion(prev => prev + 1);
+        // Calculate corrected total points if needed
+        if (data.data.pointsBreakdown) {
+          const pb = data.data.pointsBreakdown;
+          
+          // Use the actual voting points - the server now correctly calculates this
+          const votingPoints = pb.votingPoints;
+          
+          // Filter out duplicates from details
+          const uniqueDetailsMap = new Map();
+          // Process the details and keep only the highest ranking for each submission
+          if (pb.details) {
+            pb.details.forEach(detail => {
+              const existingDetail = uniqueDetailsMap.get(detail.id);
+              // If we haven't seen this submission or this position is better than what we have, update it
+              if (!existingDetail || detail.position < existingDetail.position) {
+                uniqueDetailsMap.set(detail.id, detail);
+              }
+            });
+          }
+          
+          // Recalculate points for each category based on deduplicated entries
+          let recalculatedFirstPlacePoints = 0;
+          let recalculatedSecondPlacePoints = 0;
+          let recalculatedThirdPlacePoints = 0;
+          
+          // Recalculate from deduplicated details
+          Array.from(uniqueDetailsMap.values()).forEach(detail => {
+            if (detail.position === 1) {
+              recalculatedFirstPlacePoints += detail.points;
+            } else if (detail.position === 2) {
+              recalculatedSecondPlacePoints += detail.points;
+            } else if (detail.position === 3) {
+              recalculatedThirdPlacePoints += detail.points;
+            }
+          });
+          
+          // Filter out duplicates from otherSubmissions
+          const uniqueOtherSubmissionsMap = new Map();
+          // Store only unique submissions by ID
+          if (pb.otherSubmissions) {
+            pb.otherSubmissions.forEach(sub => {
+              if (!uniqueOtherSubmissionsMap.has(sub.id)) {
+                uniqueOtherSubmissionsMap.set(sub.id, sub);
+              }
+            });
+          }
+          
+          // Recalculate other submissions points
+          let otherPoints = 0;
+          if (uniqueOtherSubmissionsMap.size > 0) {
+            otherPoints = Array.from(uniqueOtherSubmissionsMap.values())
+              .reduce((total, sub) => total + sub.points, 0);
+          }
+          // If we still don't have data, use the estimation approach as fallback
+          else if (data.data.totalSubmissions > 0) {
+            // We can estimate other submissions points if we have the total
+            const rankedSubmissions = (pb.details || []).length;
+            const remainingSubmissions = data.data.totalSubmissions - rankedSubmissions;
+            
+            // This is just an estimate - ideally the server would provide this data
+            if (remainingSubmissions > 0) {
+              // Using a conservative average rating of 3.5 instead of 3.0 for higher accuracy
+              otherPoints = remainingSubmissions * 3.5;
+              console.log(`Estimated points for ${remainingSubmissions} other submissions: ${otherPoints}`);
+            }
+          }
+          
+          setOtherSubmissionsPoints(otherPoints);
+          
+          // Calculate corrected total using deduplicated values
+          const correctedTotal = Math.round(
+            recalculatedFirstPlacePoints + 
+            recalculatedSecondPlacePoints + 
+            recalculatedThirdPlacePoints + 
+            otherPoints + 
+            votingPoints
+          );
+          
+          setCorrectedTotalPoints(correctedTotal);
+        }
         
         console.log('User stats loaded:', data.data);
       }
@@ -1058,71 +1030,62 @@ export default function ProfilePage() {
     return { firstPlace, secondPlace, thirdPlace, totalTopThree };
   };
 
-  // Modify the Points Breakdown modal to deduplicate entries
+  // Points Breakdown Modal
   const PointsBreakdownModal = () => {
-    if (!showPointsBreakdown || !pointsBreakdown || !calculationComplete) return null;
+    if (!showPointsBreakdown || !pointsBreakdown) return null;
     
-    // Deduplicate details entries by photo ID, keeping the highest rank (lowest position number)
-    const photoEntries = new Map();
-    
-    if (pointsBreakdown.details && pointsBreakdown.details.length > 0) {
-      // First collect all entries by photo ID
-      pointsBreakdown.details.forEach(detail => {
-        const photoId = detail.id;
-        if (!photoEntries.has(photoId) || detail.position < photoEntries.get(photoId).position) {
-          photoEntries.set(photoId, detail);
-        }
-      });
-    }
-    
-    // Create deduplicated details array
-    const deduplicatedDetails = Array.from(photoEntries.values());
-    
-    // Recalculate all point values using the deduplicated details
-    let recalcFirstPlacePoints = 0;
-    let recalcSecondPlacePoints = 0;
-    let recalcThirdPlacePoints = 0;
-    let recalcOtherPoints = 0;
-    
-    // Calculate correct points for top-ranked positions
-    if (deduplicatedDetails.length > 0) {
-      deduplicatedDetails.forEach(detail => {
-        let multiplier = 1;
-        if (detail.position === 1) multiplier = 5;
-        else if (detail.position === 2) multiplier = 3;
-        else if (detail.position === 3) multiplier = 2;
-        
-        const points = detail.totalRating * multiplier;
-        
-        if (detail.position === 1) recalcFirstPlacePoints += points;
-        else if (detail.position === 2) recalcSecondPlacePoints += points;
-        else if (detail.position === 3) recalcThirdPlacePoints += points;
-        else recalcOtherPoints += points;
-      });
-    }
-    
-    // Calculate correct points for other submissions
-    if (pointsBreakdown.otherSubmissions && pointsBreakdown.otherSubmissions.length > 0) {
-      // Deduplicate other submissions too
-      const otherPhotoIds = new Set(deduplicatedDetails.map(d => d.id));
-      const deduplicatedOtherSubmissions = pointsBreakdown.otherSubmissions.filter(
-        sub => !otherPhotoIds.has(sub.id)
-      );
-      
-      deduplicatedOtherSubmissions.forEach(sub => {
-        recalcOtherPoints += sub.totalRating * 1; // Multiplier is always 1 for positions 4+
-      });
-    }
-    
-    // Use corrected values for voting points
+    // Use actual voting points from the API - we've fixed the backend calculation
     const correctedVotingPoints = pointsBreakdown.votingPoints;
     
-    // Recalculate total points
+    // Use the state-tracked other submissions points
+    const finalOtherSubmissionsPoints = otherSubmissionsPoints;
+    
+    // Create maps for deduplication
+    const uniqueDetailsMap = new Map();
+    // Process the details and keep only the highest ranking for each submission
+    pointsBreakdown.details.forEach(detail => {
+      const existingDetail = uniqueDetailsMap.get(detail.id);
+      // If we haven't seen this submission or this position is better than what we have, update it
+      if (!existingDetail || detail.position < existingDetail.position) {
+        uniqueDetailsMap.set(detail.id, detail);
+      }
+    });
+    
+    // Recalculate points for each category based on deduplicated entries
+    let recalculatedFirstPlacePoints = 0;
+    let recalculatedSecondPlacePoints = 0;
+    let recalculatedThirdPlacePoints = 0;
+    
+    // Recalculate from deduplicated details
+    Array.from(uniqueDetailsMap.values()).forEach(detail => {
+      if (detail.position === 1) {
+        recalculatedFirstPlacePoints += detail.points;
+      } else if (detail.position === 2) {
+        recalculatedSecondPlacePoints += detail.points;
+      } else if (detail.position === 3) {
+        recalculatedThirdPlacePoints += detail.points;
+      }
+    });
+    
+    // Create unique other submissions map
+    const uniqueOtherSubmissionsMap = new Map();
+    // Store only unique submissions by ID
+    pointsBreakdown.otherSubmissions.forEach(sub => {
+      if (!uniqueOtherSubmissionsMap.has(sub.id)) {
+        uniqueOtherSubmissionsMap.set(sub.id, sub);
+      }
+    });
+    
+    // Recalculate other submissions points
+    const recalculatedOtherSubmissionsPoints = Array.from(uniqueOtherSubmissionsMap.values())
+      .reduce((total, sub) => total + sub.points, 0);
+    
+    // Recalculate total for display using the deduplicated points
     const totalCalculatedPoints = Math.round(
-      recalcFirstPlacePoints +
-      recalcSecondPlacePoints +
-      recalcThirdPlacePoints +
-      recalcOtherPoints +
+      recalculatedFirstPlacePoints +
+      recalculatedSecondPlacePoints +
+      recalculatedThirdPlacePoints +
+      recalculatedOtherSubmissionsPoints +
       correctedVotingPoints
     );
     
@@ -1142,31 +1105,31 @@ export default function ProfilePage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {recalcFirstPlacePoints > 0 && (
+            {recalculatedFirstPlacePoints > 0 && (
               <div className="bg-yellow-50 p-3 rounded">
                 <p className="text-yellow-700 font-semibold">1st Place Points</p>
-                <p className="text-xl">{Math.round(recalcFirstPlacePoints)}</p>
+                <p className="text-xl">{Math.round(recalculatedFirstPlacePoints)}</p>
               </div>
             )}
             
-            {recalcSecondPlacePoints > 0 && (
+            {recalculatedSecondPlacePoints > 0 && (
               <div className="bg-gray-100 p-3 rounded">
                 <p className="text-gray-700 font-semibold">2nd Place Points</p>
-                <p className="text-xl">{Math.round(recalcSecondPlacePoints)}</p>
+                <p className="text-xl">{Math.round(recalculatedSecondPlacePoints)}</p>
               </div>
             )}
             
-            {recalcThirdPlacePoints > 0 && (
+            {recalculatedThirdPlacePoints > 0 && (
               <div className="bg-orange-50 p-3 rounded">
                 <p className="text-orange-700 font-semibold">3rd Place Points</p>
-                <p className="text-xl">{Math.round(recalcThirdPlacePoints)}</p>
+                <p className="text-xl">{Math.round(recalculatedThirdPlacePoints)}</p>
               </div>
             )}
             
-            {recalcOtherPoints > 0 && (
+            {recalculatedOtherSubmissionsPoints > 0 && (
               <div className="bg-green-50 p-3 rounded">
                 <p className="text-green-700 font-semibold">Other Submissions Points</p>
-                <p className="text-xl">{Math.round(recalcOtherPoints)}</p>
+                <p className="text-xl">{Math.round(recalculatedOtherSubmissionsPoints)}</p>
                 <p className="text-xs text-green-600">(4th place and beyond)</p>
               </div>
             )}
@@ -1197,7 +1160,7 @@ export default function ProfilePage() {
           <div className="border-t pt-4">
             <h4 className="font-semibold mb-2">Detailed Breakdown</h4>
             
-            {deduplicatedDetails.length > 0 ? (
+            {pointsBreakdown.details && pointsBreakdown.details.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1210,54 +1173,64 @@ export default function ProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {deduplicatedDetails.map((detail, index) => {
-                      // Determine multiplier based on position
-                      let multiplier = 1;
-                      if (detail.position === 1) multiplier = 5;
-                      else if (detail.position === 2) multiplier = 3;
-                      else if (detail.position === 3) multiplier = 2;
-                      
-                      // Calculate correct points based on multiplier
-                      const calculatedPoints = detail.totalRating * multiplier;
-                      
-                      return (
-                        <tr key={index} className="border-b">
-                          <td className="p-2">{detail.title || 'Untitled'}</td>
-                          <td className="p-2 text-center">{detail.position}</td>
-                          <td className="p-2 text-right">{detail.totalRating.toFixed(1)}</td>
-                          <td className="p-2 text-right">×{multiplier}</td>
-                          <td className="p-2 text-right font-medium">{Math.round(calculatedPoints)}</td>
-                        </tr>
-                      );
-                    })}
+                    {/* Filter out duplicates by ID and use a Map to keep track of seen submissions */}
+                    {(() => {
+                      const uniqueDetailsMap = new Map();
+                      // Process the details and keep only the highest ranking for each submission
+                      pointsBreakdown.details.forEach(detail => {
+                        const existingDetail = uniqueDetailsMap.get(detail.id);
+                        // If we haven't seen this submission or this position is better than what we have, update it
+                        if (!existingDetail || detail.position < existingDetail.position) {
+                          uniqueDetailsMap.set(detail.id, detail);
+                        }
+                      });
+                      // Convert back to array and render
+                      return Array.from(uniqueDetailsMap.values()).map((detail, index) => {
+                        // Determine multiplier based on position
+                        let multiplier = 1;
+                        if (detail.position === 1) multiplier = 5;
+                        else if (detail.position === 2) multiplier = 3;
+                        else if (detail.position === 3) multiplier = 2;
+                        
+                        return (
+                          <tr key={index} className="border-b">
+                            <td className="p-2">{detail.title || 'Untitled'}</td>
+                            <td className="p-2 text-center">{detail.position}</td>
+                            <td className="p-2 text-right">{detail.totalRating.toFixed(1)}</td>
+                            <td className="p-2 text-right">×{multiplier}</td>
+                            <td className="p-2 text-right font-medium">{Math.round(detail.points)}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                     
                     {/* Other submissions (4th place and beyond) */}
                     {pointsBreakdown.otherSubmissions && pointsBreakdown.otherSubmissions.length > 0 && (
                       <>
-                        {/* Filter out submissions that are already shown in deduplicated details */}
-                        {pointsBreakdown.otherSubmissions
-                          .filter(sub => !deduplicatedDetails.some(d => d.id === sub.id))
-                          .map((sub, index) => {
-                            // For 4+ positions, multiplier is always 1
-                            const multiplier = 1;
-                            const calculatedPoints = sub.totalRating * multiplier;
-                            
-                            return (
-                              <tr key={`other-${index}`} className="border-b bg-green-50">
-                                <td className="p-2">{sub.title || 'Untitled'}</td>
-                                <td className="p-2 text-center">4+</td>
-                                <td className="p-2 text-right">{sub.totalRating.toFixed(1)}</td>
-                                <td className="p-2 text-right">×{multiplier}</td>
-                                <td className="p-2 text-right font-medium">{Math.round(calculatedPoints)}</td>
-                              </tr>
-                            );
-                          })
-                        }
+                        {(() => {
+                          const uniqueOtherSubmissionsMap = new Map();
+                          // Store only unique submissions by ID
+                          pointsBreakdown.otherSubmissions.forEach(sub => {
+                            if (!uniqueOtherSubmissionsMap.has(sub.id)) {
+                              uniqueOtherSubmissionsMap.set(sub.id, sub);
+                            }
+                          });
+                          
+                          return Array.from(uniqueOtherSubmissionsMap.values()).map((sub, index) => (
+                            <tr key={`other-${index}`} className="border-b bg-green-50">
+                              <td className="p-2">{sub.title || 'Untitled'}</td>
+                              <td className="p-2 text-center">4+</td>
+                              <td className="p-2 text-right">{sub.totalRating.toFixed(1)}</td>
+                              <td className="p-2 text-right">×1</td>
+                              <td className="p-2 text-right font-medium">{Math.round(sub.points)}</td>
+                            </tr>
+                          ));
+                        })()}
                       </>
                     )}
                     
                     {/* Voting points row */}
-                    <tr
+                    <tr 
                       className="bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors"
                       onClick={() => {
                         setShowPointsBreakdown(false);
@@ -1366,19 +1339,7 @@ export default function ProfilePage() {
                         onClick={() => setShowPointsBreakdown(true)}
                         title="Click for points breakdown"
                       >
-                        {!calculationComplete ? (
-                          <span className="inline-flex items-center">
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#1a4d5c]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Calculating...
-                          </span>
-                        ) : correctedTotalPoints !== null ? (
-                          correctedTotalPoints
-                        ) : totalPoints !== null ? (
-                          totalPoints
-                        ) : '-'}
+                        {correctedTotalPoints !== null ? correctedTotalPoints : totalPoints !== null ? totalPoints : '-'}
                       </span> Points
                       <span className="text-xs ml-1 text-green-600">(all submissions counted)</span>
                     </span>
@@ -1542,21 +1503,58 @@ export default function ProfilePage() {
                           if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating;
                           return (b.ratingCount || 0) - (a.ratingCount || 0);
                         });
-                        const rank = sorted.findIndex(img => img._id === currentModalImage._id) + 1;
-                        if (rank > 0) {
+                        
+                        // Properly implement dense ranking
+                        let currentRank = 0;
+                        let prevRating = null;
+                        let prevRatingCount = null;
+                        let actualRank = 0;
+                        
+                        // First pass: create ranking map
+                        const rankMap = new Map();
+                        
+                        for (let i = 0; i < sorted.length; i++) {
+                          const image = sorted[i];
+                          const rating = image.averageRating;
+                          const ratingCount = image.ratingCount || 0;
+                          
+                          // If first item or different rating from previous item
+                          if (i === 0 || rating !== prevRating || ratingCount !== prevRatingCount) {
+                            currentRank = rankMap.size + 1;
+                          }
+                          
+                          // Define the rating key as a combination of rating and count
+                          const ratingKey = `${rating}-${ratingCount}`;
+                          
+                          // If we haven't assigned a rank to this rating yet
+                          if (!rankMap.has(ratingKey)) {
+                            rankMap.set(ratingKey, currentRank);
+                          }
+                          
+                          // Store current values for next comparison
+                          prevRating = rating;
+                          prevRatingCount = ratingCount;
+                          
+                          // If this is our target image, store its rank
+                          if (image._id === currentModalImage._id) {
+                            actualRank = currentRank;
+                          }
+                        }
+                        
+                        if (actualRank > 0) {
                           let badgeIcon: React.ReactNode = null;
-                          if (rank === 1) badgeIcon = <span className="mr-1">🥇</span>;
-                          else if (rank === 2) badgeIcon = <span className="mr-1">🥈</span>;
-                          else if (rank === 3) badgeIcon = <span className="mr-1">🥉</span>;
+                          if (actualRank === 1) badgeIcon = <span className="mr-1">🥇</span>;
+                          else if (actualRank === 2) badgeIcon = <span className="mr-1">🥈</span>;
+                          else if (actualRank === 3) badgeIcon = <span className="mr-1">🥉</span>;
                           return (
                             <span className={`ml-2 inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${
-                              rank === 1 ? 'bg-yellow-400' :
-                              rank === 2 ? 'bg-gray-300' :
-                              rank === 3 ? 'bg-orange-400' :
+                              actualRank === 1 ? 'bg-yellow-400' :
+                              actualRank === 2 ? 'bg-gray-300' :
+                              actualRank === 3 ? 'bg-orange-400' :
                               'bg-gray-700'
                             }`}>
                               {badgeIcon}
-                              {rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`} Rank
+                              {actualRank === 1 ? '1st' : actualRank === 2 ? '2nd' : actualRank === 3 ? '3rd' : `${actualRank}th`} Rank
                             </span>
                           );
                         }
