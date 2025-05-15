@@ -70,11 +70,23 @@ export default function NotificationsPage() {
     }
   };
 
-  const markAsRead = async (ids?: string[]) => {
+  const markAsRead = async (idsOrEvent?: string[] | React.MouseEvent<HTMLButtonElement>) => {
     try {
-      const notificationIds = ids || selectedNotifications;
+      // Check if it's an event or array of IDs
+      let notificationIds: string[];
       
-      if (notificationIds.length === 0 && !ids) {
+      if (idsOrEvent && !Array.isArray(idsOrEvent)) {
+        // It's a button click event
+        notificationIds = selectedNotifications;
+      } else {
+        // It's an array of IDs or undefined
+        notificationIds = (idsOrEvent as string[]) || selectedNotifications;
+      }
+      
+      // Check if there are any selected notifications
+      if (notificationIds.length === 0) {
+        // Show a message or silent return
+        console.log('No notifications selected to mark as read');
         return;
       }
       
