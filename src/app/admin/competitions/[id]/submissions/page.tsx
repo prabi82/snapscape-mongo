@@ -195,8 +195,23 @@ export default function CompetitionSubmissions() {
     }
   };
   
-  // All submissions (combine both arrays)
-  const allSubmissions = [...submissions, ...photoSubmissions];
+  // All submissions (combine both arrays and remove duplicates by ID)
+  const uniqueSubmissionsMap = new Map();
+  
+  // First add all submissions from PhotoSubmission model
+  submissions.forEach(sub => {
+    uniqueSubmissionsMap.set(sub._id.toString(), sub);
+  });
+  
+  // Then add submissions from Photo model only if they don't already exist
+  photoSubmissions.forEach(sub => {
+    if (!uniqueSubmissionsMap.has(sub._id.toString())) {
+      uniqueSubmissionsMap.set(sub._id.toString(), sub);
+    }
+  });
+  
+  // Convert back to array
+  const allSubmissions = Array.from(uniqueSubmissionsMap.values());
   
   // Filter submissions by status if needed
   const filteredSubmissions = statusFilter === 'all'
@@ -213,6 +228,14 @@ export default function CompetitionSubmissions() {
       </div>
     );
   }
+  
+  // Update status counts based on all unique submissions
+  const actualStatusCounts = {
+    total: allSubmissions.length,
+    pending: allSubmissions.filter(sub => sub.status === 'pending').length,
+    approved: allSubmissions.filter(sub => sub.status === 'approved').length,
+    rejected: allSubmissions.filter(sub => sub.status === 'rejected').length,
+  };
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -263,17 +286,17 @@ export default function CompetitionSubmissions() {
           
           <div className="sm:ml-4">
             <p className="block text-sm font-medium text-gray-700 mb-1">
-              Total Submissions: <span className="font-bold">{statusCounts.total}</span>
+              Total Submissions: <span className="font-bold">{actualStatusCounts.total}</span>
             </p>
             <div className="flex gap-2">
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                Pending: {statusCounts.pending}
+                Pending: {actualStatusCounts.pending}
               </span>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Approved: {statusCounts.approved}
+                Approved: {actualStatusCounts.approved}
               </span>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                Rejected: {statusCounts.rejected}
+                Rejected: {actualStatusCounts.rejected}
               </span>
             </div>
           </div>
