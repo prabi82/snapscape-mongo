@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from 'crypto';
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
+import { sendVerificationEmail } from "@/lib/emailService";
+
+// Function to generate a random token
+const generateVerificationToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,12 +31,23 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Create new user
+    // Generate verification token
+    const verificationToken = generateVerificationToken();
+    const verificationExpires = new Date();
+    verificationExpires.setHours(verificationExpires.getHours() + 24); // Token expires in 24 hours
+    
+    // Create new user with verification token
     const user = await User.create({
       name,
       email,
       password, // Password will be hashed by the User model pre-save hook
+      isVerified: false,
+      verificationToken,
+      verificationExpires,
     });
+    
+    // Send verification email
+    await sendVerificationEmail(email, name, verificationToken);
     
     // Remove sensitive information
     const userResponse = {
@@ -37,13 +55,14 @@ export async function POST(req: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
+      isVerified: user.isVerified,
       createdAt: user.createdAt,
     };
     
     return NextResponse.json(
       {
         success: true,
-        message: 'User registered successfully',
+        message: 'User registered successfully. Please check your email to verify your account.',
         data: userResponse,
       },
       { status: 201 }

@@ -68,12 +68,15 @@ export default function RegisterPage() {
         throw new Error(data.message || 'Registration failed');
       }
       
-      setSuccessMessage('Registration successful! Redirecting to login...');
+      setSuccessMessage(data.message || 'Registration successful! Please check your email to verify your account.');
       
-      // Redirect to login page after a short delay
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
+      // Clear form after successful submission
+      setName('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      
+      // No immediate redirect - wait for email verification
     } catch (error: any) {
       console.error('Registration error:', error);
       setError(error.message || 'An error occurred during registration. Please try again.');

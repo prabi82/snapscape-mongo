@@ -1,6 +1,22 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// Define a type for the user document
+interface IUserDocument extends mongoose.Document {
+  name: string;
+  email: string;
+  password?: string;
+  role: string;
+  provider: string;
+  providerId: string | null;
+  image: string | null;
+  isVerified: boolean;
+  verificationToken: string | null;
+  verificationExpires: Date | null;
+  createdAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
 // Define the user schema
 const userSchema = new mongoose.Schema({
   name: {
@@ -20,7 +36,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [
-      function() {
+      function(this: IUserDocument) {
         // Only require password for credentials provider (not social logins)
         return !this.provider || this.provider === 'credentials';
       },
@@ -48,6 +64,19 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  // Email verification fields
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: {
+    type: String,
+    default: null,
+  },
+  verificationExpires: {
+    type: Date,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -55,7 +84,7 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Hash password before saving, but only if it's modified and exists
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function(this: IUserDocument, next) {
   if (!this.isModified('password') || !this.password) {
     next();
     return;
@@ -65,11 +94,11 @@ userSchema.pre('save', async function(next) {
 });
 
 // Add method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword: string) {
-  return await bcrypt.compare(candidatePassword, this.password);
+userSchema.methods.comparePassword = async function(this: IUserDocument, candidatePassword: string) {
+  return await bcrypt.compare(candidatePassword, this.password || '');
 };
 
 // Create or get the User model
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model<IUserDocument>('User', userSchema);
 
 export default User; 

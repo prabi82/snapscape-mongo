@@ -13,6 +13,10 @@ export default function Home() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [authProviders, setAuthProviders] = useState<any>({});
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [resendMessage, setResendMessage] = useState('');
 
   useEffect(() => {
     // Fetch available providers
@@ -38,7 +42,13 @@ export default function Home() {
         password,
       });
       if (result?.error) {
-        setError(result.error);
+        // If the error is about email verification, show the verification modal
+        if (result.error.includes('verify your email')) {
+          setVerificationEmail(email);
+          setShowVerificationModal(true);
+        } else {
+          setError(result.error);
+        }
         return;
       }
       // Redirect to dashboard on successful login
@@ -54,6 +64,45 @@ export default function Home() {
 
   const handleSocialLogin = (providerId: string) => {
     signIn(providerId, { callbackUrl: '/dashboard' });
+  };
+
+  const handleResendVerification = async () => {
+    if (!verificationEmail) {
+      setResendStatus('error');
+      setResendMessage('Email is required');
+      return;
+    }
+
+    try {
+      setResendStatus('loading');
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: verificationEmail }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResendStatus('success');
+        setResendMessage(data.message);
+      } else {
+        setResendStatus('error');
+        setResendMessage(data.message || 'Failed to resend verification email');
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      setResendStatus('error');
+      setResendMessage('An error occurred. Please try again.');
+    }
+  };
+
+  const closeVerificationModal = () => {
+    setShowVerificationModal(false);
+    setResendStatus('idle');
+    setResendMessage('');
   };
 
   return (
@@ -138,6 +187,72 @@ export default function Home() {
           <span className="text-[#1a4d5c]">Don't have an account? </span>
           <Link href="/auth/register" className="text-[#e0c36a] font-semibold hover:underline">Signup</Link>
         </div>
+        
+        {/* Email Verification Modal */}
+        {showVerificationModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md relative">
+              <button
+                onClick={closeVerificationModal}
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              
+              <h3 className="text-xl font-semibold text-[#1a4d5c] mb-4 text-center">Email Verification Required</h3>
+              
+              <p className="text-[#1a4d5c] mb-4">
+                Your email address needs to be verified before you can sign in. Please check your inbox for the verification email.
+              </p>
+              
+              <p className="text-[#1a4d5c] mb-6">
+                If you didn't receive the email or it expired, you can resend it to: <span className="font-semibold">{verificationEmail}</span>
+              </p>
+              
+              {resendStatus === 'idle' && (
+                <button
+                  onClick={handleResendVerification}
+                  className="w-full py-3 rounded-lg bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold text-lg shadow-md hover:from-[#2699a6] hover:to-[#1a4d5c] transition border-2 border-[#e0c36a]"
+                >
+                  Resend Verification Email
+                </button>
+              )}
+              
+              {resendStatus === 'loading' && (
+                <div className="flex justify-center my-4">
+                  <div className="w-8 h-8 border-4 border-[#2699a6] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+              
+              {resendStatus === 'success' && (
+                <div className="text-green-600 p-3 bg-green-100 rounded-lg mb-4 text-center">
+                  {resendMessage}
+                </div>
+              )}
+              
+              {resendStatus === 'error' && (
+                <div className="text-red-600 p-3 bg-red-100 rounded-lg mb-4 text-center">
+                  {resendMessage}
+                </div>
+              )}
+              
+              <div className="flex justify-between mt-4">
+                <button
+                  onClick={closeVerificationModal}
+                  className="py-2 px-4 rounded-lg bg-gray-200 text-[#1a4d5c] font-semibold hover:bg-gray-300 transition"
+                >
+                  Close
+                </button>
+                <Link href="/auth/register" className="py-2 px-4 rounded-lg bg-[#e6f0f3] text-[#1a4d5c] font-semibold hover:bg-[#d1e6ed] transition">
+                  Register with a Different Email
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

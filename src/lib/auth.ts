@@ -1,11 +1,11 @@
-import { NextAuthOptions } from 'next-auth';
+import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import dbConnect from '@/lib/dbConnect';
 import User from '@/models/User';
 import { compare } from 'bcryptjs';
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -29,6 +29,11 @@ export const authOptions: NextAuthOptions = {
         
         if (!user) {
           throw new Error('No user found with this email');
+        }
+        
+        // Check if user's email is verified (for credentials provider)
+        if (user.provider === 'credentials' && !user.isVerified) {
+          throw new Error('Please verify your email before signing in');
         }
         
         // Check if password matches
@@ -64,6 +69,8 @@ export const authOptions: NextAuthOptions = {
               email: user.email,
               // Set a default role for social login users
               role: 'user',
+              // Social providers don't need email verification
+              isVerified: true,
               // Additional metadata about the provider they used
               provider: account.provider,
               providerId: account.providerAccountId,
