@@ -7,6 +7,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { format } from 'date-fns';
 
+// Define extended session type to include role and id properties
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+}
+
+interface ExtendedSession {
+  user?: ExtendedUser;
+  expires: string;
+}
+
 interface Submission {
   _id: string;
   title: string;
@@ -34,7 +48,7 @@ interface Competition {
 }
 
 export default function ViewSubmissions() {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession() as { data: ExtendedSession | null, status: string };
   const params = useParams();
   const competitionId = params?.id as string;
   const router = useRouter();
@@ -464,6 +478,22 @@ export default function ViewSubmissions() {
                   lastRatingCount = (submission.ratingCount || 0);
                   
                   const rankToDisplay = currentActualRank;
+                  
+                  // Calculate total rating
+                  const totalRating = submission.averageRating * (submission.ratingCount || 0);
+                  
+                  // Apply ranking multiplier based on position
+                  let multiplier = 1; // Default for 4th place and beyond
+                  if (rankToDisplay === 1) {
+                    multiplier = 5;
+                  } else if (rankToDisplay === 2) {
+                    multiplier = 3;
+                  } else if (rankToDisplay === 3) {
+                    multiplier = 2;
+                  }
+                  
+                  // Calculate points with the multiplier
+                  const totalPoints = Math.round(totalRating * multiplier);
 
                   let rankText = '';
                   let rankColor = 'bg-gray-500'; // Default for ranks > 3
@@ -541,8 +571,16 @@ export default function ViewSubmissions() {
                               <div className="flex items-center">
                                 <svg className="text-green-500 h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                                 <span className="text-xs sm:text-sm text-gray-500">
-                                  {(submission.averageRating * (submission.ratingCount || 0)).toFixed(1)} (Total Rating)
+                                  {totalRating.toFixed(1)} (Total Rating)
                                 </span>
+                              </div>
+                              {/* Total Points - Add this section */}
+                              <div className="flex items-center justify-center mt-2">
+                                <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full">
+                                  <span className="font-bold">{totalPoints}</span>
+                                  <span className="ml-1">(Total Points)</span>
+                                  <span className="ml-1 text-xs">×{multiplier}</span>
+                                </div>
                               </div>
                             </div>
                             {/* 4. User Name (centered, no avatar) */}
@@ -563,11 +601,20 @@ export default function ViewSubmissions() {
                                     {submission.averageRating.toFixed(1)} ({submission.ratingCount} votes)
                                   </span>
                                 </div>
+                                {/* Total Rating */}
                                 <div className="flex items-center justify-end mt-1">
                                   <svg className="text-green-500 h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                                   <span className="text-sm text-gray-500">
-                                    {(submission.averageRating * (submission.ratingCount || 0)).toFixed(1)} (Total Rating)
+                                    {totalRating.toFixed(1)} (Total Rating)
                                   </span>
+                                </div>
+                                {/* Total Points - Desktop view */}
+                                <div className="flex items-center justify-end mt-2">
+                                  <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
+                                    <span className="font-bold">{totalPoints}</span>
+                                    <span className="ml-1">(Total Points)</span>
+                                    <span className="ml-1 text-xs">×{multiplier}</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -692,7 +739,9 @@ export default function ViewSubmissions() {
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center text-white p-4">
                   <div className="font-bold text-base mb-1 truncate w-full text-center">{submission.title}</div>
                   {submission.user && (
-                    <div className="text-xs mb-1 truncate w-full text-center">By: {submission.user.name || 'Unknown'}</div>
+                    (!competition.hideOtherSubmissions || competition.status !== 'voting' || isAdmin || session?.user?.id === submission.user._id) ? (
+                      <div className="text-xs mb-1 truncate w-full text-center">By: {submission.user.name || 'Unknown'}</div>
+                    ) : null
                   )}
                   <div className="text-xs w-full text-center">Uploaded: {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString() : ''}</div>
                 </div>
@@ -716,6 +765,7 @@ export default function ViewSubmissions() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+            
             {/* Image on the left */}
             <div className="flex-1 h-full relative modal-image-area" key={selectedSubmission._id}>
               <Image
@@ -725,12 +775,46 @@ export default function ViewSubmissions() {
                 fill
                 className="object-contain w-full h-full modal-image"
               />
+              
+              {/* Left navigation arrow - inside image container */}
+              <button 
+                className={`absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full ${
+                  submissions.findIndex(s => s._id === selectedSubmission._id) <= 0 
+                    ? 'bg-gray-300/40 text-gray-500 cursor-not-allowed opacity-50' 
+                    : 'bg-white/40 hover:bg-white/60 text-[#1a4d5c] shadow'
+                }`}
+                onClick={() => navigateImages('prev')}
+                disabled={submissions.findIndex(s => s._id === selectedSubmission._id) <= 0}
+                aria-label="Previous image"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              
+              {/* Right navigation arrow - inside image container at right edge */}
+              <button 
+                className={`absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full ${
+                  !hasMore && submissions.findIndex(s => s._id === selectedSubmission._id) >= submissions.length - 1
+                    ? 'bg-gray-300/40 text-gray-500 cursor-not-allowed opacity-50' 
+                    : 'bg-white/40 hover:bg-white/60 text-[#1a4d5c] shadow'
+                }`}
+                onClick={() => navigateImages('next')}
+                disabled={!hasMore && submissions.findIndex(s => s._id === selectedSubmission._id) >= submissions.length - 1}
+                aria-label="Next image"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
             {/* Sidebar on the right */}
             <div className="w-full md:w-64 h-full flex flex-col justify-center bg-black/70 p-6 md:rounded-none rounded-b-2xl md:rounded-r-2xl modal-sidebar">
               <div className="font-bold text-2xl text-white mb-2 text-center md:text-left">{selectedSubmission.title}</div>
               {selectedSubmission.user && (
-                <div className="text-base text-[#e0c36a] mb-2 text-center md:text-left">By: {selectedSubmission.user.name || 'Unknown'}</div>
+                (!competition.hideOtherSubmissions || competition.status !== 'voting' || isAdmin || session?.user?.id === selectedSubmission.user._id) ? (
+                  <div className="text-base text-[#e0c36a] mb-2 text-center md:text-left">By: {selectedSubmission.user.name || 'Unknown'}</div>
+                ) : null
               )}
               <div className="text-xs text-gray-200 mb-4 text-center md:text-left">Uploaded: {selectedSubmission.createdAt ? new Date(selectedSubmission.createdAt).toLocaleDateString() : ''}</div>
               {selectedSubmission.description && (
