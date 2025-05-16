@@ -7,6 +7,20 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
 
+// Extended session type
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+}
+
+interface ExtendedSession {
+  user?: ExtendedUser;
+  expires: string;
+}
+
 // Types
 interface User {
   _id: string;
@@ -41,7 +55,7 @@ interface Competition {
 }
 
 export default function CompetitionRatings() {
-  const { data: session } = useSession();
+  const { data: session } = useSession() as { data: ExtendedSession | null, status: string };
   const params = useParams();
   const router = useRouter();
   const competitionId = params?.id as string;
@@ -143,8 +157,9 @@ export default function CompetitionRatings() {
     );
   }
 
-  // Only show results if competition is completed
-  if (competition.status !== 'completed') {
+  // For regular users, only show results if competition is completed
+  // For admins, always show results even during voting phase
+  if (competition.status !== 'completed' && session?.user?.role !== 'admin') {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
@@ -159,6 +174,10 @@ export default function CompetitionRatings() {
       </div>
     );
   }
+  
+  // Flag to show info banner when admin is viewing voting-phase ratings
+  const isVoting = competition.status === 'voting';
+  const showVotingBanner = isVoting && session?.user?.role === 'admin';
 
   // Sort submissions by averageRating (desc), then ratingCount (desc)
   const sortedSubmissions = [...submissions].sort((a, b) => {
@@ -169,11 +188,14 @@ export default function CompetitionRatings() {
   });
 
   // Badge assignment logic for ties
-  let goldRating = null, silverRating = null, bronzeRating = null;
+  let goldRating: number | null = null;
+  let silverRating: number | null = null;
+  let bronzeRating: number | null = null;
+  
   sortedSubmissions.forEach(sub => {
     if (goldRating === null && sub.averageRating > 0) goldRating = sub.averageRating;
-    else if (silverRating === null && sub.averageRating < goldRating && sub.averageRating > 0) silverRating = sub.averageRating;
-    else if (bronzeRating === null && sub.averageRating < silverRating && sub.averageRating > 0) bronzeRating = sub.averageRating;
+    else if (silverRating === null && goldRating !== null && sub.averageRating < goldRating && sub.averageRating > 0) silverRating = sub.averageRating;
+    else if (bronzeRating === null && silverRating !== null && sub.averageRating < silverRating && sub.averageRating > 0) bronzeRating = sub.averageRating;
   });
 
   function getBadge(rating: number) {
@@ -197,6 +219,16 @@ export default function CompetitionRatings() {
           Back to Competitions
         </Link>
       </div>
+
+      {/* Admin viewing voting-phase ratings banner */}
+      {showVotingBanner && (
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+          <p className="text-blue-700">
+            <span className="font-bold">Admin View:</span> You are viewing live ratings during the voting phase. 
+            These results are not visible to regular users until the competition is completed.
+          </p>
+        </div>
+      )}
 
       {/* Header */}
       <div className="mb-8">

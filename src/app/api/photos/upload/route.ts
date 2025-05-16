@@ -5,12 +5,13 @@ import { uploadToCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/mongodb';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Competition from '@/models/Competition';
+import { notifyAdminsOfPhotoSubmission } from '@/lib/notification-service';
 
-// CORS headers for all responses
+// Define CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Handle OPTIONS requests for CORS preflight
@@ -155,6 +156,21 @@ export async function POST(request: NextRequest) {
       });
 
       console.log('Submission created:', submission._id);
+      
+      // Send notification to admins
+      try {
+        await notifyAdminsOfPhotoSubmission(
+          submission._id.toString(),
+          submission.title || 'Untitled Photo',
+          session.user.id,
+          session.user.name || 'User',
+          competitionId,
+          competition.title
+        );
+      } catch (notifyError) {
+        console.error('Error sending admin notifications:', notifyError);
+        // Continue even if notification fails
+      }
       
       return NextResponse.json({ 
         success: true, 

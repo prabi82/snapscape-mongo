@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Competition from '@/models/Competition';
 import dbConnect from '@/lib/dbConnect';
+import { notifySubmissionStatusUpdate } from '@/lib/notification-service';
+
+// Define extended session interface
+interface ExtendedSession {
+  user?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+    role?: string;
+  };
+}
 
 // GET a single photo submission
 export async function GET(
@@ -11,7 +24,7 @@ export async function GET(
 ) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions) as ExtendedSession;
     const { id } = params;
     
     // Check authentication
@@ -57,7 +70,7 @@ export async function PUT(
 ) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions) as ExtendedSession;
     const { id } = params;
     
     // Check authentication
@@ -129,7 +142,7 @@ export async function DELETE(
 ) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions) as ExtendedSession;
     const { id } = params;
     
     // Check authentication
@@ -192,11 +205,11 @@ export async function PATCH(
 ) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions) as ExtendedSession;
     const { id } = params;
     
     // Check authentication
-    if (!session || !session.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
@@ -207,7 +220,8 @@ export async function PATCH(
     // In a real implementation, you would check if user is admin here
     // For now, we'll proceed as if the user is authorized
     
-    const submission = await PhotoSubmission.findById(id);
+    const submission = await PhotoSubmission.findById(id)
+      .populate('competition', 'title');
     
     if (!submission) {
       return NextResponse.json(
@@ -232,6 +246,26 @@ export async function PATCH(
       { status: body.status },
       { new: true }
     );
+    
+    // Send notification to the user if status is approved or rejected
+    if (body.status === 'approved' || body.status === 'rejected') {
+      try {
+        console.log(`Creating notification for ${body.status} submission with image: ${submission.thumbnailUrl}`);
+        
+        await notifySubmissionStatusUpdate(
+          submission.user.toString(),  // userId
+          submission._id.toString(),   // submissionId
+          submission.title,            // photoTitle
+          submission.competition._id.toString(), // competitionId
+          submission.competition.title,        // competitionTitle
+          body.status as 'approved' | 'rejected'  // status
+        );
+        console.log(`Notification sent to user for ${body.status} submission`);
+      } catch (notifyError) {
+        console.error('Error sending notification to user:', notifyError);
+        // Continue even if notification fails
+      }
+    }
     
     return NextResponse.json({ 
       success: true, 

@@ -9,19 +9,33 @@ import { useRouter } from 'next/navigation';
 
 // Helper function to format time since a date
 function formatTimeSince(date: Date): string {
+  if (!date || isNaN(date.getTime())) {
+    return 'recently'; // Default fallback for invalid dates
+  }
+
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  let interval = seconds / 31536000; // years
-  if (interval > 1) return Math.floor(interval) + " years ago";
-  interval = seconds / 2592000; // months
-  if (interval > 1) return Math.floor(interval) + " months ago";
-  interval = seconds / 86400; // days
-  if (interval > 1) return Math.floor(interval) + " days ago";
-  interval = seconds / 3600; // hours
-  if (interval > 1) return Math.floor(interval) + " hours ago";
-  interval = seconds / 60; // minutes
-  if (interval > 1) return Math.floor(interval) + " minutes ago";
-  if (seconds < 10) return "just now";
-  return Math.floor(seconds) + " seconds ago";
+  
+  let interval = seconds / 31536000;
+  if (interval > 1) {
+    return Math.floor(interval) + ' years ago';
+  }
+  interval = seconds / 2592000;
+  if (interval > 1) {
+    return Math.floor(interval) + ' months ago';
+  }
+  interval = seconds / 86400;
+  if (interval > 1) {
+    return Math.floor(interval) + ' days ago';
+  }
+  interval = seconds / 3600;
+  if (interval > 1) {
+    return Math.floor(interval) + ' hours ago';
+  }
+  interval = seconds / 60;
+  if (interval > 1) {
+    return Math.floor(interval) + ' minutes ago';
+  }
+  return 'just now';
 }
 
 // Types for the dashboard data
@@ -113,7 +127,7 @@ export default function DashboardPage() {
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'feed' | 'competitions' | 'activity'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'competitions'>('feed');
   const [feedColumns, setFeedColumns] = useState<1 | 2>(2);
   const [competitionsColumns, setCompetitionsColumns] = useState<1 | 2>(2);
   const [votingCompetitions, setVotingCompetitions] = useState<Competition[]>([]);
@@ -135,35 +149,16 @@ export default function DashboardPage() {
   const fetchActivities = async (page = 1) => {
     setActivitiesLoading(true);
     try {
-      const res = await fetch(`/api/users/activities?page=${page}&limit=20`); // Increased limit to get more activities
+      const res = await fetch(`/api/users/activities?page=${page}&limit=20`);
       if (!res.ok) throw new Error('Failed to load recent activities');
       const data = await res.json();
-      
-      // Add comprehensive debug logging to help diagnose the issue
-      console.log('Activities data loaded:', {
-        count: data.data?.length,
-        types: data.data?.map((item: any) => item.type)
-      });
-      
-      console.log('Activities details:', 
-        data.data?.map((item: any) => ({ 
-          id: item._id,
-          type: item.type, 
-          title: item.title,
-          hasPhoto: !!item.photoUrl
-        }))
-      );
       
       const activities = data.data || [];
       
       if (page === 1) {
-        console.log(`Setting ${activities.length} activities`);
         setActivities(activities);
       } else {
-        setActivities(prev => {
-          console.log(`Adding ${activities.length} activities to existing ${prev.length}`);
-          return [...prev, ...activities];
-        });
+        setActivities(prev => [...prev, ...activities]);
       }
       setActivitiesHasMore((data.data?.length || 0) === 20);
     } catch (err) {
@@ -212,12 +207,20 @@ export default function DashboardPage() {
     // 3. Add Active and Upcoming Competitions (from the general 'competitions' state)
     competitions.forEach(comp => {
       if (uniqueIds.has(comp._id)) return;
-      let sortDateToUse = comp.startDate; // Default for upcoming
+      
+      // Fix sorting order issue by prioritizing various dates correctly
+      let sortDateToUse;
+      
       if (comp.status === 'active') {
-        sortDateToUse = comp.updatedAt || comp.startDate; // Prioritize updatedAt for active
+        // For active competitions, use updatedAt or startDate
+        sortDateToUse = comp.updatedAt || comp.startDate;
       } else if (comp.status === 'upcoming') {
-        // Optional: use createdAt if preferred for upcoming, otherwise startDate is fine
-        // sortDateToUse = comp.createdAt || comp.startDate;
+        // For upcoming competitions, prioritize createdAt over startDate 
+        // to ensure new competitions appear at the top
+        sortDateToUse = comp.createdAt || new Date().toISOString();
+      } else {
+        // Default fallback
+        sortDateToUse = comp.updatedAt || comp.startDate;
       }
       
       allFeedItems.push({
@@ -269,7 +272,26 @@ export default function DashboardPage() {
     console.log(`After adding activities, allFeedItems has ${allFeedItems.length} items`);
 
     // Sort all feed items by sortDate descending
-    allFeedItems.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
+    allFeedItems.sort((a, b) => {
+      // Ensure we have valid date objects by checking and converting as needed
+      const dateA = a.sortDate ? new Date(a.sortDate).getTime() : 0;
+      const dateB = b.sortDate ? new Date(b.sortDate).getTime() : 0;
+      
+      // Return newest first (descending order)
+      return dateB - dateA;
+    });
+
+    // Log final sorted order of feed items
+    console.log('Final feed items order (first 5):', 
+      allFeedItems.slice(0, 5).map(item => ({
+        id: item.id,
+        type: item.type,
+        title: item.type.startsWith('competition') ? (item.data as Competition).title : 'activity',
+        sortDate: item.sortDate,
+        normalizedDate: new Date(item.sortDate).toISOString(),
+        timestamp: new Date(item.sortDate).getTime()
+      }))
+    );
 
     setFeedItems(allFeedItems);
 
@@ -300,23 +322,27 @@ export default function DashboardPage() {
   }, [hiddenFeedItems]);
 
   useEffect(() => {
-    if (status === 'authenticated' && userId) {
+    if (status === 'authenticated') {
+      // Only fetch the dashboard data when authenticated
       fetchDashboardData();
       fetchVotingCompetitions();
       fetchCompletedCompetitions();
-      fetchActivities(1);
-      fetchAppSettings(); // Add new function call to fetch app settings
-      
-      // Polling: auto-refresh stats every 30 seconds
-      const interval = setInterval(() => {
-        fetchDashboardData();
-        fetchVotingCompetitions();
-        fetchCompletedCompetitions();
-        fetchActivities(1);
-      }, 30000);
-      return () => clearInterval(interval);
+      fetchAppSettings(); // Add this line to fetch app settings when the component mounts
     }
-  }, [status, userId]);
+  }, [status]);
+
+  // Add new hook to handle pagination correctly
+  useEffect(() => {
+    if (activitiesPage > 1 && !activitiesLoading) {
+      fetchActivities(activitiesPage);
+    }
+  }, [activitiesPage]);
+
+  // Create a helper function to load more activities
+  const loadMoreActivities = () => {
+    if (!activitiesHasMore || activitiesLoading) return;
+    setActivitiesPage(prev => prev + 1);
+  };
 
   // Fetch results for each completed competition
   useEffect(() => {
@@ -362,32 +388,24 @@ export default function DashboardPage() {
       // Fetch user stats
       const statsRes = await fetch('/api/users/stats');
       if (!statsRes.ok) {
-        const text = await statsRes.text();
-        console.error('Failed to load user statistics:', statsRes.status, text);
-        throw new Error('Failed to load user statistics: ' + statsRes.status + ' ' + text);
+        throw new Error('Failed to load user statistics');
       }
-      // Fetch active competitions - INCREASED LIMIT
-      const competitionsRes = await fetch('/api/competitions?limit=50&status=active,upcoming');
+      
+      // Fetch active competitions
+      const competitionsRes = await fetch('/api/competitions?limit=10&status=active,upcoming');
       if (!competitionsRes.ok) {
-        const text = await competitionsRes.text();
-        console.error('Failed to load competitions:', competitionsRes.status, text);
-        throw new Error('Failed to load competitions: ' + competitionsRes.status + ' ' + text);
+        throw new Error('Failed to load competitions');
       }
-      // Fetch recent activities - Changed from 5 to 20 for the initial load
-      const activitiesRes = await fetch('/api/users/activities?limit=20');
+      
+      // Fetch recent activities - use page 1 to ensure proper pagination
+      const activitiesRes = await fetch('/api/users/activities?page=1&limit=20');
       if (!activitiesRes.ok) {
-        const text = await activitiesRes.text();
-        console.error('Failed to load recent activities:', activitiesRes.status, text);
-        throw new Error('Failed to load recent activities: ' + activitiesRes.status + ' ' + text);
+        throw new Error('Failed to load recent activities');
       }
+      
       const statsData = await statsRes.json();
       const competitionsData = await competitionsRes.json();
       const activitiesData = await activitiesRes.json();
-      
-      console.log('Dashboard API fetched activities count:', activitiesData.data?.length);
-      console.log('Dashboard API fetched activities types:', 
-        activitiesData.data?.map((item: any) => ({ type: item.type, title: item.title }))
-      );
       
       setStats(statsData.data || {
         totalSubmissions: 0,
@@ -398,13 +416,11 @@ export default function DashboardPage() {
       });
       setCompetitions(competitionsData.data || []);
       setActivities(activitiesData.data || []);
-      // Set activities has more based on returned data
       setActivitiesHasMore((activitiesData.data?.length || 0) === 20);
-      // Reset activities page to 1 since we're loading fresh data
       setActivitiesPage(1);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      setError('Failed to load dashboard data. Please try again later. ' + (err instanceof Error ? err.message : ''));
+      setError('Failed to load dashboard data. Please try again later.');
     } finally {
       setIsLoading(false);
     }
@@ -580,17 +596,17 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
-      {/* Tabs */}
-      <div className="flex justify-between items-center border-b border-gray-200 mb-4">
-        {['feed', 'competitions', 'activity'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as any)}
-            className={`flex-1 py-2 text-center font-semibold capitalize transition border-b-2 ${activeTab === tab ? 'border-[#1a4d5c] text-[#1a4d5c]' : 'border-transparent text-gray-400'}`}
-          >
-            {tab}
-          </button>
-        ))}
+      {/* Tabs */}      
+      <div className="flex justify-between items-center border-b border-gray-200 mb-4">        
+        {['feed', 'competitions'].map(tab => (          
+          <button            
+            key={tab}            
+            onClick={() => setActiveTab(tab as any)}            
+            className={`flex-1 py-2 text-center font-semibold capitalize transition border-b-2 ${activeTab === tab ? 'border-[#1a4d5c] text-[#1a4d5c]' : 'border-transparent text-gray-400'}`}          
+          >            
+            {tab}          
+          </button>        
+        ))}      
       </div>
       {/* Feed Content */}
       <div>
@@ -720,7 +736,11 @@ export default function DashboardPage() {
                 // Then add all the direct activity items, EVEN if they're related to completed competitions
                 importantActivities.forEach(activity => {
                   // We want to include all important activities regardless of their competitionId
-                  const activityDate = new Date(activity.date);
+                  const activityDate = activity.date ? new Date(activity.date) : new Date();
+                  
+                  // Ensure we have a valid date (fallback to current timestamp if invalid)
+                  const isValidDate = !isNaN(activityDate.getTime());
+                  const finalDate = isValidDate ? activityDate : new Date();
                   
                   // Create a signature to detect duplicates - include competition ID if present
                   // For win activities, use competitionId+type+position to detect duplicate win notifications
@@ -730,6 +750,10 @@ export default function DashboardPage() {
                     const positionMatch = activity.title.match(/Won|Runner-up|Third place/);
                     const position = positionMatch ? positionMatch[0] : '';
                     activitySignature = `${activity.competitionId}-${activity.type}-${position}`;
+                  } else if (activity.type === 'notification' && (activity.title === 'Photo Approved' || activity.title === 'Photo Not Approved') && activity.competitionId) {
+                    // For photo approvals, include the photo ID in the signature to distinguish different approvals
+                    // Extract the photo ID from the details or use the activity ID if not available
+                    activitySignature = `${activity.competitionId}-${activity.type}-${activity._id}`;
                   } else if (activity.competitionId) {
                     activitySignature = `${activity.competitionId}-${activity.type}`;
                   } else {
@@ -747,7 +771,7 @@ export default function DashboardPage() {
                   
                   feedContent.push({
                     id: activity._id,
-                    date: activityDate,
+                    date: finalDate,
                     activity: activity
                   });
                   
@@ -755,8 +779,30 @@ export default function DashboardPage() {
                   addedActivitySignatures.add(activitySignature);
                 });
                 
-                // Sort everything by date
-                feedContent.sort((a, b) => b.date.getTime() - a.date.getTime());
+                // Sort everything by date - ensure newest first
+                feedContent.sort((a, b) => {
+                  // Ensure valid date objects by safely getting timestamps
+                  const dateA = a.date instanceof Date ? a.date.getTime() : 0;
+                  const dateB = b.date instanceof Date ? b.date.getTime() : 0;
+                  
+                  // Return newest first (descending order)
+                  return dateB - dateA;
+                });
+                
+                // Log the sorted feed content for debugging
+                console.log('Sorted feed content items (first 5):', 
+                  feedContent.slice(0, 5).map(content => ({
+                    id: content.id,
+                    type: content.item?.type || (content.activity?.type || 'unknown'),
+                    title: content.item 
+                      ? (content.item.type.startsWith('competition') 
+                          ? (content.item.data as Competition).title 
+                          : 'activity item') 
+                      : (content.activity?.title || 'unknown activity'),
+                    date: content.date.toISOString(),
+                    timestamp: content.date.getTime()
+                  }))
+                );
                 
                 // Filter out hidden items
                 const visibleFeedContent = feedContent.filter(content => 
@@ -949,7 +995,17 @@ export default function DashboardPage() {
                       case 'competition_active':
                       case 'competition_upcoming':
                         const activeComp = item.data as Competition;
-                        const createdAtDate = (activeComp as any).createdAt; // Attempt to get createdAt
+                        
+                        // Improve timestamp handling
+                        let displayTimestamp;
+                        if (activeComp.status === 'upcoming') {
+                          // For upcoming competitions, prioritize the creation date to show "added X minutes ago"
+                          displayTimestamp = (activeComp as any).createdAt || item.sortDate;
+                        } else {
+                          // For active competitions, use the most recent modification time
+                          displayTimestamp = (activeComp as any).updatedAt || activeComp.startDate;
+                        }
+                        
                         return (
                           <div key={item.id} className="rounded-2xl shadow-lg overflow-hidden bg-sky-50 border-l-4 border-sky-400 flex flex-col md:flex-row items-start p-4 mb-4 group relative">
                             {/* Delete Button - Only show if allowed by settings */}
@@ -989,7 +1045,7 @@ export default function DashboardPage() {
                                     {activeComp.status.charAt(0).toUpperCase() + activeComp.status.slice(1)}
                                   </span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(createdAtDate || item.sortDate))}</p>
+                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(displayTimestamp))}</p>
                                 <p className="text-sm text-gray-600 mb-1">Theme: {activeComp.theme}</p>
                                 <p className="text-sm text-gray-500 mb-2">
                                   {activeComp.status === 'upcoming' ? `Starts: ${new Date(activeComp.startDate).toLocaleDateString()}` : `Ends: ${new Date(activeComp.endDate).toLocaleDateString()}`}
@@ -1085,11 +1141,31 @@ export default function DashboardPage() {
                            activity.title === 'Photo Rejected' || 
                            activity.title?.includes('rejected'))) {
                         
+                        // Debug to see exactly what URLs we're receiving
+                        console.log('RENDERING PHOTO APPROVAL NOTIFICATION:', {
+                          id: activity._id,
+                          title: activity.title,
+                          hasPhotoUrl: !!activity.photoUrl,
+                          photoUrl: activity.photoUrl || 'none',
+                          photoUrlType: activity.photoUrl ? typeof activity.photoUrl : 'N/A',
+                          photoUrlIsValidString: activity.photoUrl ? typeof activity.photoUrl === 'string' : false,
+                          photoUrlPrefix: activity.photoUrl ? activity.photoUrl.substring(0, 50) : 'none',
+                          details: activity.details,
+                          competitionId: activity.competitionId
+                        });
+                        
                         const borderColorClass = activity.title?.includes('Rejected') ? 
                                                 'border-red-500' : 'border-green-500';
                         
+                        // Generate a unique key for debugging
+                        const debugKey = `notification-${activity._id || Math.random().toString(36).substring(2, 9)}`;
+                        
+                        // Extract photo details from the notification message
+                        const photoTitleMatch = activity.details?.match(/photo "(.*?)"/);
+                        const photoTitle = photoTitleMatch ? photoTitleMatch[1] : 'photo';
+                        
                         return (
-                          <div key={activity._id} className={`bg-white p-3 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 border-l-4 ${borderColorClass} mb-4 relative`}>
+                          <div key={activity._id} className={`bg-white p-3 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 border-l-4 ${borderColorClass} mb-4 relative`} id={debugKey}>
                             {/* Delete Button - Only show if allowed by settings */}
                             {appSettings.allowNotificationDeletion && (
                               <button 
@@ -1104,18 +1180,30 @@ export default function DashboardPage() {
                             )}
                             
                             <div className="flex items-start space-x-3">
-                              {/* Left side - Image thumbnail */}
-                              {activity.photoUrl && (
+                              {/* Left side - Image thumbnail - Force show image if photoUrl exists */}
+                              {activity.photoUrl ? (
                                 <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 rounded-md overflow-hidden border border-gray-200 bg-gray-100">
                                   <img 
                                     src={activity.photoUrl}
-                                    alt={activity.title}
+                                    alt={photoTitle}
                                     className="w-full h-full object-cover"
+                                    onLoad={() => console.log(`Image loaded successfully for ${debugKey}`)}
                                     onError={(e) => {
-                                      console.error('Image failed to load:', e.currentTarget.src);
-                                      e.currentTarget.src = 'https://picsum.photos/300/200';
+                                      console.error(`Image failed to load for ${debugKey}:`, {
+                                        src: e.currentTarget.src,
+                                        element: debugKey
+                                      });
+                                      // Don't set a fallback - leave the broken image
+                                      // e.currentTarget.src = 'https://picsum.photos/300/200';
                                     }}
                                   />
+                                </div>
+                              ) : (
+                                // Show fallback if no photo URL
+                                <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 rounded-md border border-gray-200 bg-gray-100 flex items-center justify-center">
+                                  <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
                                 </div>
                               )}
 
@@ -1340,117 +1428,7 @@ export default function DashboardPage() {
             </div>
           </>
         )}
-        {activeTab === 'activity' && (
-          <div>
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-[#1a4d5c]">Your Recent Activity</h3>
-              <p className="text-sm text-gray-500">Track your recent actions and notifications</p>
-            </div>
-            
-            {/* Activity items */}
-            {activitiesLoading && activities.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 border-4 border-[#2699a6] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading activities...</p>
-              </div>
-            ) : activities.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No recent activities</div>
-            ) : (
-              <>
-                {/* Filter out duplicate activities using the same approach as in the feed tab */}
-                {(() => {
-                  const addedActivitySignatures = new Set<string>();
-                  const uniqueActivities: RecentActivity[] = [];
-                  
-                  activities.forEach(activity => {
-                    // Create a signature to detect duplicates - include competition ID if present
-                    let activitySignature = '';
-                    if (activity.type === 'win' && activity.competitionId) {
-                      // Extract position information from the title (1st/2nd/3rd place)
-                      const positionMatch = activity.title.match(/Won|Runner-up|Third place/);
-                      const position = positionMatch ? positionMatch[0] : '';
-                      activitySignature = `${activity.competitionId}-${activity.type}-${position}`;
-                    } else if (activity.competitionId) {
-                      activitySignature = `${activity.competitionId}-${activity.type}`;
-                    } else {
-                      activitySignature = `${activity._id}-${activity.type}`;
-                    }
-                    
-                    // Skip if we've already added this activity
-                    if (addedActivitySignatures.has(activitySignature)) {
-                      return;
-                    }
-                    
-                    uniqueActivities.push(activity);
-                    addedActivitySignatures.add(activitySignature);
-                  });
-                  
-                  return uniqueActivities.map((activity, index) => (
-                    <div
-                      key={activity._id || index}
-                      className="mb-4 p-4 bg-white rounded-lg shadow flex items-start gap-4 hover:bg-gray-50 transition-colors relative"
-                    >
-                      {/* Delete Button - Only show if allowed by settings */}
-                      {appSettings.allowNotificationDeletion && (
-                        <button 
-                          onClick={() => hideFeedItem(activity._id || `activity-${index}`)} 
-                          className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1 opacity-60 hover:opacity-100 transition-opacity"
-                          aria-label="Delete"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                      
-                      {getActivityIcon(activity.type)}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                          <h4 className="font-medium text-gray-900">{activity.title}</h4>
-                          <span className="text-xs text-gray-500 mt-1 sm:mt-0">
-                            {formatTimeSince(new Date(activity.date))}
-                          </span>
-                        </div>
-                        {activity.details && <p className="text-sm text-gray-600 mt-1">{activity.details}</p>}
-                        {activity.photoUrl && (
-                          <div className="mt-2 relative h-24 w-32 rounded overflow-hidden">
-                            <Image
-                              src={activity.photoUrl}
-                              alt={activity.details || 'Activity photo'}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        )}
-                        {activity.competitionId && (
-                          <Link
-                            href={`/dashboard/competitions/${activity.competitionId}`}
-                            className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-800"
-                          >
-                            View Competition
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  ));
-                })()}
-                
-                {/* Load more button */}
-                {activitiesHasMore && (
-                  <div className="mt-4 text-center">
-                    <button
-                      onClick={() => fetchActivities(activitiesPage + 1)}
-                      disabled={activitiesLoading}
-                      className="px-4 py-2 bg-[#1a4d5c] text-white rounded-lg hover:bg-[#2699a6] transition-colors disabled:opacity-50"
-                    >
-                      {activitiesLoading ? 'Loading...' : 'Load More'}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+                {/* Activity tab removed as requested */}
       </div>
       {/* Mobile Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#e0c36a] flex justify-around items-center py-2 md:hidden">

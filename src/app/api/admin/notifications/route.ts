@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
-import { Notification, ensureModelsAreLoaded } from '@/lib/model-import-helper';
+import { Notification, User, ensureModelsAreLoaded } from '@/lib/model-import-helper';
 
 // Define interface for extended session
 interface ExtendedSession {
@@ -11,10 +11,11 @@ interface ExtendedSession {
     name?: string;
     email?: string;
     image?: string;
+    role?: string;
   };
 }
 
-// GET user notifications
+// GET admin notifications (similar to user notifications but fetches for all users of admin type)
 export async function GET(req: NextRequest) {
   try {
     // Check authentication
@@ -27,6 +28,14 @@ export async function GET(req: NextRequest) {
       );
     }
     
+    // Check if user is admin
+    if (session.user.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized. Admin access required.' },
+        { status: 403 }
+      );
+    }
+    
     // Connect to the database
     await dbConnect();
     
@@ -36,16 +45,20 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     
     // Parse query parameters
-    const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const skip = (page - 1) * limit;
     
     // Unread filter
     const unreadOnly = searchParams.get('unread') === 'true';
     
-    // Create filter
+    // Find all admin users
+    const adminUsers = await User.find({ role: 'admin' }, '_id');
+    const adminIds = adminUsers.map(admin => admin._id);
+    
+    // Create filter to get all admin notifications
     const filter = {
-      user: session.user.id,
+      user: { $in: adminIds },
       ...(unreadOnly ? { read: false } : {})
     };
     
@@ -56,19 +69,10 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .lean();
     
-    // Log notification ordering for debugging purposes
-    console.log('Notification order check:', notifications.map(n => ({
-      id: n._id,
-      title: n.title,
-      type: n.type, 
-      created: n.createdAt,
-      timeAgo: new Date(n.createdAt).toISOString()
-    })));
-    
     // Get total count for pagination and unread count
     const [totalNotifications, unreadCount] = await Promise.all([
       Notification.countDocuments(filter),
-      Notification.countDocuments({ user: session.user.id, read: false })
+      Notification.countDocuments({ user: { $in: adminIds }, read: false })
     ]);
     
     return NextResponse.json({
@@ -84,57 +88,15 @@ export async function GET(req: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Error fetching notifications:', error);
+    console.error('Error fetching admin notifications:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to fetch notifications' },
+      { success: false, message: 'Failed to fetch admin notifications' },
       { status: 500 }
     );
   }
 }
 
-// POST create a notification (typically used by system processes)
-export async function POST(req: NextRequest) {
-  try {
-    await dbConnect();
-    const session = await getServerSession() as ExtendedSession;
-    
-    // This endpoint would typically be protected and only accessible by the system
-    // or admins. For simplicity, we'll just check for authentication.
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: 'Not authenticated' },
-        { status: 401 }
-      );
-    }
-    
-    const body = await req.json();
-    
-    // Validate required fields
-    const requiredFields = ['user', 'title', 'message', 'type'];
-    for (const field of requiredFields) {
-      if (!body[field]) {
-        return NextResponse.json(
-          { success: false, message: `${field} is required` },
-          { status: 400 }
-        );
-      }
-    }
-    
-    // Create notification
-    const notification = await Notification.create(body);
-    
-    return NextResponse.json(
-      { success: true, data: notification },
-      { status: 201 }
-    );
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
-  }
-}
-
+// PUT update admin notifications (mark as read/unread)
 export async function PUT(req: NextRequest) {
   try {
     // Check authentication
@@ -144,6 +106,14 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
+      );
+    }
+    
+    // Check if user is admin
+    if (session.user.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized. Admin access required.' },
+        { status: 403 }
       );
     }
     
@@ -167,12 +137,16 @@ export async function PUT(req: NextRequest) {
       );
     }
     
+    // Find all admin users
+    const adminUsers = await User.find({ role: 'admin' }, '_id');
+    const adminIds = adminUsers.map(admin => admin._id);
+    
     let updateResult;
     
     if (markAll) {
-      // Mark all notifications as read/unread
+      // Mark all admin notifications as read/unread
       updateResult = await Notification.updateMany(
-        { user: session.user.id },
+        { user: { $in: adminIds } },
         { $set: { read } }
       );
     } else {
@@ -180,7 +154,7 @@ export async function PUT(req: NextRequest) {
       updateResult = await Notification.updateMany(
         { 
           _id: { $in: ids },
-          user: session.user.id // Ensure user can only update their own notifications
+          user: { $in: adminIds } // Ensure admin can only update admin notifications
         },
         { $set: { read } }
       );
@@ -188,7 +162,7 @@ export async function PUT(req: NextRequest) {
     
     // Get updated unread count
     const unreadCount = await Notification.countDocuments({ 
-      user: session.user.id,
+      user: { $in: adminIds },
       read: false
     });
     
@@ -200,14 +174,15 @@ export async function PUT(req: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Error updating notifications:', error);
+    console.error('Error updating admin notifications:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to update notifications' },
+      { success: false, message: 'Failed to update admin notifications' },
       { status: 500 }
     );
   }
 }
 
+// DELETE admin notifications
 export async function DELETE(req: NextRequest) {
   try {
     // Check authentication
@@ -217,6 +192,14 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
+      );
+    }
+    
+    // Check if user is admin
+    if (session.user.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized. Admin access required.' },
+        { status: 403 }
       );
     }
     
@@ -233,22 +216,26 @@ export async function DELETE(req: NextRequest) {
       );
     }
     
-    // Delete the specified notifications
+    // Find all admin users
+    const adminUsers = await User.find({ role: 'admin' }, '_id');
+    const adminIds = adminUsers.map(admin => admin._id);
+    
+    // Delete the specified notifications for admin users
     const deleteResult = await Notification.deleteMany({
       _id: { $in: ids },
-      user: session.user.id // Ensure user can only delete their own notifications
+      user: { $in: adminIds } // Ensure admin can only delete admin notifications
     });
     
     return NextResponse.json({
       success: true,
-      message: 'Notifications deleted successfully',
+      message: 'Admin notifications deleted successfully',
       deletedCount: deleteResult.deletedCount
     });
     
   } catch (error) {
-    console.error('Error deleting notifications:', error);
+    console.error('Error deleting admin notifications:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to delete notifications' },
+      { success: false, message: 'Failed to delete admin notifications' },
       { status: 500 }
     );
   }

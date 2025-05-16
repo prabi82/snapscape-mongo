@@ -19,7 +19,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['competition', 'badge', 'result', 'system'],
+    enum: ['competition', 'badge', 'result', 'system', 'photo_submission'],
     default: 'system',
   },
   read: {
@@ -36,11 +36,20 @@ const notificationSchema = new mongoose.Schema({
   },
   relatedPhoto: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Photo',
+    refPath: 'photoModel', // Use refPath to dynamically set the referenced model
+  },
+  photoModel: {
+    type: String,
+    enum: ['Photo', 'PhotoSubmission'],
+    default: 'Photo'
   },
   relatedBadge: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Badge',
+  },
+  directThumbnailUrl: {
+    type: String,
+    trim: true,
   },
   createdAt: {
     type: Date,
