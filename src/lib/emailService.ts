@@ -13,8 +13,8 @@ const createTransporter = () => {
     port: 465,
     secure: true, // use SSL
     auth: {
-      user: 'info@snapscape.onlyoman.com',
-      pass: '@17@}b^OJFr}'
+      user: 'info@onlyoman.com',
+      pass: 'l@fbCMLFA)Uy'
     },
   });
 };
@@ -24,7 +24,7 @@ export const sendEmail = async ({ to, subject, html }: EmailOptions) => {
     const transporter = createTransporter();
     
     const info = await transporter.sendMail({
-      from: '"SnapScape" <info@snapscape.onlyoman.com>',
+      from: '"SnapScape" <info@onlyoman.com>',
       to,
       subject,
       html,

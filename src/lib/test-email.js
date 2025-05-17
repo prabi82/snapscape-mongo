@@ -6,8 +6,8 @@ const transporter = nodemailer.createTransport({
   port: 465,
   secure: true, // use SSL
   auth: {
-    user: 'info@snapscape.onlyoman.com',
-    pass: '@17@}b^OJFr}'
+    user: 'info@onlyoman.com',
+    pass: 'l@fbCMLFA)Uy'
   }
 });
 
@@ -15,8 +15,8 @@ const transporter = nodemailer.createTransport({
 async function testEmail() {
   try {
     const info = await transporter.sendMail({
-      from: '"SnapScape Test" <info@snapscape.onlyoman.com>',
-      to: 'info@snapscape.onlyoman.com', // Send to self for testing
+      from: '"SnapScape Test" <info@onlyoman.com>',
+      to: 'info@onlyoman.com', // Send to self for testing
       subject: 'SMTP Test Email',
       text: 'This is a test email to verify SMTP settings',
       html: '<p>This is a test email to verify SMTP settings</p>',

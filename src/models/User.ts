@@ -5,12 +5,15 @@ import bcrypt from 'bcryptjs';
 interface IUserDocument extends mongoose.Document {
   name: string;
   email: string;
+  mobile?: string;
+  country?: string;
   password?: string;
   role: string;
   provider: string;
   providerId: string | null;
   image: string | null;
   isVerified: boolean;
+  isActive: boolean;
   verificationToken: string | null;
   verificationExpires: Date | null;
   createdAt: Date;
@@ -32,6 +35,14 @@ const userSchema = new mongoose.Schema({
       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
       'Please provide a valid email',
     ],
+  },
+  mobile: {
+    type: String,
+    trim: true,
+  },
+  country: {
+    type: String,
+    trim: true,
   },
   password: {
     type: String,
@@ -63,6 +74,11 @@ const userSchema = new mongoose.Schema({
   image: {
     type: String,
     default: null,
+  },
+  // User status fields
+  isActive: {
+    type: Boolean,
+    default: true,
   },
   // Email verification fields
   isVerified: {

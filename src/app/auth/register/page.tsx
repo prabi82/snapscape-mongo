@@ -10,12 +10,30 @@ export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [country, setCountry] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [authProviders, setAuthProviders] = useState<any>({});
+
+  // Country list for dropdown
+  const countries = [
+    { code: '', name: 'Select Country' },
+    { code: 'OM', name: 'Oman' },
+    { code: 'AE', name: 'United Arab Emirates' },
+    { code: 'SA', name: 'Saudi Arabia' },
+    { code: 'QA', name: 'Qatar' },
+    { code: 'KW', name: 'Kuwait' },
+    { code: 'BH', name: 'Bahrain' },
+    { code: 'US', name: 'United States' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'IN', name: 'India' },
+    { code: 'PK', name: 'Pakistan' },
+    // Add more countries as needed
+  ];
 
   useEffect(() => {
     // Fetch available providers
@@ -32,7 +50,7 @@ export default function RegisterPage() {
     
     // Validate form
     if (!name || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
+      setError('Please fill in all required fields');
       return;
     }
     
@@ -58,6 +76,8 @@ export default function RegisterPage() {
         body: JSON.stringify({
           name,
           email,
+          mobile,
+          country,
           password,
         }),
       });
@@ -73,6 +93,8 @@ export default function RegisterPage() {
       // Clear form after successful submission
       setName('');
       setEmail('');
+      setMobile('');
+      setCountry('');
       setPassword('');
       setConfirmPassword('');
       
@@ -109,6 +131,7 @@ export default function RegisterPage() {
             {successMessage}
           </div>
         )}
+        
         <div className="flex justify-center gap-6 w-full mb-4">
           {Object.values(authProviders).map((provider: any) => {
             if (provider.id === 'credentials' || provider.id === 'facebook' || provider.id === 'apple') return null;
@@ -136,7 +159,8 @@ export default function RegisterPage() {
           <span className="mx-4 text-[#1a4d5c] font-medium">or</span>
           <div className="flex-grow border-t border-[#e0c36a]"></div>
         </div>
-        <form className="w-full space-y-4" onSubmit={handleSubmit}>
+        
+        <form onSubmit={handleSubmit} className="space-y-4 w-full">
           <input
             id="name"
             name="name"
@@ -159,6 +183,29 @@ export default function RegisterPage() {
             placeholder="Email address"
             className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-base"
           />
+          <input
+            id="mobile"
+            name="mobile"
+            type="tel"
+            autoComplete="tel"
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value)}
+            placeholder="Mobile Number"
+            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-base"
+          />
+          <select
+            id="country"
+            name="country"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-base"
+          >
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
           <input
             id="password"
             name="password"

@@ -31,6 +31,11 @@ export const authOptions = {
           throw new Error('No user found with this email');
         }
         
+        // Check if user is active
+        if (!user.isActive) {
+          throw new Error('This account has been deactivated. Please contact support for assistance.');
+        }
+        
         // Check if user's email is verified (for credentials provider)
         if (user.provider === 'credentials' && !user.isVerified) {
           throw new Error('Please verify your email before signing in');

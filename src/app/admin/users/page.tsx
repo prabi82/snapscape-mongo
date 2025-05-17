@@ -12,6 +12,7 @@ interface User {
   role: string;
   image?: string;
   bio?: string;
+  isActive: boolean;
   createdAt: string;
   photoCount?: number;
   submissionCount?: number;
@@ -104,6 +105,38 @@ export default function UserManagement() {
     } catch (err: any) {
       console.error('Error updating user role:', err);
       alert(err.message || 'An error occurred while updating the user role');
+    }
+  };
+
+  // Add toggleUserStatus function
+  const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    const action = newStatus ? 'activate' : 'deactivate';
+    
+    if (!confirm(`Are you sure you want to ${action} this user?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isActive: newStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} user`);
+      }
+
+      // Update user in state
+      setUsers(users.map(user => 
+        user._id === userId ? { ...user, isActive: newStatus } : user
+      ));
+    } catch (err: any) {
+      console.error(`Error ${action}ing user:`, err);
+      alert(err.message || `An error occurred while ${action}ing the user`);
     }
   };
 
@@ -200,6 +233,7 @@ export default function UserManagement() {
                   <button
                     type="submit"
                     className="focus:outline-none"
+                    aria-label="Search"
                   >
                     <svg
                       className="h-5 w-5 text-gray-400"
@@ -283,6 +317,12 @@ export default function UserManagement() {
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Joined
                 </th>
                 <th
@@ -300,87 +340,125 @@ export default function UserManagement() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user._id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        {user.image ? (
-                          <img
-                            className="h-10 w-10 rounded-full"
-                            src={user.image}
-                            alt=""
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                            <span className="text-indigo-700 font-medium">
-                              {getUserInitials(user.name)}
-                            </span>
+              {users.length > 0 ? (
+                users.map((user) => (
+                  <tr key={user._id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          {user.image ? (
+                            <img
+                              className="h-10 w-10 rounded-full"
+                              src={user.image}
+                              alt=""
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                              <span className="text-indigo-700 font-medium">
+                                {getUserInitials(user.name)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                          {user.bio && (
+                            <div className="text-sm text-gray-500 truncate max-w-xs">{user.bio}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{user.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.role === 'admin'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}
+                      >
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => toggleUserStatus(user._id, user.isActive)}
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.isActive
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : 'bg-red-100 text-red-800 hover:bg-red-200'
+                        }`}
+                        type="button"
+                        title={user.isActive ? 'Click to deactivate' : 'Click to activate'}
+                      >
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(user.createdAt)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {user.photoCount || 0} photos
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {user.badgeCount || 0} badges
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-2">
+                        <Link
+                          href={`/admin/users/${user._id}`}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          View
+                        </Link>
+                        
+                        {/* Status Toggle */}
+                        {session?.user?.email !== user.email && (
+                          <button
+                            onClick={() => toggleUserStatus(user._id, user.isActive)}
+                            className={`${
+                              user.isActive 
+                                ? 'text-red-600 hover:text-red-900' 
+                                : 'text-green-600 hover:text-green-900'
+                            }`}
+                            type="button"
+                          >
+                            {user.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                        )}
+                        
+                        {/* Role change dropdown */}
+                        {session?.user?.email !== user.email && (
+                          <div className="relative inline-block text-left">
+                            <select
+                              onChange={(e) => handleRoleChange(user._id, e.target.value)}
+                              value={user.role}
+                              className="block w-full text-indigo-600 hover:text-indigo-900 bg-transparent border-0 focus:ring-0 focus:outline-none"
+                              aria-label="Change user role"
+                            >
+                              <option value="" disabled>
+                                Change Role
+                              </option>
+                              <option value="user">Set as User</option>
+                              <option value="admin">Set as Admin</option>
+                            </select>
                           </div>
                         )}
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                        {user.bio && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">{user.bio}</div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(user.createdAt)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {user.photoCount || 0} photos
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {user.badgeCount || 0} badges
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
-                      <Link
-                        href={`/admin/users/${user._id}`}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        View
-                      </Link>
-                      
-                      {/* Role change dropdown */}
-                      {session?.user?.email !== user.email && (
-                        <div className="relative inline-block text-left">
-                          <select
-                            onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                            value={user.role}
-                            className="block w-full text-indigo-600 hover:text-indigo-900 bg-transparent border-0 focus:ring-0 focus:outline-none"
-                          >
-                            <option value="" disabled>
-                              Change Role
-                            </option>
-                            <option value="user">Set as User</option>
-                            <option value="admin">Set as Admin</option>
-                          </select>
-                        </div>
-                      )}
-                    </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                    No users found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -392,6 +470,7 @@ export default function UserManagement() {
               onClick={() => setCurrentPage(currentPage > 1 ? currentPage - 1 : 1)}
               disabled={currentPage === 1}
               className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
             >
               Previous
             </button>
@@ -399,6 +478,7 @@ export default function UserManagement() {
               onClick={() => setCurrentPage(currentPage < totalPages ? currentPage + 1 : totalPages)}
               disabled={currentPage === totalPages}
               className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
             >
               Next
             </button>
@@ -419,6 +499,7 @@ export default function UserManagement() {
                   onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
                 >
                   <span className="sr-only">First</span>
                   <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -433,6 +514,7 @@ export default function UserManagement() {
                   onClick={() => setCurrentPage(currentPage > 1 ? currentPage - 1 : 1)}
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
                 >
                   <span className="sr-only">Previous</span>
                   <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -467,6 +549,7 @@ export default function UserManagement() {
                             ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
                             : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                         }`}
+                        type="button"
                       >
                         {pageNum}
                       </button>
@@ -479,6 +562,7 @@ export default function UserManagement() {
                   onClick={() => setCurrentPage(currentPage < totalPages ? currentPage + 1 : totalPages)}
                   disabled={currentPage === totalPages}
                   className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
                 >
                   <span className="sr-only">Next</span>
                   <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -493,6 +577,7 @@ export default function UserManagement() {
                   onClick={() => setCurrentPage(totalPages)}
                   disabled={currentPage === totalPages}
                   className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
                 >
                   <span className="sr-only">Last</span>
                   <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">

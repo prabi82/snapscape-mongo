@@ -12,7 +12,7 @@ const generateVerificationToken = () => {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const { name, email, password } = await req.json();
+    const { name, email, mobile, country, password } = await req.json();
     
     // Basic validation
     if (!name || !email || !password) {
@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
     const user = await User.create({
       name,
       email,
+      mobile,
+      country,
       password, // Password will be hashed by the User model pre-save hook
       isVerified: false,
       verificationToken,
@@ -54,6 +56,8 @@ export async function POST(req: NextRequest) {
       id: user._id,
       name: user.name,
       email: user.email,
+      mobile: user.mobile,
+      country: user.country,
       role: user.role,
       isVerified: user.isVerified,
       createdAt: user.createdAt,
