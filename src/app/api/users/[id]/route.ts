@@ -99,7 +99,7 @@ export async function PUT(
     const body = await req.json();
     
     // Fields that admins can update
-    const allowedUpdates = ['name', 'bio', 'role', 'isActive'];
+    const allowedUpdates = ['name', 'bio', 'role', 'isActive', 'isVerified'];
     const updates: any = {};
     
     for (const field of allowedUpdates) {

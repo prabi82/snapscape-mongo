@@ -157,6 +157,39 @@ export default function UserManagementPage() {
     }
   };
 
+  const toggleUserVerification = async () => {
+    if (!user) return;
+    
+    try {
+      setActionLoading(true);
+      setActionSuccess('');
+      setError('');
+      
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          isVerified: !user.isVerified,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update user verification status');
+      }
+      
+      const data = await response.json();
+      setUser(data.user);
+      setActionSuccess(`User email ${data.user.isVerified ? 'verified' : 'unverified'} successfully`);
+    } catch (err: any) {
+      console.error('Error updating user verification status:', err);
+      setError(err.message || 'An error occurred while updating user verification status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const deleteUser = async () => {
     if (!user || !confirmDelete) return;
     
@@ -350,6 +383,23 @@ export default function UserManagementPage() {
                     }`}
                   >
                     {user.isActive ? 'Deactivate Account' : 'Activate Account'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500">Email Verification</h4>
+                <div className="mt-2">
+                  <button
+                    onClick={toggleUserVerification}
+                    disabled={actionLoading}
+                    className={`px-4 py-2 border rounded-md text-sm font-medium ${
+                      user.isVerified
+                        ? 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100'
+                        : 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                    }`}
+                  >
+                    {user.isVerified ? 'Mark as Unverified' : 'Manually Verify Email'}
                   </button>
                 </div>
               </div>
