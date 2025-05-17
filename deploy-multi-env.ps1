@@ -67,22 +67,33 @@ try {
         npm install -g vercel
     }
     
-    # Deploy with the specific environment flag and target the correct alias
-    vercel $envFlag --yes
+    # Deploy with the specific environment flag and capture the output
+    $deployOutput = vercel $envFlag --yes
     
     if ($LASTEXITCODE -ne 0) {
         Write-ColorOutput "Deployment failed with exit code $LASTEXITCODE" "Red"
         exit $LASTEXITCODE
     }
     
-    # Assign the deployment to the correct alias/domain
-    Write-ColorOutput "Setting domain alias to $targetAlias..." "Cyan"
-    vercel alias set latest $targetAlias
+    # Extract the deployment URL from the output
+    $deploymentUrl = ($deployOutput | Select-String -Pattern "Production: (https://[\w-]+.vercel.app)" | ForEach-Object { $_.Matches.Groups[1].Value })
     
-    if ($LASTEXITCODE -ne 0) {
-        Write-ColorOutput "Alias setting failed with exit code $LASTEXITCODE" "Red"
+    if (-not $deploymentUrl) {
+        Write-ColorOutput "Could not extract deployment URL from output, using direct domain assignment..." "Yellow"
+        # Try to directly assign the domain
+        vercel domains add $targetAlias --force
     } else {
-        Write-ColorOutput "Deployment to $targetAlias successful!" "Green"
+        # Assign the deployment to the correct alias/domain
+        Write-ColorOutput "Setting alias from $deploymentUrl to $targetAlias..." "Cyan"
+        vercel alias set $deploymentUrl $targetAlias
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-ColorOutput "Alias setting failed with exit code $LASTEXITCODE" "Red"
+            Write-ColorOutput "Trying alternative method..." "Yellow"
+            vercel domains add $targetAlias --force
+        } else {
+            Write-ColorOutput "Deployment to $targetAlias successful!" "Green"
+        }
     }
 } catch {
     Write-ColorOutput "Error during deployment: $_" "Red"
