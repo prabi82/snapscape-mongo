@@ -8,6 +8,7 @@ export async function middleware(request: NextRequest) {
   // Check if the path is protected (dashboard or admin routes)
   const isProtectedRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
   const isAdminRoute = pathname.startsWith('/admin');
+  const isRootDashboard = pathname === '/dashboard' || pathname === '/dashboard/';
   
   if (isProtectedRoute) {
     const token = await getToken({ 
@@ -22,20 +23,38 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     
+    // Debug: Log user role and path
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Middleware: User ${token.email} with role ${token.role} accessing ${pathname}`);
+    }
+    
     // If admin route but user is not admin
     if (isAdminRoute && token.role !== 'admin') {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Middleware: Non-admin user attempted to access admin route ${pathname}, redirecting to dashboard`);
+      }
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
     
-    // If user route but user is admin, redirect to admin dashboard
-    if (pathname === '/dashboard' && token.role === 'admin') {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    // Only check the exact dashboard path (not its sub-routes) for admin redirect
+    if (isRootDashboard && token.role === 'admin') {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Middleware: Admin user at /dashboard, redirecting to admin dashboard`);
+      }
+      
+      // Force a refresh on the admin dashboard URL to ensure a fresh page load
+      const adminDashboardUrl = new URL('/admin/dashboard', request.url);
+      adminDashboardUrl.searchParams.set('refresh', Date.now().toString());
+      
+      return NextResponse.redirect(adminDashboardUrl);
     }
   }
   
   // Handle OPTIONS request for API endpoints
   if (pathname.startsWith('/api') && request.method === 'OPTIONS') {
-    console.log('Middleware handling OPTIONS request for:', pathname);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Middleware handling OPTIONS request for:', pathname);
+    }
     return new NextResponse(null, {
       status: 200,
       headers: {
