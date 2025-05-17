@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { signIn, getProviders } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { signIn, getProviders, signOut } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const refresh = searchParams?.get('refresh');
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,6 +20,7 @@ export default function Home() {
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [resendMessage, setResendMessage] = useState('');
+  const [sessionMessage, setSessionMessage] = useState('');
 
   useEffect(() => {
     // Fetch available providers
@@ -25,7 +29,17 @@ export default function Home() {
       setAuthProviders(providers || {});
     };
     fetchProviders();
-  }, []);
+    
+    // Check if we need to refresh the session
+    if (refresh === 'true') {
+      setSessionMessage('Your session has been reset. Please login again.');
+      
+      // Clear the URL parameter without page refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('refresh');
+      window.history.replaceState({}, '', url);
+    }
+  }, [refresh]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +129,13 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-[#1a4d5c] mb-2">Hello!</h2>
           <p className="text-[#1a4d5c] mb-6">Login using your email/phone</p>
         </div>
+        
+        {sessionMessage && (
+          <div className="p-3 mb-2 bg-blue-50 border border-blue-300 text-blue-700 rounded w-full text-center text-sm">
+            {sessionMessage}
+          </div>
+        )}
+        
         {error && (
           <div className="p-3 mb-2 bg-[#fffbe6] border border-[#e0c36a] text-[#bfa100] rounded w-full text-center text-sm">
             {error}
