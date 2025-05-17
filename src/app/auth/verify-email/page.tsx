@@ -1,11 +1,32 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function VerifyEmailPage() {
+// Loading component for Suspense fallback
+function VerificationLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-[#e6f0f3] to-[#1a4d5c]">
+      <div className="w-full max-w-md p-6 bg-white rounded-3xl shadow-2xl flex flex-col items-center border border-[#e0c36a]">
+        <div className="flex flex-col items-center mb-8">
+          <Image src="/logo.png" alt="SnapScape Logo" width={160} height={160} className="mb-3" />
+        </div>
+        <div className="mb-6 text-center">
+          <h2 className="text-2xl font-bold text-[#1a4d5c] mb-4">Email Verification</h2>
+          <div className="flex flex-col items-center">
+            <div className="w-12 h-12 border-4 border-[#2699a6] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-[#1a4d5c]">Loading verification...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Inner component that uses useSearchParams
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -105,5 +126,14 @@ export default function VerifyEmailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<VerificationLoading />}>
+      <VerifyEmailContent />
+    </Suspense>
   );
 } 
