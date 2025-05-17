@@ -334,7 +334,7 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {user && userId !== session?.user?.id && (
+      {user && (
         <div className="mt-8 bg-white shadow overflow-hidden sm:rounded-lg">
           <div className="px-4 py-5 sm:px-6 bg-gray-50">
             <h3 className="text-lg font-medium leading-6 text-gray-900">User Management</h3>
@@ -404,40 +404,42 @@ export default function UserManagementPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-red-500">Danger Zone</h4>
-                <div className="mt-2">
-                  {!confirmDelete ? (
-                    <button
-                      onClick={() => setConfirmDelete(true)}
-                      className="px-4 py-2 border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 rounded-md text-sm font-medium"
-                    >
-                      Delete User
-                    </button>
-                  ) : (
-                    <div className="bg-red-50 p-4 rounded-md">
-                      <p className="text-sm text-red-800 mb-4">
-                        Are you sure you want to delete this user? This action cannot be undone and will remove all of the user's data.
-                      </p>
-                      <div className="flex space-x-4">
-                        <button
-                          onClick={deleteUser}
-                          disabled={actionLoading}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
-                        >
-                          Confirm Delete
-                        </button>
-                        <button
-                          onClick={() => setConfirmDelete(false)}
-                          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
+              {userId !== session?.user?.id && (
+                <div className="pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-medium text-red-500">Danger Zone</h4>
+                  <div className="mt-2">
+                    {!confirmDelete ? (
+                      <button
+                        onClick={() => setConfirmDelete(true)}
+                        className="px-4 py-2 border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 rounded-md text-sm font-medium"
+                      >
+                        Delete User
+                      </button>
+                    ) : (
+                      <div className="bg-red-50 p-4 rounded-md">
+                        <p className="text-sm text-red-800 mb-4">
+                          Are you sure you want to delete this user? This action cannot be undone and will remove all of the user's data.
+                        </p>
+                        <div className="flex space-x-4">
+                          <button
+                            onClick={deleteUser}
+                            disabled={actionLoading}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                          >
+                            Confirm Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(false)}
+                            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
