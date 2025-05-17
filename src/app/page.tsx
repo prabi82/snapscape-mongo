@@ -66,8 +66,21 @@ function HomeWithSearchParams() {
         }
         return;
       }
-      // Redirect to dashboard on successful login
-      router.push('/dashboard');
+      
+      // Get the session to check the user's role
+      const session = await fetch('/api/auth/session');
+      const sessionData = await session.json();
+      
+      // Check if user is admin and redirect accordingly
+      if (sessionData?.user?.role === 'admin') {
+        // Redirect admin users to admin dashboard
+        console.log('Admin user detected, redirecting to admin dashboard');
+        router.push('/admin/dashboard');
+      } else {
+        // Redirect regular users to user dashboard
+        router.push('/dashboard');
+      }
+      
       router.refresh();
     } catch (error) {
       console.error('Login error:', error);
@@ -78,6 +91,7 @@ function HomeWithSearchParams() {
   };
 
   const handleSocialLogin = (providerId: string) => {
+    // Use state callback URL based on role - the actual check will happen in middleware
     signIn(providerId, { callbackUrl: '/dashboard' });
   };
 

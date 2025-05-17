@@ -64,3 +64,8 @@ Thumbs.db
 .env
 .env*.local
 !.env.template
+
+# SMTP test files with sensitive data
+src/lib/send-gmail-test.js
+src/lib/send-internal-test.js
+src/lib/send-test-email.js

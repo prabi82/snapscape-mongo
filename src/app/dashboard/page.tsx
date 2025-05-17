@@ -108,6 +108,7 @@ export type FeedItem = CompetitionFeedItem | ActivityFeedItem;
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   
   // Add a type assertion for session.user to fix TypeScript errors
   // Cast session.user to include id property from next-auth.d.ts
@@ -133,7 +134,6 @@ export default function DashboardPage() {
   const [votingCompetitions, setVotingCompetitions] = useState<Competition[]>([]);
   const [completedCompetitions, setCompletedCompetitions] = useState<Competition[]>([]);
   const [completedResults, setCompletedResults] = useState<Record<string, Submission[]>>({});
-  const router = useRouter();
 
   // New state for combined and sorted feed items
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -534,6 +534,15 @@ export default function DashboardPage() {
       console.error('Failed to fetch app settings:', error);
     }
   };
+
+  // Add admin redirect check
+  useEffect(() => {
+    // Check if user is admin and redirect to admin dashboard
+    if (status === 'authenticated' && (session?.user as any)?.role === 'admin') {
+      console.log('User is admin, redirecting to admin dashboard');
+      router.push('/admin/dashboard');
+    }
+  }, [session, status, router]);
 
   if (status === 'loading' || isLoading) {
     return (

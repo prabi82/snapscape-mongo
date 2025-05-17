@@ -107,6 +107,16 @@ export default function DebugTokenPage() {
             Reset Session
           </a>
         </div>
+        
+        <div className="mt-4">
+          <a 
+            href="/api/auth/middleware-check" 
+            target="_blank"
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Check Middleware Configuration
+          </a>
+        </div>
       </div>
     </div>
   );

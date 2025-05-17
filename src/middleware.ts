@@ -45,6 +45,7 @@ export async function middleware(request: NextRequest) {
       // Force a refresh on the admin dashboard URL to ensure a fresh page load
       const adminDashboardUrl = new URL('/admin/dashboard', request.url);
       adminDashboardUrl.searchParams.set('refresh', Date.now().toString());
+      adminDashboardUrl.searchParams.set('source', 'middleware');
       
       return NextResponse.redirect(adminDashboardUrl);
     }
