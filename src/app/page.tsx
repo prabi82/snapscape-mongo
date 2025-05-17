@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { signIn, getProviders, signOut } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function Home() {
+// Component that uses useSearchParams
+function HomeWithSearchParams() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const refresh = searchParams?.get('refresh');
@@ -276,5 +277,28 @@ export default function Home() {
         )}
       </div>
     </div>
+  );
+}
+
+// Fallback for suspense
+function HomeLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-[#e6f0f3] to-[#1a4d5c]">
+      <div className="w-full max-w-md p-6 bg-white rounded-3xl shadow-2xl flex flex-col items-center border border-[#e0c36a]">
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 border-4 border-[#2699a6] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-[#1a4d5c]">Loading...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main component wrapped with Suspense
+export default function Home() {
+  return (
+    <Suspense fallback={<HomeLoading />}>
+      <HomeWithSearchParams />
+    </Suspense>
   );
 }
