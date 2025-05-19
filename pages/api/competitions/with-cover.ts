@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Competition from '@/models/Competition';
 import { uploadToCloudinary } from '@/lib/cloudinary';
-import formidable from 'formidable';
+import { IncomingForm, Fields, Files } from 'formidable';
 import { promises as fs } from 'fs';
 
 // Set the body parser config to accept large files
@@ -37,13 +37,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await connectDB();
 
     // Use formidable to parse the multipart form data
-    const form = new formidable.IncomingForm({
+    const form = new IncomingForm({
       maxFileSize: 10 * 1024 * 1024, // 10MB in bytes
       keepExtensions: true,
     });
 
     // Parse the form data
-    const [fields, files] = await new Promise<[formidable.Fields, formidable.Files]>((resolve, reject) => {
+    const [fields, files] = await new Promise<[Fields, Files]>((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) {
           console.error('Error parsing form data:', err);
