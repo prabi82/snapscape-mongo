@@ -16,11 +16,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ success: false, message: 'Only administrators can create competitions' });
     }
 
-    // Initialize Cloudinary (should already be initialized in your app)
+    // Get Cloudinary credentials - check both environment variables and hardcoded fallbacks for development
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "snapscapeapp";
+    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY || "385223859767546";
+    const apiSecret = process.env.CLOUDINARY_API_SECRET || "KoAMKhz9NCRPwLZu0K3EAGmKsJk";
+
+    // Log the configuration for debugging
+    console.log("Cloudinary config:", { 
+      cloudName,
+      apiKeyLength: apiKey?.length || 0,
+      apiSecretLength: apiSecret?.length || 0
+    });
+
+    // Initialize Cloudinary
     cloudinary.config({
-      cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
       secure: true
     });
 
@@ -31,15 +43,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       folder: 'snapscape/competitions/covers',
       // You can add other upload parameters here if needed
       // For example: transformation: [{ width: 1200, height: 600, crop: 'fill' }]
-    }, process.env.CLOUDINARY_API_SECRET || '');
+    }, apiSecret);
 
     // Return the necessary data for direct upload
     return res.status(200).json({
       success: true,
       signature,
       timestamp,
-      cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-      apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
+      cloudName,
+      apiKey,
       folder: 'snapscape/competitions/covers'
     });
   } catch (error: any) {
