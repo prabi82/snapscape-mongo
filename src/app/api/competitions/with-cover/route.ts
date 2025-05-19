@@ -5,6 +5,16 @@ import connectDB from '@/lib/mongodb';
 import Competition from '@/models/Competition';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
+export const runtime = 'nodejs';
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
+
 export async function POST(request: NextRequest) {
   try {
     // Check if user is authenticated and admin
