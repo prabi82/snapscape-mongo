@@ -12,17 +12,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Check if user is admin
+    // @ts-ignore - Adding type ignore since 'role' is a custom field we added to the session
     if (session.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Only administrators can create competitions' });
     }
 
-    // Get Cloudinary credentials from environment variables with fallbacks for development/testing
-    // IMPORTANT: Replace these with your actual Cloudinary credentials in production environment variables
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dpxuzscso";
-    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY || "569119329184156";
-    const apiSecret = process.env.CLOUDINARY_API_SECRET || "mXxpw8ZpwAA3sIcvJeTJ9LtvGS8";
+    // Get Cloudinary credentials from environment variables - use exact names from Vercel
+    // These names match what's shown in the Vercel environment variables screenshot
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-    // Log configurations for debugging
+    // Validate credentials
+    if (!cloudName || !apiKey || !apiSecret) {
+      console.error('Missing Cloudinary credentials in environment:', {
+        hasCloudName: !!cloudName,
+        hasApiKey: !!apiKey,
+        hasApiSecret: !!apiSecret
+      });
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Server configuration error: Missing Cloudinary credentials'
+      });
+    }
+
+    // Log configurations for debugging (without exposing sensitive data)
     console.log("Cloudinary configuration check:", {
       cloudName,
       hasApiKey: !!apiKey,

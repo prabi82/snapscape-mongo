@@ -227,10 +227,19 @@ export default function CreateCompetition() {
           const signatureResponse = await fetch('/api/cloudinary/signature');
           
           if (!signatureResponse.ok) {
-            throw new Error('Failed to get upload signature');
+            const errorData = await signatureResponse.text();
+            console.error('Signature API error:', errorData);
+            throw new Error(`Failed to get upload signature: ${errorData}`);
           }
           
-          const { signature, timestamp, cloudName, apiKey, folder } = await signatureResponse.json();
+          const signatureData = await signatureResponse.json();
+          
+          if (!signatureData.success) {
+            console.error('Signature API returned error:', signatureData);
+            throw new Error(signatureData.message || 'Failed to get upload signature');
+          }
+          
+          const { signature, timestamp, cloudName, apiKey, folder } = signatureData;
           
           // Step 2: Create a FormData for Cloudinary
           const cloudinaryData = new FormData();
@@ -244,7 +253,12 @@ export default function CreateCompetition() {
           cloudinaryData.append('transformation', 'c_fill,w_1200,h_600,q_auto:good');
           
           // Step 3: Upload directly to Cloudinary
-          console.log('Uploading directly to Cloudinary...');
+          console.log('Uploading directly to Cloudinary...', {
+            cloudName,
+            hasApiKey: !!apiKey,
+            hasSignature: !!signature
+          });
+          
           const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
             method: 'POST',
             body: cloudinaryData,
@@ -252,6 +266,7 @@ export default function CreateCompetition() {
           
           if (!uploadResponse.ok) {
             const errorText = await uploadResponse.text();
+            console.error('Cloudinary upload error response:', errorText);
             throw new Error(`Cloudinary upload failed: ${errorText}`);
           }
           
