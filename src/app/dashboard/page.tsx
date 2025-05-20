@@ -605,17 +605,17 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
-      {/* Tabs */}      
-      <div className="flex justify-between items-center border-b border-gray-200 mb-4">        
+      {/* Tabs */}
+      <div className="flex justify-between items-center border-b border-gray-200 mb-4">
         {['feed', 'competitions'].map(tab => (          
-          <button            
-            key={tab}            
-            onClick={() => setActiveTab(tab as any)}            
-            className={`flex-1 py-2 text-center font-semibold capitalize transition border-b-2 ${activeTab === tab ? 'border-[#1a4d5c] text-[#1a4d5c]' : 'border-transparent text-gray-400'}`}          
-          >            
-            {tab}          
-          </button>        
-        ))}      
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab as any)}
+            className={`flex-1 py-2 text-center font-semibold capitalize transition border-b-2 ${activeTab === tab ? 'border-[#1a4d5c] text-[#1a4d5c]' : 'border-transparent text-gray-400'}`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
       {/* Feed Content */}
       <div>

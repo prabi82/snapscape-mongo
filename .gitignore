@@ -69,3 +69,15 @@ Thumbs.db
 src/lib/send-gmail-test.js
 src/lib/send-internal-test.js
 src/lib/send-test-email.js
+
+# Admin scripts with credentials
+check-admin-users.js
+ensure-admin-users.js
+create-admin-user.js
+
+# Cloudinary and sensitive test files
+build-cloudinary-url.js
+test-cloudinary*.js
+test-cloudinary*.ts
+*-credentials.json
+sensitive-*.txt

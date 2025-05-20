@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
     if (photoSubmissionIds.length > 0) {
       // Only log count in production
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`Fetching ${photoSubmissionIds.length} photo submissions for notifications`);
+      console.log(`Fetching ${photoSubmissionIds.length} photo submissions for notifications`);
       }
       
       try {
@@ -166,10 +166,10 @@ export async function GET(req: NextRequest) {
           
           // Only fetch the uncached submissions
           if (uncachedIds.length > 0) {
-            const photoSubmissions = await PhotoSubmission.find({
+          const photoSubmissions = await PhotoSubmission.find({
               _id: { $in: uncachedIds }
-            }).lean();
-            
+          }).lean();
+          
             // Add to cache
             photoSubmissions.forEach(photo => {
               const photoId = (photo._id as mongoose.Types.ObjectId).toString();
@@ -187,7 +187,7 @@ export async function GET(req: NextRequest) {
           
           // Only log in development
           if (process.env.NODE_ENV !== 'production') {
-            console.log(`Found ${Object.keys(photoSubmissionsMap).length} photo submissions with potential thumbnails`);
+          console.log(`Found ${Object.keys(photoSubmissionsMap).length} photo submissions with potential thumbnails`);
           }
         }
       } catch (err) {
@@ -216,7 +216,7 @@ export async function GET(req: NextRequest) {
             photoUrl = photoSubmission.thumbnailUrl;
           } else if (photoSubmission.imageUrl) {
             photoUrl = photoSubmission.imageUrl;
-          }
+      }
         }
       }
       
@@ -234,7 +234,7 @@ export async function GET(req: NextRequest) {
     
     // Only log count in production
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`Found ${notifications.length} total notifications, including ${photoNotifications.length} photo approval/rejection notifications`);
+    console.log(`Found ${notifications.length} total notifications, including ${photoNotifications.length} photo approval/rejection notifications`);
     }
     
     // Combine all activities, sort by date, and limit to requested amount
@@ -257,7 +257,7 @@ export async function GET(req: NextRequest) {
     
     // Only log count in production
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`Returning ${allActivities.length} activities with ${notificationActivities.length} notifications`);
+    console.log(`Returning ${allActivities.length} activities with ${notificationActivities.length} notifications`);
     }
     
     return NextResponse.json({

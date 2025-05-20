@@ -125,9 +125,9 @@ export default function CreateCompetition() {
         return;
       }
       
-      // Validate file size (10MB max)
-      if (file.size > 10 * 1024 * 1024) {
-        setImageValidationError('Image size must be less than 10MB');
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        setImageValidationError('Image size must be less than 5MB');
         setCoverImage(null);
         setCoverImagePreview(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -180,6 +180,35 @@ export default function CreateCompetition() {
       return;
     }
 
+    const formDataToSubmit = new FormData();
+    Object.entries(formData).forEach(([key, value]) => {
+      if (value instanceof Date) {
+        formDataToSubmit.append(key, value.toISOString());
+      } else if (typeof value === 'boolean') {
+        formDataToSubmit.append(key, value.toString());
+      } else if (value !== null && value !== undefined) {
+        formDataToSubmit.append(key, value as string); // Ensure value is string or Blob
+      }
+    });
+
+    if (coverImage && completedCrop) {
+      formDataToSubmit.append('coverImage', coverImage);
+      // Add crop parameters
+      formDataToSubmit.append('cropX', String(Math.round(completedCrop.x)));
+      formDataToSubmit.append('cropY', String(Math.round(completedCrop.y)));
+      formDataToSubmit.append('cropWidth', String(Math.round(completedCrop.width)));
+      formDataToSubmit.append('cropHeight', String(Math.round(completedCrop.height)));
+    } else if (coverImage && !completedCrop) {
+      // If there's an image but no crop (e.g. user didn't interact with cropper)
+      // We might want to send the original image or prevent submission
+      // For now, let's assume a crop is always made if an image is present.
+      // Or, we can send default crop (e.g. full image, but that might not respect 4:3)
+      // This case should ideally be handled by onImageLoad setting an initial completedCrop.
+      setError('Image selected but crop data is missing. Please adjust the crop area.');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Validate form data
       if (!formData.title || !formData.description || !formData.theme || !formData.startDate || !formData.endDate || !formData.votingEndDate) {
@@ -216,94 +245,13 @@ export default function CreateCompetition() {
         throw new Error('Voting end date must be after submission end date');
       }
 
-      let coverImageUrl = null;
-      let cropData = null;
+      let response;
 
-      // If there's a cover image, first upload it to Cloudinary directly
-      if (coverImage && completedCrop) {
-        try {
-          console.log('Starting direct Cloudinary upload flow');
-          // Step 1: Get a signature from our API
-          const signatureResponse = await fetch('/api/cloudinary/signature');
-          
-          if (!signatureResponse.ok) {
-            const errorData = await signatureResponse.text();
-            console.error('Signature API error:', errorData);
-            throw new Error(`Failed to get upload signature: ${errorData}`);
-          }
-          
-          const signatureData = await signatureResponse.json();
-          
-          if (!signatureData.success) {
-            console.error('Signature API returned error:', signatureData);
-            throw new Error(signatureData.message || 'Failed to get upload signature');
-          }
-          
-          const { signature, timestamp, cloudName, apiKey, folder } = signatureData;
-          
-          // Step 2: Create a FormData for Cloudinary
-          const cloudinaryData = new FormData();
-          cloudinaryData.append('file', coverImage);
-          cloudinaryData.append('signature', signature);
-          cloudinaryData.append('timestamp', timestamp);
-          cloudinaryData.append('api_key', apiKey);
-          cloudinaryData.append('folder', folder);
-          
-          // Add transformation parameters for Cloudinary to process
-          cloudinaryData.append('transformation', 'c_fill,w_1200,h_600,q_auto:good');
-          
-          // Step 3: Upload directly to Cloudinary
-          console.log('Uploading directly to Cloudinary...', {
-            cloudName,
-            hasApiKey: !!apiKey,
-            hasSignature: !!signature
-          });
-          
-          const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-            method: 'POST',
-            body: cloudinaryData,
-          });
-          
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            console.error('Cloudinary upload error response:', errorText);
-            throw new Error(`Cloudinary upload failed: ${errorText}`);
-          }
-          
-          const uploadResult = await uploadResponse.json();
-          console.log('Cloudinary direct upload result:', uploadResult);
-          
-          // Save the Cloudinary URL
-          coverImageUrl = uploadResult.secure_url;
-          
-          // Save crop data
-          cropData = {
-            cropX: Math.round(completedCrop.x),
-            cropY: Math.round(completedCrop.y),
-            cropWidth: Math.round(completedCrop.width),
-            cropHeight: Math.round(completedCrop.height)
-          };
-          
-        } catch (uploadError: any) {
-          console.error('Error during direct Cloudinary upload:', uploadError);
-          throw new Error(`Failed to upload image: ${uploadError.message}`);
-        }
-      }
-
-      // Now submit just the competition data with the image URL to our API
-      const competitionToSubmit = {
-        ...submissionData,
-        coverImageUrl, // Include the Cloudinary URL we got
-        ...(cropData || {}) // Fix the spreading of possibly null object
-      };
-      
-      console.log('Submitting competition with pre-uploaded image:', coverImageUrl ? 'Has image' : 'No image');
-      const response = await fetch('/api/competitions/direct', {
+      // Submit form with image
+      console.log('Submitting with cover image:', coverImage?.name, coverImage?.size, coverImage?.type);
+      response = await fetch('/api/competitions/with-cover', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(competitionToSubmit),
+        body: formDataToSubmit,
       });
 
       // Check if response is okay
@@ -324,6 +272,11 @@ export default function CreateCompetition() {
 
       if (!responseData.success) {
         throw new Error(responseData.message || 'Failed to create competition');
+      }
+
+      // Verify the competition has a coverImage if one was uploaded
+      if (coverImage && !responseData.data?.coverImage) {
+        console.warn('Cover image was not saved properly in the server response');
       }
 
       // Handle success

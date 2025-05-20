@@ -1,3 +1,30 @@
+# Sensitive Files - NEVER Commit With Real Credentials
+# This file serves as documentation of files that might contain sensitive information
+
+# Database credentials
+check-admin-users.js
+ensure-admin-users.js
+create-admin-user.js
+
+# Cloudinary credentials
+build-cloudinary-url.js
+test-cloudinary-direct.js
+test-cloudinary-direct.ts
+test-cloudinary-connection.js
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Never commit actual values in these templates
+# Instead use placeholders like YOUR_API_KEY
+export-env-template.js
+
+# Use BFG Repo Cleaner to remove any accidentally committed credentials:
+# java -jar bfg.jar --replace-text passwords.txt repo-name.git
+
 src/lib/send-gmail-test.js
 src/lib/send-internal-test.js
 src/lib/send-test-email.js 

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 // Script to build a Cloudinary URL from individual components
+// WARNING: NEVER COMMIT CREDENTIALS TO SOURCE CONTROL
+// ONLY USE THIS SCRIPT LOCALLY AND NEVER COMMIT THE OUTPUT
 console.log('=== Cloudinary URL Builder ===');
+console.log('⚠️  WARNING: Never commit API keys or secrets to source control!');
 
 // Get inputs via command-line arguments
 const args = process.argv.slice(2);

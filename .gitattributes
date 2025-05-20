@@ -1,0 +1,20 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Denote binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+
+# Files that should never be committed with credentials
+check-admin-users.js linguist-generated
+ensure-admin-users.js linguist-generated
+create-admin-user.js linguist-generated
+build-cloudinary-url.js linguist-generated
+test-cloudinary*.js linguist-generated
+test-cloudinary*.ts linguist-generated
+*-credentials.json linguist-generated
+sensitive-*.txt linguist-generated 

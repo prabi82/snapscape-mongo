@@ -2,8 +2,8 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-// Define MongoDB URI explicitly
-const MONGODB_URI = 'mongodb+srv://snap:C4U2QqNfr8OlzNjt@snapscape-mongo.gli1z.mongodb.net/?retryWrites=true&w=majority&appName=snapscape-mongo';
+// Define MongoDB URI from environment variables
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/snapscape';
 
 // Define a simplified user schema with password
 const UserSchema = new mongoose.Schema({

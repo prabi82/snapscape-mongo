@@ -3,14 +3,14 @@ import { v2 as cloudinary } from 'cloudinary';
 
 /**
  * Main function to test Cloudinary credentials
- * You should replace these values with your actual credentials
+ * IMPORTANT: NEVER COMMIT ACTUAL CREDENTIALS TO SOURCE CONTROL
  */
 async function testCloudinaryDirectly(): Promise<void> {
-  // REPLACE THESE VALUES WITH YOUR ACTUAL CREDENTIALS
+  // THESE ARE PLACEHOLDERS - REPLACE WHEN TESTING LOCALLY AND NEVER COMMIT ACTUAL VALUES
   const credentials = {
-    cloudName: "your-cloud-name", // Replace with your cloud name
-    apiKey: "REPLACE_WITH_YOUR_ACTUAL_API_KEY",
-    apiSecret: "REPLACE_WITH_YOUR_ACTUAL_API_SECRET"
+    cloudName: "YOUR_CLOUD_NAME_PLACEHOLDER",
+    apiKey: "YOUR_API_KEY_PLACEHOLDER",
+    apiSecret: "YOUR_API_SECRET_PLACEHOLDER" 
   };
 
   console.log("======== CLOUDINARY DIRECT CREDENTIALS TEST ========");

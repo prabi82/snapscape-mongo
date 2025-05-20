@@ -1,10 +1,11 @@
 // Direct Cloudinary credentials test script
 const { v2: cloudinary } = require('cloudinary');
 
-// Replace these with your actual Cloudinary credentials
-const CLOUD_NAME = "your-cloud-name"; // Replace with your cloud name
-const API_KEY = "REPLACE_WITH_YOUR_ACTUAL_API_KEY";
-const API_SECRET = "REPLACE_WITH_YOUR_ACTUAL_API_SECRET";
+// IMPORTANT: NEVER COMMIT ACTUAL CREDENTIALS TO SOURCE CONTROL
+// Replace these placeholders with your actual credentials when testing locally
+const CLOUD_NAME = "YOUR_CLOUD_NAME_PLACEHOLDER"; 
+const API_KEY = "YOUR_API_KEY_PLACEHOLDER";
+const API_SECRET = "YOUR_API_SECRET_PLACEHOLDER";
 
 // Configure Cloudinary with direct credentials
 cloudinary.config({
