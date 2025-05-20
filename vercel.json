@@ -8,6 +8,24 @@
       "use": "@vercel/next"
     }
   ],
+  "functions": {
+    "src/app/api/competitions/with-cover/route.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/competitions/[id]/with-cover/route.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/photos/upload/route.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/**/*": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  },
   "routes": [
     {
       "src": "/(.*)",
