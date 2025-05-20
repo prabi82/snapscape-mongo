@@ -6,6 +6,9 @@ import Competition from '@/models/Competition';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  console.log('API: Competition with cover upload started');
+  
   try {
     // Check if user is authenticated and admin
     const session = await getServerSession(authOptions);
@@ -25,9 +28,12 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
+    console.log('API: Connected to DB');
 
     // Parse form data
+    console.log('API: Starting to parse form data');
     const formData = await request.formData();
+    console.log('API: Form data parsed successfully');
     
     // Extract cover image file
     const coverImageFile = formData.get('coverImage') as File;
@@ -62,14 +68,14 @@ export async function POST(request: NextRequest) {
     // Upload cover image to Cloudinary if provided
     if (coverImageFile) {
       try {
-        console.log('Starting cover image upload to Cloudinary...');
-        const arrayBuffer = await coverImageFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        console.log(`API: Starting cover image upload to Cloudinary... (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
         
-        console.log('Cover image file details:', {
+        // Get file details before processing
+        console.log('API: Cover image file details:', {
           type: coverImageFile.type,
           size: coverImageFile.size,
-          name: coverImageFile.name
+          name: coverImageFile.name,
+          sizeInMB: (coverImageFile.size / (1024 * 1024)).toFixed(2) + ' MB'
         });
 
         // Validate file size (10MB max)
@@ -80,6 +86,12 @@ export async function POST(request: NextRequest) {
           );
         }
         
+        console.log(`API: Reading file buffer... (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
+        const arrayBuffer = await coverImageFile.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        console.log(`API: File buffer created, size: ${(buffer.length / (1024 * 1024)).toFixed(2)} MB (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
+        
+        console.log(`API: Starting Cloudinary upload... (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
         const uploadResult = await uploadToCloudinary(buffer, {
           folder: 'snapscape/competitions/covers',
           resource_type: 'image',
@@ -89,27 +101,29 @@ export async function POST(request: NextRequest) {
           ]
         });
 
-        console.log('Cloudinary upload result:', uploadResult);
+        console.log(`API: Cloudinary upload completed (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
 
         if (uploadResult && uploadResult.secure_url) {
           competitionData.coverImage = uploadResult.secure_url;
-          console.log('Cover image URL set to:', competitionData.coverImage);
+          console.log('API: Cover image URL set to:', competitionData.coverImage);
         } else {
-          console.error('No secure_url in Cloudinary upload result');
+          console.error('API: No secure_url in Cloudinary upload result');
         }
       } catch (uploadError: any) {
-        console.error('Error uploading cover image:', uploadError);
+        console.error(`API: Error uploading cover image (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed):`, uploadError);
         return NextResponse.json(
           { success: false, message: `Error uploading cover image: ${uploadError.message}` },
           { status: 500 }
         );
       }
     } else {
-      console.log('No cover image file provided');
+      console.log('API: No cover image file provided');
     }
 
     // Create competition in database
+    console.log(`API: Creating competition in database... (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
     const competition = await Competition.create(competitionData);
+    console.log(`API: Competition created successfully (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
 
     return NextResponse.json({
       success: true,
@@ -117,7 +131,7 @@ export async function POST(request: NextRequest) {
       data: competition
     });
   } catch (error: any) {
-    console.error('Error creating competition with cover:', error);
+    console.error(`API: Error creating competition with cover (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed):`, error);
     return NextResponse.json(
       { success: false, message: error.message || 'An error occurred while creating the competition' },
       { status: 500 }
