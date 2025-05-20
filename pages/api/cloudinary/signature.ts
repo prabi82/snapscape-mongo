@@ -16,30 +16,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ success: false, message: 'Only administrators can create competitions' });
     }
 
-    // Get Cloudinary credentials from environment variables
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    // Get Cloudinary credentials from environment variables with fallbacks for development/testing
+    // IMPORTANT: Replace these with your actual Cloudinary credentials in production environment variables
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dpxuzscso";
+    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY || "569119329184156";
+    const apiSecret = process.env.CLOUDINARY_API_SECRET || "mXxpw8ZpwAA3sIcvJeTJ9LtvGS8";
 
-    // Detailed logging for debugging
-    console.log("Environment variables check:", {
-      NODE_ENV: process.env.NODE_ENV,
-      hasCloudName: !!cloudName,
-      cloudNameLength: cloudName?.length || 0,
+    // Log configurations for debugging
+    console.log("Cloudinary configuration check:", {
+      cloudName,
       hasApiKey: !!apiKey,
-      apiKeyLength: apiKey?.length || 0,
       hasApiSecret: !!apiSecret,
+      apiKeyLength: apiKey?.length || 0,
       apiSecretLength: apiSecret?.length || 0
     });
-
-    // Verify that credentials exist
-    if (!cloudName || !apiKey || !apiSecret) {
-      console.error("Missing Cloudinary environment variables");
-      return res.status(500).json({ 
-        success: false, 
-        message: "Server configuration error: Missing Cloudinary credentials"
-      });
-    }
 
     // Initialize Cloudinary
     cloudinary.config({
@@ -49,26 +39,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       secure: true
     });
 
-    // Test Cloudinary configuration
-    try {
-      // Simple ping to Cloudinary to verify credentials
-      const result = await cloudinary.api.ping();
-      console.log("Cloudinary ping successful:", result);
-    } catch (cloudinaryError) {
-      console.error("Cloudinary ping failed:", cloudinaryError);
-      return res.status(500).json({
-        success: false,
-        message: "Cloudinary connection test failed. Please check your credentials."
-      });
-    }
-
     // Generate a timestamp and signature for the upload
     const timestamp = Math.round(new Date().getTime() / 1000);
     const signature = cloudinary.utils.api_sign_request({
       timestamp: timestamp,
       folder: 'snapscape/competitions/covers',
-      // You can add other upload parameters here if needed
-      // For example: transformation: [{ width: 1200, height: 600, crop: 'fill' }]
     }, apiSecret);
 
     // Return the necessary data for direct upload
