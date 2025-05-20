@@ -184,22 +184,162 @@ export default function EditCompetition() {
       const originalSize = file.size / (1024 * 1024); // Size in MB
       console.log(`Original image size: ${originalSize.toFixed(2)} MB`);
       
-      // STRICT SIZE LIMIT: 5MB for production uploads
-      if (file.size > 5 * 1024 * 1024) {
-        setImageValidationError(`Image size must be less than 5MB (current size: ${originalSize.toFixed(2)} MB)`);
+      // ORIGINAL SIZE LIMIT: 10MB for initial selection
+      if (file.size > 10 * 1024 * 1024) {
+        setImageValidationError(`Image size must be less than 10MB (current size: ${originalSize.toFixed(2)} MB)`);
         setCoverImage(null);
         setCoverImagePreview(competition?.coverImage || null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
 
-      // Set file for upload and preview
-      setCoverImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCoverImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      // Automatically compress if file is over 5MB (Vercel's limit)
+      if (file.size > 5 * 1024 * 1024) {
+        try {
+          // Create an image element from the file
+          const img = document.createElement('img');
+          const reader = new FileReader();
+          
+          // Wait for the image to load
+          await new Promise<void>((resolve) => {
+            reader.onload = (e) => {
+              img.src = e.target?.result as string;
+              img.onload = () => resolve();
+            };
+            reader.readAsDataURL(file);
+          });
+          
+          // Create a canvas and compress the image
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions while maintaining aspect ratio
+          let width = img.width;
+          let height = img.height;
+          
+          // Reduce dimensions if larger than 2000px on any side
+          const maxDimension = 2000;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height / width) * maxDimension);
+              width = maxDimension;
+            } else {
+              width = Math.round((width / height) * maxDimension);
+              height = maxDimension;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw image on canvas
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Calculate compression quality based on file size
+          // Larger files need more compression
+          let quality = 0.7;
+          if (file.size > 8 * 1024 * 1024) {
+            quality = 0.5; // More aggressive compression for very large files
+          }
+          
+          // Convert to blob with quality reduction
+          const compressedBlob = await new Promise<Blob>((resolve) => {
+            canvas.toBlob(
+              (blob) => {
+                // This should never happen, but TypeScript requires us to check
+                if (!blob) {
+                  resolve(new Blob([]));
+                  return;
+                }
+                resolve(blob);
+              },
+              file.type,
+              quality
+            );
+          });
+          
+          // Create new File from compressed blob
+          const compressedFile = new File([compressedBlob], file.name, {
+            type: file.type,
+            lastModified: Date.now(),
+          });
+          
+          console.log(`Compressed image size: ${(compressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((compressedFile.size / file.size) * 100)}% of original)`);
+          
+          // If compression wasn't enough, try one more time with more aggressive settings
+          if (compressedFile.size > 5 * 1024 * 1024) {
+            const canvas2 = document.createElement('canvas');
+            const ctx2 = canvas2.getContext('2d');
+            
+            // Reduce dimensions further if still too large
+            width = Math.round(width * 0.8);
+            height = Math.round(height * 0.8);
+            
+            canvas2.width = width;
+            canvas2.height = height;
+            
+            ctx2?.drawImage(img, 0, 0, width, height);
+            
+            const recompressedBlob = await new Promise<Blob>((resolve) => {
+              canvas2.toBlob(
+                (blob) => {
+                  if (!blob) {
+                    resolve(new Blob([]));
+                    return;
+                  }
+                  resolve(blob);
+                },
+                file.type,
+                0.4 // Much more aggressive compression
+              );
+            });
+            
+            const recompressedFile = new File([recompressedBlob], file.name, {
+              type: file.type,
+              lastModified: Date.now(),
+            });
+            
+            console.log(`Re-compressed image size: ${(recompressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((recompressedFile.size / file.size) * 100)}% of original)`);
+            
+            // Use the recompressed file
+            setCoverImage(recompressedFile);
+            
+            // Create a preview
+            const reader2 = new FileReader();
+            reader2.onloadend = () => {
+              setCoverImagePreview(reader2.result as string);
+            };
+            reader2.readAsDataURL(recompressedFile);
+          } else {
+            // Use the compressed file
+            setCoverImage(compressedFile);
+            
+            // Create a preview
+            const reader2 = new FileReader();
+            reader2.onloadend = () => {
+              setCoverImagePreview(reader2.result as string);
+            };
+            reader2.readAsDataURL(compressedFile);
+          }
+          
+        } catch (error) {
+          console.error('Error compressing image:', error);
+          // If compression fails, inform the user they need a smaller image
+          setImageValidationError(`Unable to compress image. Please use an image smaller than 5MB.`);
+          setCoverImage(null);
+          setCoverImagePreview(competition?.coverImage || null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
+      } else {
+        // For smaller files, just use them as is
+        setCoverImage(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setCoverImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
 
     } else {
       setCoverImage(null);
