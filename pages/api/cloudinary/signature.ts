@@ -16,10 +16,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ success: false, message: 'Only administrators can create competitions' });
     }
 
-    // Get Cloudinary credentials - check both environment variables and hardcoded fallbacks for development
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "snapscapeapp";
-    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY || "385223859767546";
-    const apiSecret = process.env.CLOUDINARY_API_SECRET || "KoAMKhz9NCRPwLZu0K3EAGmKsJk";
+    // These are temporary demo credentials - replace with your actual Cloudinary credentials
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dhdvcvisi";
+    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY || "871274638732918";
+    const apiSecret = process.env.CLOUDINARY_API_SECRET || "wDmk1U-p8wO_aTmOgWfM0JE98qA";
 
     // Log the configuration for debugging
     console.log("Cloudinary config:", { 
