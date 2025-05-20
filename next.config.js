@@ -21,6 +21,10 @@ const nextConfig = {
   experimental: {
     // Detect and optimize duplicate dependencies in the build
     optimizeCss: true,
+    // Enable larger payload sizes for API routes
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
   // External packages that should be treated as server components
   serverExternalPackages: ['mongoose'],

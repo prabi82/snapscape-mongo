@@ -71,6 +71,14 @@ export async function POST(request: NextRequest) {
           size: coverImageFile.size,
           name: coverImageFile.name
         });
+
+        // Validate file size (10MB max)
+        if (coverImageFile.size > 10 * 1024 * 1024) {
+          return NextResponse.json(
+            { success: false, message: 'Image size must be less than 10MB' },
+            { status: 400 }
+          );
+        }
         
         const uploadResult = await uploadToCloudinary(buffer, {
           folder: 'snapscape/competitions/covers',

@@ -180,8 +180,8 @@ export default function EditCompetition() {
     const file = e.target.files?.[0] || null;
     
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setImageValidationError('Image size must be less than 5MB');
+      if (file.size > 10 * 1024 * 1024) {
+        setImageValidationError('Image size must be less than 10MB');
         setCoverImage(null);
         setCoverImagePreview(competition?.coverImage || null);
         if (fileInputRef.current) fileInputRef.current.value = '';
