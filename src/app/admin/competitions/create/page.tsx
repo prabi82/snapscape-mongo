@@ -245,28 +245,69 @@ export default function CreateCompetition() {
         throw new Error('Voting end date must be after submission end date');
       }
 
-      let response;
-
       // Submit form with image
       console.log('Submitting with cover image:', coverImage?.name, coverImage?.size, coverImage?.type);
-      response = await fetch('/api/competitions/with-cover', {
-        method: 'POST',
-        body: formDataToSubmit,
-      });
-
-      // Check if response is okay
-      if (!response.ok) {
-        let errorMessage = 'Failed to create competition';
+      
+      // Add retry logic for large files
+      const MAX_RETRIES = 3;
+      const TIMEOUT = 60000; // 60 seconds timeout
+      
+      let response: Response | null = null;
+      let retryCount = 0;
+      let lastError: Error | null = null;
+      
+      while (retryCount < MAX_RETRIES && !response) {
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch (e) {
-          console.error('Could not parse error response', e);
+          if (retryCount > 0) {
+            console.log(`Retry attempt ${retryCount} for upload...`);
+            setError(`Upload timed out. Retrying (${retryCount}/${MAX_RETRIES})...`);
+          }
+          
+          // Create a timeout promise
+          const timeoutPromise = new Promise<Response>((_, reject) => {
+            setTimeout(() => reject(new Error('Request timed out')), TIMEOUT);
+          });
+          
+          // Create the fetch promise
+          const fetchPromise = fetch('/api/competitions/with-cover', {
+            method: 'POST',
+            body: formDataToSubmit,
+          });
+          
+          // Race them - whichever resolves/rejects first wins
+          response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+          
+          // If we get here, the fetch completed before the timeout
+          if (!response.ok) {
+            let errorMessage = 'Failed to create competition';
+            try {
+              const errorData = await response.json();
+              errorMessage = errorData.message || errorMessage;
+            } catch (e) {
+              console.error('Could not parse error response', e);
+            }
+            throw new Error(errorMessage);
+          }
+        } catch (err: any) {
+          lastError = err;
+          response = null;
+          retryCount++;
+          
+          // If it's not the last retry, continue the loop
+          if (retryCount < MAX_RETRIES) {
+            continue;
+          }
+          
+          // If we're out of retries, throw the last error
+          throw err;
         }
-        throw new Error(errorMessage);
       }
 
       // Parse the response to verify success
+      if (!response) {
+        throw new Error('No response received after multiple attempts');
+      }
+      
       const responseData = await response.json();
       console.log('Server response:', responseData);
 

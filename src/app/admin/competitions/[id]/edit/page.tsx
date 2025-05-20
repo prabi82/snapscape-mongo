@@ -270,20 +270,63 @@ export default function EditCompetition() {
     }
     
     try {
-      const res = await fetch(`/api/competitions/${competitionId}`, {
-        method: 'PUT',
-        body: formDataToSubmit,
-      });
-
-      if (!res.ok) {
-        let errorData;
+      // Add retry logic for large files
+      const MAX_RETRIES = 3;
+      const TIMEOUT = 60000; // 60 seconds timeout
+      
+      let response: Response | null = null;
+      let retryCount = 0;
+      let lastError: Error | null = null;
+      
+      while (retryCount < MAX_RETRIES && !response) {
         try {
-          errorData = await res.json();
-        } catch (jsonErr) {
-          errorData = { message: await res.text() };
+          if (retryCount > 0) {
+            console.log(`Retry attempt ${retryCount} for upload...`);
+            setError(`Upload timed out. Retrying (${retryCount}/${MAX_RETRIES})...`);
+          }
+          
+          // Create a timeout promise
+          const timeoutPromise = new Promise<Response>((_, reject) => {
+            setTimeout(() => reject(new Error('Request timed out')), TIMEOUT);
+          });
+          
+          // Create the fetch promise
+          const fetchPromise = fetch(`/api/competitions/${competitionId}`, {
+            method: 'PUT',
+            body: formDataToSubmit,
+          });
+          
+          // Race them - whichever resolves/rejects first wins
+          response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+          
+          // If we get here, the fetch completed before the timeout
+          if (!response.ok) {
+            let errorData;
+            try {
+              errorData = await response.json();
+            } catch (jsonErr) {
+              errorData = { message: await response.text() };
+            }
+            console.error('Backend error:', errorData);
+            throw new Error(errorData.message || 'Failed to update competition');
+          }
+        } catch (err: any) {
+          lastError = err;
+          response = null;
+          retryCount++;
+          
+          // If it's not the last retry, continue the loop
+          if (retryCount < MAX_RETRIES) {
+            continue;
+          }
+          
+          // If we're out of retries, throw the last error
+          throw err;
         }
-        console.error('Backend error:', errorData);
-        throw new Error(errorData.message || 'Failed to update competition');
+      }
+
+      if (!response) {
+        throw new Error('No response received after multiple attempts');
       }
 
       setSuccess(coverImage ? 'Competition updated successfully with new cover image!' : 'Competition updated successfully!');
