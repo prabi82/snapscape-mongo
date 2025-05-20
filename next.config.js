@@ -39,14 +39,7 @@ const nextConfig = {
       },
     ],
     domains: ['res.cloudinary.com'],
-  },
-  // Configure API routes to accept larger payloads
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-    responseLimit: false,
-  },
+  }
 };
 
 module.exports = nextConfig; 
