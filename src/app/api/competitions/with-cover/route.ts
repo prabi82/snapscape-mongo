@@ -78,10 +78,10 @@ export async function POST(request: NextRequest) {
           sizeInMB: (coverImageFile.size / (1024 * 1024)).toFixed(2) + ' MB'
         });
 
-        // Validate file size (10MB max)
-        if (coverImageFile.size > 10 * 1024 * 1024) {
+        // Validate file size (5MB max)
+        if (coverImageFile.size > 5 * 1024 * 1024) {
           return NextResponse.json(
-            { success: false, message: 'Image size must be less than 10MB' },
+            { success: false, message: 'Image size must be less than 5MB' },
             { status: 400 }
           );
         }

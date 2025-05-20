@@ -129,111 +129,23 @@ export default function CreateCompetition() {
       const originalSize = file.size / (1024 * 1024); // Size in MB
       console.log(`Original image size: ${originalSize.toFixed(2)} MB`);
       
-      // Validate file size (10MB max)
-      if (file.size > 10 * 1024 * 1024) {
-        setImageValidationError('Image size must be less than 10MB');
+      // STRICT SIZE LIMIT: 5MB for production uploads
+      if (file.size > 5 * 1024 * 1024) {
+        setImageValidationError(`Image size must be less than 5MB (current size: ${originalSize.toFixed(2)} MB)`);
         setCoverImage(null);
         setCoverImagePreview(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
       
-      // If file is larger than 5MB, compress it
-      if (file.size > 5 * 1024 * 1024) {
-        try {
-          // Create an image element from the file
-          const img = document.createElement('img');
-          const reader = new FileReader();
-          
-          // Wait for the image to load
-          await new Promise<void>((resolve) => {
-            reader.onload = (e) => {
-              img.src = e.target?.result as string;
-              img.onload = () => resolve();
-            };
-            reader.readAsDataURL(file);
-          });
-          
-          // Create a canvas and compress the image
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          // Calculate new dimensions while maintaining aspect ratio
-          let width = img.width;
-          let height = img.height;
-          
-          // Reduce dimensions if larger than 2000px on any side
-          const maxDimension = 2000;
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height / width) * maxDimension);
-              width = maxDimension;
-            } else {
-              width = Math.round((width / height) * maxDimension);
-              height = maxDimension;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Draw image on canvas
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          // Convert to blob with quality reduction
-          const compressedBlob = await new Promise<Blob>((resolve) => {
-            canvas.toBlob(
-              (blob) => {
-                // This should never happen, but TypeScript requires us to check
-                if (!blob) {
-                  resolve(new Blob([]));
-                  return;
-                }
-                resolve(blob);
-              },
-              file.type,
-              0.7 // Adjust quality (0.7 = 70% quality)
-            );
-          });
-          
-          // Create new File from compressed blob
-          const compressedFile = new File([compressedBlob], file.name, {
-            type: file.type,
-            lastModified: Date.now(),
-          });
-          
-          console.log(`Compressed image size: ${(compressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((compressedFile.size / file.size) * 100)}% of original)`);
-          
-          // Use the compressed file instead
-          setCoverImage(compressedFile);
-          
-          // Create a preview
-          const reader2 = new FileReader();
-          reader2.onloadend = () => {
-            setCoverImagePreview(reader2.result as string);
-          };
-          reader2.readAsDataURL(compressedFile);
-          
-        } catch (error) {
-          console.error('Error compressing image:', error);
-          // Fall back to using the original file
-          setCoverImage(file);
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setCoverImagePreview(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
-      } else {
-        // For smaller files, just use them as is
-        setCoverImage(file);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setCoverImagePreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-      
+      // Set file for potential upload and preview for cropper
+      setCoverImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
     } else {
       setCoverImage(null);
       setCoverImagePreview(null);

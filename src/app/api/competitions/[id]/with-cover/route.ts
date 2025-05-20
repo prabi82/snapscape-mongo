@@ -87,6 +87,14 @@ export async function PUT(
           name: coverImageFile.name
         });
         
+        // Validate file size (5MB max)
+        if (coverImageFile.size > 5 * 1024 * 1024) {
+          return NextResponse.json(
+            { success: false, message: 'Image size must be less than 5MB' },
+            { status: 400 }
+          );
+        }
+        
         const arrayBuffer = await coverImageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         
