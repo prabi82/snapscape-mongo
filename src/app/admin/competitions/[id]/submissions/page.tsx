@@ -33,6 +33,80 @@ interface Submission {
   createdAt: string;
 }
 
+// Confirmation Dialog Component
+function DeleteConfirmationDialog({ isOpen, onClose, onConfirm, submissionTitle }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onConfirm: () => void;
+  submissionTitle: string;
+}) {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl">
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Deletion</h3>
+        <p className="text-gray-700 mb-4">
+          Are you sure you want to delete the submission "{submissionTitle}"? This will permanently remove the image and allow the user to submit a new one.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Status Update Dialog Component
+function StatusConfirmationDialog({ isOpen, onClose, onConfirm, status }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onConfirm: () => void;
+  status: 'approved' | 'rejected' | null;
+}) {
+  if (!isOpen || !status) return null;
+  
+  const isApprove = status === 'approved';
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl">
+        <h3 className="text-lg font-bold text-gray-900 mb-2">
+          Confirm {isApprove ? 'Approval' : 'Rejection'}
+        </h3>
+        <p className="text-gray-700 mb-4">
+          Are you sure you want to {isApprove ? 'approve' : 'reject'} this submission?
+        </p>
+        <div className="flex justify-end gap-3">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={onConfirm}
+            className={`px-4 py-2 text-white rounded transition-colors ${isApprove ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+          >
+            {isApprove ? 'Approve' : 'Reject'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CompetitionSubmissions() {
   const { data: session } = useSession();
   const params = useParams();
@@ -49,6 +123,14 @@ export default function CompetitionSubmissions() {
   const [totalSubmissions, setTotalSubmissions] = useState(0);
   const submissionsPerPage = 12;
   const [statusCounts, setStatusCounts] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+  
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [submissionToDelete, setSubmissionToDelete] = useState<{id: string, userId: string, title: string} | null>(null);
+  
+  // Additional state for status update dialog
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusUpdate, setStatusUpdate] = useState<{id: string, status: 'approved' | 'rejected'} | null>(null);
   
   // Fetch competition details
   useEffect(() => {
@@ -141,19 +223,23 @@ export default function CompetitionSubmissions() {
     if (competitionId) fetchStatusCounts();
   }, [competitionId]);
   
+  // Open status update dialog
+  const openStatusDialog = (id: string, status: 'approved' | 'rejected') => {
+    setStatusUpdate({ id, status });
+    setStatusDialogOpen(true);
+  };
+  
   // Handle status update
-  const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
-    if (!confirm(`Are you sure you want to ${status} this submission?`)) {
-      return;
-    }
+  const handleUpdateStatus = async () => {
+    if (!statusUpdate) return;
     
     try {
-      const response = await fetch(`/api/submissions/${id}`, {
+      const response = await fetch(`/api/submissions/${statusUpdate.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: statusUpdate.status }),
       });
       
       if (!response.ok) {
@@ -162,28 +248,37 @@ export default function CompetitionSubmissions() {
       
       // Update the submission in the list
       setSubmissions(submissions.map(sub => 
-        sub._id === id ? { ...sub, status } : sub
+        sub._id === statusUpdate.id ? { ...sub, status: statusUpdate.status } : sub
       ));
       
       // Also check in photo submissions
       setPhotoSubmissions(photoSubmissions.map(sub => 
-        sub._id === id ? { ...sub, status } : sub
+        sub._id === statusUpdate.id ? { ...sub, status: statusUpdate.status } : sub
       ));
+      
+      // Close the dialog
+      setStatusDialogOpen(false);
+      setStatusUpdate(null);
       
     } catch (err: any) {
       console.error('Error updating submission status:', err);
       alert(err.message || 'Failed to update submission status');
+      setStatusDialogOpen(false);
     }
   };
   
+  // Open delete confirmation dialog
+  const openDeleteDialog = (id: string, userId: string, title: string) => {
+    setSubmissionToDelete({ id, userId, title });
+    setDeleteDialogOpen(true);
+  };
+  
   // Handle submission deletion
-  const handleDeleteSubmission = async (id: string, userId: string) => {
-    if (!confirm('Are you sure you want to delete this submission? This will permanently remove the image and allow the user to submit a new one.')) {
-      return;
-    }
+  const handleDeleteSubmission = async () => {
+    if (!submissionToDelete) return;
     
     try {
-      const response = await fetch(`/api/admin/submissions/${id}`, {
+      const response = await fetch(`/api/admin/submissions/${submissionToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -195,8 +290,12 @@ export default function CompetitionSubmissions() {
       }
       
       // Remove the submission from both lists
-      setSubmissions(submissions.filter(sub => sub._id !== id));
-      setPhotoSubmissions(photoSubmissions.filter(sub => sub._id !== id));
+      setSubmissions(submissions.filter(sub => sub._id !== submissionToDelete.id));
+      setPhotoSubmissions(photoSubmissions.filter(sub => sub._id !== submissionToDelete.id));
+      
+      // Close the dialog
+      setDeleteDialogOpen(false);
+      setSubmissionToDelete(null);
       
       // Reload the page to refresh counts
       router.refresh();
@@ -205,6 +304,7 @@ export default function CompetitionSubmissions() {
     } catch (err: any) {
       console.error('Error deleting submission:', err);
       alert(err.message || 'Failed to delete submission');
+      setDeleteDialogOpen(false);
     }
   };
   
@@ -271,6 +371,22 @@ export default function CompetitionSubmissions() {
   
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Delete confirmation dialog */}
+      <DeleteConfirmationDialog 
+        isOpen={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={handleDeleteSubmission}
+        submissionTitle={submissionToDelete?.title || ''}
+      />
+      
+      {/* Status update dialog */}
+      <StatusConfirmationDialog 
+        isOpen={statusDialogOpen}
+        onClose={() => setStatusDialogOpen(false)}
+        onConfirm={handleUpdateStatus}
+        status={statusUpdate?.status || null}
+      />
+      
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Competition Submissions</h1>
@@ -390,71 +506,77 @@ export default function CompetitionSubmissions() {
                       href={submission.imageUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center w-10 h-10 border border-gray-300 rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                      className="inline-flex items-center justify-center w-24 h-10 border border-gray-300 rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
                       title="View Full Size"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                       </svg>
+                      <span>View</span>
                     </a>
                     
                     {submission.status === 'pending' && (
                       <>
                         <button
-                          onClick={() => handleUpdateStatus(submission._id, 'approved')}
-                          className="inline-flex items-center justify-center w-10 h-10 border border-transparent shadow-sm rounded-md text-white bg-green-600 hover:bg-green-700"
+                          onClick={() => openStatusDialog(submission._id, 'approved')}
+                          className="inline-flex items-center justify-center w-24 h-10 border border-transparent shadow-sm rounded-md text-white bg-green-600 hover:bg-green-700"
                           title="Approve"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                           </svg>
+                          <span>Approve</span>
                         </button>
                         <button
-                          onClick={() => handleUpdateStatus(submission._id, 'rejected')}
-                          className="inline-flex items-center justify-center w-10 h-10 border border-transparent shadow-sm rounded-md text-white bg-red-600 hover:bg-red-700"
+                          onClick={() => openStatusDialog(submission._id, 'rejected')}
+                          className="inline-flex items-center justify-center w-24 h-10 border border-transparent shadow-sm rounded-md text-white bg-red-600 hover:bg-red-700"
                           title="Reject"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                           </svg>
+                          <span>Reject</span>
                         </button>
                       </>
                     )}
                     
                     {submission.status === 'approved' && (
                       <button
-                        onClick={() => handleUpdateStatus(submission._id, 'rejected')}
-                        className="inline-flex items-center justify-center w-10 h-10 border border-transparent shadow-sm rounded-md text-white bg-red-600 hover:bg-red-700"
+                        onClick={() => openStatusDialog(submission._id, 'rejected')}
+                        className="inline-flex items-center justify-center w-24 h-10 border border-transparent shadow-sm rounded-md text-white bg-red-600 hover:bg-red-700"
                         title="Reject"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
+                        <span>Reject</span>
                       </button>
                     )}
                     
                     {submission.status === 'rejected' && (
                       <button
-                        onClick={() => handleUpdateStatus(submission._id, 'approved')}
-                        className="inline-flex items-center justify-center w-10 h-10 border border-transparent shadow-sm rounded-md text-white bg-green-600 hover:bg-green-700"
+                        onClick={() => openStatusDialog(submission._id, 'approved')}
+                        className="inline-flex items-center justify-center w-24 h-10 border border-transparent shadow-sm rounded-md text-white bg-green-600 hover:bg-green-700"
                         title="Approve"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                         </svg>
+                        <span>Approve</span>
                       </button>
                     )}
                     
                     {/* Delete button - always visible for admin */}
                     <button
-                      onClick={() => handleDeleteSubmission(submission._id, submission.user?._id)}
-                      className="inline-flex items-center justify-center w-10 h-10 border border-transparent shadow-sm rounded-md text-white bg-gray-800 hover:bg-gray-900"
+                      onClick={() => openDeleteDialog(submission._id, submission.user?._id, submission.title)}
+                      className="inline-flex items-center justify-center w-24 h-10 border border-transparent shadow-sm rounded-md text-white bg-gray-800 hover:bg-gray-900"
                       title="Delete"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                       </svg>
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>
