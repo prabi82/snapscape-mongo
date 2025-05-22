@@ -176,6 +176,38 @@ export default function CompetitionSubmissions() {
     }
   };
   
+  // Handle submission deletion
+  const handleDeleteSubmission = async (id: string, userId: string) => {
+    if (!confirm('Are you sure you want to delete this submission? This will permanently remove the image and allow the user to submit a new one.')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/admin/submissions/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete submission');
+      }
+      
+      // Remove the submission from both lists
+      setSubmissions(submissions.filter(sub => sub._id !== id));
+      setPhotoSubmissions(photoSubmissions.filter(sub => sub._id !== id));
+      
+      // Reload the page to refresh counts
+      router.refresh();
+      
+      alert('Submission deleted successfully. The user can now submit a new photo.');
+    } catch (err: any) {
+      console.error('Error deleting submission:', err);
+      alert(err.message || 'Failed to delete submission');
+    }
+  };
+  
   // Format date for display
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'MMM d, yyyy h:mm a');
@@ -397,6 +429,14 @@ export default function CompetitionSubmissions() {
                         Approve
                       </button>
                     )}
+                    
+                    {/* Delete button - always visible for admin */}
+                    <button
+                      onClick={() => handleDeleteSubmission(submission._id, submission.user?._id)}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               </div>
