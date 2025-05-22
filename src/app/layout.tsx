@@ -9,7 +9,13 @@ export const metadata: Metadata = {
   title: "SnapScape: Share, compete, and discover amazing photography.",
   description: "A photography competition platform where you can share your best shots, compete with fellow photographers, and discover amazing photography.",
   icons: {
-    icon: '/logo.png',
+    icon: [
+      { url: '/logo.png' },
+      { url: '/logo.png', sizes: '16x16' },
+      { url: '/logo.png', sizes: '32x32' },
+      { url: '/logo.png', sizes: '48x48' }
+    ],
+    shortcut: '/logo.png',
     apple: '/logo.png',
   },
 };
@@ -21,6 +27,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/logo.png" />
+      </head>
       <body className={inter.className} style={{ isolation: "isolate" }}>
         <AuthContext>
           {children}
