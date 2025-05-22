@@ -6,8 +6,12 @@ import AuthContext from "./context/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "SnapScape MongoDB",
-  description: "A simple application with user and admin authentication",
+  title: "SnapScape: Share, compete, and discover amazing photography.",
+  description: "A photography competition platform where you can share your best shots, compete with fellow photographers, and discover amazing photography.",
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
