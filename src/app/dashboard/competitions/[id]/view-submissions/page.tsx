@@ -758,32 +758,35 @@ export default function ViewSubmissions() {
       
       {/* Modal for enlarged image */}
       {modalOpen && selectedSubmission && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={closeModal}>
-          <div className="relative w-full h-full flex flex-col md:flex-row items-center justify-center" onClick={e => e.stopPropagation()}>
-            <button className="absolute top-4 right-8 z-10 bg-white/80 hover:bg-white text-[#1a4d5c] rounded-full p-2 shadow" onClick={closeModal} aria-label="Close">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 landscape-modal-container" onClick={closeModal}>
+          <div className="relative w-full h-full flex flex-col md:flex-row items-center justify-center landscape-modal-inner" onClick={e => e.stopPropagation()}>
+            <button className="absolute top-4 right-8 z-10 bg-white/80 hover:bg-white text-[#1a4d5c] rounded-full p-2 shadow landscape-close-btn" onClick={closeModal} aria-label="Close">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
             
             {/* Image on the left */}
-            <div className="flex-1 h-full relative modal-image-area" key={selectedSubmission._id}>
+            <div className="flex-1 h-full relative modal-image-area landscape-image-container" key={selectedSubmission._id}>
               <Image
                 key={selectedSubmission._id}
                 src={selectedSubmission.imageUrl || selectedSubmission.thumbnailUrl}
                 alt={selectedSubmission.title || 'Submission photo'}
                 fill
-                className="object-contain w-full h-full modal-image"
+                className="object-contain w-full h-full modal-image landscape-image"
               />
               
               {/* Left navigation arrow - inside image container */}
               <button 
-                className={`absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full ${
+                className={`absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full landscape-nav-btn landscape-prev-btn ${
                   submissions.findIndex(s => s._id === selectedSubmission._id) <= 0 
                     ? 'bg-gray-300/40 text-gray-500 cursor-not-allowed opacity-50' 
                     : 'bg-white/40 hover:bg-white/60 text-[#1a4d5c] shadow'
                 }`}
-                onClick={() => navigateImages('prev')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateImages('prev');
+                }}
                 disabled={submissions.findIndex(s => s._id === selectedSubmission._id) <= 0}
                 aria-label="Previous image"
               >
@@ -794,12 +797,15 @@ export default function ViewSubmissions() {
               
               {/* Right navigation arrow - inside image container at right edge */}
               <button 
-                className={`absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full ${
+                className={`absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full landscape-nav-btn landscape-next-btn ${
                   !hasMore && submissions.findIndex(s => s._id === selectedSubmission._id) >= submissions.length - 1
                     ? 'bg-gray-300/40 text-gray-500 cursor-not-allowed opacity-50' 
                     : 'bg-white/40 hover:bg-white/60 text-[#1a4d5c] shadow'
                 }`}
-                onClick={() => navigateImages('next')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateImages('next');
+                }}
                 disabled={!hasMore && submissions.findIndex(s => s._id === selectedSubmission._id) >= submissions.length - 1}
                 aria-label="Next image"
               >
@@ -809,7 +815,7 @@ export default function ViewSubmissions() {
               </button>
             </div>
             {/* Sidebar on the right */}
-            <div className="w-full md:w-64 h-full flex flex-col justify-center bg-black/70 p-6 md:rounded-none rounded-b-2xl md:rounded-r-2xl modal-sidebar">
+            <div className="w-full md:w-64 h-full flex flex-col justify-center bg-black/70 p-6 md:rounded-none rounded-b-2xl md:rounded-r-2xl modal-sidebar landscape-sidebar">
               <div className="font-bold text-2xl text-white mb-2 text-center md:text-left">{selectedSubmission.title}</div>
               {selectedSubmission.user && (
                 (!competition.hideOtherSubmissions || competition.status !== 'voting' || isAdmin || session?.user?.id === selectedSubmission.user._id) ? (
@@ -863,8 +869,9 @@ export default function ViewSubmissions() {
               )}
             </div>
           </div>
-          {/* Mobile portrait-specific styles */}
+          {/* Completely rewritten mobile and landscape styles with more specific selectors */}
           <style jsx global>{`
+            /* Portrait Mode Styles */
             @media (max-width: 767px) and (orientation: portrait) {
               .modal-image-area {
                 width: 100vw !important;
@@ -886,6 +893,115 @@ export default function ViewSubmissions() {
               .modal-sidebar {
                 max-height: 50vh;
                 overflow-y: auto;
+              }
+            }
+            
+            /* Landscape Mode Styles - Completely redesigned and more specific */
+            @media screen and (orientation: landscape) and (max-height: 500px) {
+              /* Main container */
+              .landscape-modal-container {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                overflow: hidden !important;
+                display: flex !important;
+                background-color: rgba(0, 0, 0, 0.85) !important;
+                z-index: 50 !important;
+              }
+              
+              /* Inner container */
+              .landscape-modal-inner {
+                display: flex !important;
+                flex-direction: row !important;
+                width: 100% !important;
+                height: 100% !important;
+                position: relative !important;
+              }
+              
+              /* Image container */
+              .landscape-image-container {
+                flex: 0 0 70% !important;
+                width: 70% !important;
+                height: 100vh !important;
+                position: relative !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                background: #000 !important;
+              }
+              
+              /* Actual image */
+              .landscape-image {
+                object-fit: contain !important;
+                width: 100% !important;
+                height: 100% !important;
+                max-height: 100vh !important;
+              }
+              
+              /* Sidebar */
+              .landscape-sidebar {
+                flex: 0 0 30% !important;
+                width: 30% !important;
+                height: 100vh !important;
+                overflow-y: auto !important;
+                padding: 1rem !important;
+                background-color: rgba(0, 0, 0, 0.8) !important;
+              }
+              
+              /* Navigation buttons */
+              .landscape-nav-btn {
+                position: absolute !important;
+                z-index: 20 !important;
+                background-color: rgba(255, 255, 255, 0.8) !important;
+                border-radius: 50% !important;
+                width: 40px !important;
+                height: 40px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 0.5rem !important;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
+              }
+              
+              .landscape-prev-btn {
+                left: 1rem !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+              }
+              
+              .landscape-next-btn {
+                right: 1rem !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+              }
+              
+              /* Close button */
+              .landscape-close-btn {
+                position: absolute !important;
+                top: 1rem !important;
+                right: 31% !important; /* Position it just before the sidebar */
+                z-index: 30 !important;
+                background-color: rgba(255, 255, 255, 0.8) !important;
+                border-radius: 50% !important;
+                padding: 0.5rem !important;
+              }
+              
+              /* Hide bottom navigation bar when modal is open in landscape mode */
+              body:has(.landscape-modal-container) nav,
+              body:has(.landscape-modal-container) [role="navigation"],
+              body:has(.landscape-modal-container) .fixed.bottom-0,
+              body:has(.landscape-modal-container) .fixed.bottom-0.inset-x-0,
+              body:has(.landscape-modal-container) .w-full.fixed.bottom-0,
+              body:has(.landscape-modal-container) .container.fixed.bottom-0,
+              body:has(.landscape-modal-container) .flex.justify-between.items-center.bg-white.border-t.w-full.fixed.bottom-0.inset-x-0 {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                z-index: -1 !important;
               }
             }
           `}</style>

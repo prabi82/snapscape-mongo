@@ -61,6 +61,7 @@ export const authOptions = {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          image: user.image,
           role: user.role,
           isVerified: user.isVerified,
           isActive: user.isActive
@@ -83,6 +84,7 @@ export const authOptions = {
             const newUser = await User.create({
               name: user.name,
               email: user.email,
+              image: user.image, // Include image from social profile
               // Set a default role for social login users
               role: 'user',
               // Social providers don't need email verification
@@ -102,6 +104,17 @@ export const authOptions = {
             user.id = existingUser._id.toString();
             user.role = existingUser.role;
             
+            // If user doesn't have an image but the social profile does, update it
+            if (!existingUser.image && user.image) {
+              await User.findByIdAndUpdate(existingUser._id, {
+                image: user.image
+              });
+              debugLog(`Updated existing user with social profile image: ${user.email}`);
+            } else {
+              // Ensure the session has the image from the database
+              user.image = existingUser.image || user.image;
+            }
+            
             debugLog(`Existing social user login: ${user.email} with role: ${user.role}`);
           }
         } catch (error) {
@@ -120,9 +133,15 @@ export const authOptions = {
         token.isVerified = user.isVerified;
         token.isActive = user.isActive;
         
+        // Make sure to include image if present
+        if (user.image) {
+          token.image = user.image;
+        }
+        
         debugLog(`JWT created for user: ${user.email}`, { 
           id: token.id, 
           role: token.role,
+          image: token.image,
           roleType: typeof token.role
         });
       } else if (token.role === 'admin') {
@@ -136,6 +155,12 @@ export const authOptions = {
           if (adminUser && adminUser.role === 'admin') {
             // Ensure role is correctly set in token
             token.role = 'admin';
+            
+            // Update image in token if it's changed in the database
+            if (adminUser.image) {
+              token.image = adminUser.image;
+            }
+            
             debugLog('Admin role confirmed');
           } else {
             // User is no longer admin
@@ -156,9 +181,15 @@ export const authOptions = {
         session.user.isVerified = token.isVerified as boolean;
         session.user.isActive = token.isActive as boolean;
         
+        // Make sure to include image from token to session
+        if (token.image) {
+          session.user.image = token.image as string;
+        }
+        
         debugLog('Session created', { 
           user: session.user.email, 
-          role: session.user.role 
+          role: session.user.role,
+          image: session.user.image
         });
       }
       return session;

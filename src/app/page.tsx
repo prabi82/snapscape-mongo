@@ -5,6 +5,7 @@ import { signIn, getProviders, signOut } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import ReCaptchaV3 from '@/components/ReCaptcha';
 
 // Component that uses useSearchParams
 function HomeWithSearchParams() {
@@ -22,6 +23,7 @@ function HomeWithSearchParams() {
   const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [resendMessage, setResendMessage] = useState('');
   const [sessionMessage, setSessionMessage] = useState('');
+  const [recaptchaToken, setRecaptchaToken] = useState('');
 
   useEffect(() => {
     // Fetch available providers
@@ -44,22 +46,54 @@ function HomeWithSearchParams() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
+    
+    // Validate reCAPTCHA
+    if (!recaptchaToken) {
+      setError('Unable to verify security challenge. Please try again.');
+      return;
+    }
+    
     try {
       setIsLoading(true);
       setError('');
+      
+      // First verify the reCAPTCHA on the server
+      const recaptchaResponse = await fetch('/api/verify-recaptcha', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          token: recaptchaToken,
+          action: 'login'
+        }),
+      });
+      
+      const recaptchaData = await recaptchaResponse.json();
+      
+      if (!recaptchaData.success) {
+        setError('Security verification failed. Please try again.');
+        return;
+      }
+      
+      // Proceed with sign in
       const result = await signIn('credentials', {
         redirect: false,
-        email,
+        email: email.toLowerCase(),
         password,
+        recaptchaToken,
       });
+      
       if (result?.error) {
         // If the error is about email verification, show the verification modal
         if (result.error.includes('verify your email')) {
-          setVerificationEmail(email);
+          setVerificationEmail(email.toLowerCase());
           setShowVerificationModal(true);
         } else {
           setError(result.error);
@@ -90,6 +124,10 @@ function HomeWithSearchParams() {
     }
   };
 
+  const handleRecaptchaVerify = (token: string) => {
+    setRecaptchaToken(token);
+  };
+
   const handleSocialLogin = (providerId: string) => {
     // Use state callback URL based on role - the actual check will happen in middleware
     signIn(providerId, { callbackUrl: '/dashboard' });
@@ -109,7 +147,7 @@ function HomeWithSearchParams() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: verificationEmail }),
+        body: JSON.stringify({ email: verificationEmail.toLowerCase() }),
       });
 
       const data = await response.json();
@@ -136,6 +174,13 @@ function HomeWithSearchParams() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-[#e6f0f3] to-[#1a4d5c]">
+      {/* Invisible reCAPTCHA v3 */}
+      <ReCaptchaV3
+        siteKey="6LegLkMrAAAAAOSRdKTQ33Oa6UT4EzOvqdhsSpM3" // Temporarily hardcoded for testing
+        action="login"
+        onVerify={handleRecaptchaVerify}
+      />
+      
       <div className="w-full max-w-md p-6 bg-white rounded-3xl shadow-2xl flex flex-col items-center border border-[#e0c36a]">
         <div className="flex flex-col items-center mb-8">
           <Image src="/logo.png" alt="SnapScape Logo" width={160} height={160} className="mb-3" />
@@ -166,7 +211,7 @@ function HomeWithSearchParams() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email/Phone"
-            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-base"
+            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-base"
           />
           <input
             id="password"
@@ -177,13 +222,15 @@ function HomeWithSearchParams() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-base"
+            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-base"
           />
+          
           <div className="flex justify-end w-full">
             <Link href="/auth/reset-password" className="text-sm text-[#e0c36a] hover:underline">
               Forgot password?
             </Link>
           </div>
+          
           <button
             type="submit"
             disabled={isLoading}

@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
+import Image from 'next/image';
 
 // Icons for navigation
 const HomeIcon = () => (
@@ -57,7 +58,7 @@ export default function DashboardLayout({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '/dashboard';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   
@@ -100,13 +101,13 @@ export default function DashboardLayout({
   ];
   
   // Add admin link if user is an admin
-  if (session?.user?.role === 'admin') {
+  if (session?.user && (session.user as any).role === 'admin') {
     navigation.push({ name: 'Admin', href: '/dashboard/admin', icon: AdminIcon });
   }
   
   const handleLogout = async () => {
     await signOut({ redirect: false });
-    router.push('/');
+    window.location.href = '/';
   };
   
   if (status === 'loading') {
@@ -184,10 +185,20 @@ export default function DashboardLayout({
             {session?.user && (
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-full bg-[#e0c36a]/20 flex items-center justify-center border-2 border-[#e0c36a]">
-                    <span className="text-[#1a4d5c] font-bold text-lg">
-                      {session.user.name?.charAt(0).toUpperCase() || '?'}
-                    </span>
+                  <div className="h-10 w-10 rounded-full overflow-hidden bg-[#e0c36a]/20 flex items-center justify-center border-2 border-[#e0c36a]">
+                    {session.user.image ? (
+                      <Image
+                        src={session.user.image}
+                        alt={session.user.name || 'User'}
+                        width={40}
+                        height={40}
+                        className="object-cover w-full h-full"
+                      />
+                    ) : (
+                      <span className="text-[#1a4d5c] font-bold text-lg">
+                        {session.user.name?.charAt(0).toUpperCase() || '?'}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="ml-3">
@@ -274,10 +285,20 @@ export default function DashboardLayout({
               <div className="p-4 border-t border-gray-200">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-indigo-200 flex items-center justify-center">
-                      <span className="text-indigo-600 font-medium">
-                        {session.user.name?.charAt(0).toUpperCase() || '?'}
-                      </span>
+                    <div className="h-8 w-8 rounded-full overflow-hidden bg-indigo-200 flex items-center justify-center">
+                      {session.user.image ? (
+                        <Image
+                          src={session.user.image}
+                          alt={session.user.name || 'User'}
+                          width={32}
+                          height={32}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <span className="text-indigo-600 font-medium">
+                          {session.user.name?.charAt(0).toUpperCase() || '?'}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="ml-3">

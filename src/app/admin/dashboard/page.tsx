@@ -14,6 +14,19 @@ interface User {
   createdAt: string;
 }
 
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+}
+
+interface ExtendedSession {
+  user: ExtendedUser;
+  expires: string;
+}
+
 interface DashboardStats {
   userCount: number;
   competitionCount: number;
@@ -40,6 +53,48 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const router = useRouter();
 
+  // Fetch dashboard stats
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch users count
+      const usersResponse = await fetch('/api/users');
+      if (!usersResponse.ok) throw new Error('Failed to fetch users');
+      const usersData = await usersResponse.json();
+      
+      // Fetch competitions count and active competitions
+      const competitionsResponse = await fetch('/api/competitions');
+      if (!competitionsResponse.ok) throw new Error('Failed to fetch competitions');
+      const competitionsData = await competitionsResponse.json();
+      
+      // For demo purposes, let's simulate some stats
+      // In a real app, you would make specific API calls for these statistics
+      const activeCompetitions = competitionsData.data.filter(
+        (comp: any) => comp.status === 'active' || comp.status === 'voting'
+      ).length;
+      
+      // Dummy data for submissions since we don't have that API yet
+      const submissionCount = 150;
+      const pendingSubmissions = 23;
+      
+      setStats({
+        userCount: usersData.users.length,
+        competitionCount: competitionsData.data.length,
+        activeCompetitions,
+        submissionCount,
+        pendingSubmissions,
+        recentUsers: usersData.users.slice(0, 5),
+        recentCompetitions: competitionsData.data.slice(0, 5)
+      });
+    } catch (err: any) {
+      console.error('Error fetching dashboard stats:', err);
+      setError(err.message || 'An error occurred while fetching dashboard statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Check if user is authenticated
     if (status === 'unauthenticated') {
@@ -48,7 +103,7 @@ export default function AdminDashboard() {
     }
 
     // Check if user is admin
-    if (status === 'authenticated' && session?.user?.role !== 'admin') {
+    if (status === 'authenticated' && (session?.user as ExtendedUser)?.role !== 'admin') {
       router.push('/dashboard');
       return;
     }
@@ -73,49 +128,7 @@ export default function AdminDashboard() {
       }
     };
 
-    // Fetch dashboard stats
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch users count
-        const usersResponse = await fetch('/api/users');
-        if (!usersResponse.ok) throw new Error('Failed to fetch users');
-        const usersData = await usersResponse.json();
-        
-        // Fetch competitions count and active competitions
-        const competitionsResponse = await fetch('/api/competitions');
-        if (!competitionsResponse.ok) throw new Error('Failed to fetch competitions');
-        const competitionsData = await competitionsResponse.json();
-        
-        // For demo purposes, let's simulate some stats
-        // In a real app, you would make specific API calls for these statistics
-        const activeCompetitions = competitionsData.data.filter(
-          (comp: any) => comp.status === 'active' || comp.status === 'voting'
-        ).length;
-        
-        // Dummy data for submissions since we don't have that API yet
-        const submissionCount = 150;
-        const pendingSubmissions = 23;
-        
-        setStats({
-          userCount: usersData.users.length,
-          competitionCount: competitionsData.data.length,
-          activeCompetitions,
-          submissionCount,
-          pendingSubmissions,
-          recentUsers: usersData.users.slice(0, 5),
-          recentCompetitions: competitionsData.data.slice(0, 5)
-        });
-      } catch (err: any) {
-        console.error('Error fetching dashboard stats:', err);
-        setError(err.message || 'An error occurred while fetching dashboard statistics');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (status === 'authenticated' && session?.user?.role === 'admin') {
+    if (status === 'authenticated' && (session?.user as ExtendedUser)?.role === 'admin') {
       fetchUsers();
       fetchStats();
     }
@@ -143,6 +156,12 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
           <div className="flex space-x-4">
+            <Link 
+              href="/admin/settings"
+              className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md text-sm"
+            >
+              Settings
+            </Link>
             <Link 
               href="/admin/create-admin"
               className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm"
@@ -491,6 +510,22 @@ export default function AdminDashboard() {
               <div className="ml-4">
                 <p className="text-base font-medium text-gray-900">Moderate Photos</p>
                 <p className="text-sm text-gray-500">Review pending submissions</p>
+              </div>
+            </Link>
+
+            <Link
+              href="/admin/settings"
+              className="flex items-center p-4 bg-white shadow rounded-lg hover:bg-gray-50"
+            >
+              <div className="flex-shrink-0 bg-green-500 rounded-md p-2">
+                <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-base font-medium text-gray-900">Database Maintenance</p>
+                <p className="text-sm text-gray-500">Clean up orphaned data and settings</p>
               </div>
             </Link>
 

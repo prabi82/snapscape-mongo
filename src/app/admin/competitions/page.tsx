@@ -66,6 +66,7 @@ export default function CompetitionsManagement() {
     }
 
     try {
+      console.log('Attempting to delete competition:', id);
       const response = await fetch(`/api/competitions/${id}`, {
         method: 'DELETE',
         headers: {
@@ -73,15 +74,29 @@ export default function CompetitionsManagement() {
         },
       });
 
+      // Parse the response first
+      let data;
+      try {
+        data = await response.json();
+        console.log('Server response:', data);
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+      
       if (!response.ok) {
-        throw new Error('Failed to delete competition');
+        const errorMessage = data?.message || 'Failed to delete competition';
+        const detailedError = data?.error ? `: ${data.error}` : '';
+        console.error('Delete error details:', data);
+        throw new Error(`${errorMessage}${detailedError}`);
       }
 
       // Remove competition from state
       setCompetitions(competitions.filter(comp => comp._id !== id));
+      alert('Competition deleted successfully');
     } catch (err: any) {
       console.error('Error deleting competition:', err);
-      alert(err.message || 'An error occurred while deleting the competition');
+      alert(`Error: ${err.message}`);
     }
   };
 

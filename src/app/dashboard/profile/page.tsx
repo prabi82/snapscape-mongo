@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import React from 'react';
+import { useSession } from 'next-auth/react';
 import { Session } from 'next-auth';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import DebugInfo from '@/components/DebugInfo';
+import React from 'react';
 import Head from 'next/head';
 import VotedPhotosModal from './VotedPhotosModal';
 
@@ -50,17 +51,58 @@ type MessageType = {
 
 export default function ProfilePage() {
   // Cast session to our extended type
-  const { data: session, status } = useSession() as { data: ExtendedSession | null, status: string };
+  const { data: session, status, update: updateSession } = useSession() as { data: ExtendedSession | null, status: string, update: any };
   const typedSession = session as ExtendedSession;
   const router = useRouter();
+  
+  // Add state for direct user data from database
+  const [dbUserData, setDbUserData] = useState<any>(null);
   
   // Log session data when it changes
   useEffect(() => {
     console.log('[ProfilePage] Session object updated:', session);
     if (session?.user) {
       console.log('[ProfilePage] session.user.image:', session.user.image);
+      
+      // Fetch latest user data from database when session is available
+      fetchLatestUserData();
     }
   }, [session]);
+
+  // New function to fetch the latest user data directly from database
+  const fetchLatestUserData = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      console.log('[ProfilePage] Fetching latest user data from database...');
+      const response = await fetch(`/api/users/profile`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch user data');
+      }
+      
+      const data = await response.json();
+      console.log('[ProfilePage] Latest user data from database:', data);
+      
+      if (data.user) {
+        setDbUserData(data.user);
+        
+        // If user data from DB has an image but session doesn't, update session
+        if (data.user.image && !session.user.image) {
+          console.log('[ProfilePage] Updating session with image from database:', data.user.image);
+          await updateSession({
+            ...session,
+            user: {
+              ...session.user,
+              image: data.user.image
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching latest user data:', error);
+    }
+  };
 
   // State for profile data
   const [name, setName] = useState<string>('');
@@ -829,32 +871,33 @@ export default function ProfilePage() {
     }
   };
 
-  // Update the sync achievements UI to include only the API Test button
+  // Render sync buttons for debugging
   const renderSyncButtons = () => {
     return (
-      <div className="flex items-center space-x-2">
-        {/* Manual Sync button as direct link */}
-        <a 
-          href={`/api/debug/manual-sync?userId=${getUserId()}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-3 rounded flex items-center"
-        >
-          <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
-          <span>API Test</span>
-        </a>
-        
-        {/* Debug API Test Button */}
-        <a 
-          href={`/api/debug/force-sync?userId=${getUserId()}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded"
-        >
-          Debug API
-        </a>
+      <div className="flex items-center space-x-2 mt-1 mb-4">
+        <DebugInfo>
+          <a 
+            href={`/api/debug/manual-sync?userId=${getUserId()}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-3 rounded flex items-center"
+          >
+            <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            <span>API Test</span>
+          </a>
+          
+          {/* Debug API Test Button */}
+          <a 
+            href={`/api/debug/force-sync?userId=${getUserId()}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded"
+          >
+            Debug API
+          </a>
+        </DebugInfo>
       </div>
     );
   };
@@ -876,22 +919,24 @@ export default function ProfilePage() {
           </div>
         </div>
         {/* Add toggle for stored vs. direct achievements (for debugging) */}
-        <div className="mt-2 flex items-center justify-end">
-          <label className="inline-flex items-center cursor-pointer">
-            <span className="mr-2 text-xs text-blue-700">
-              {useDirectResults ? "Using direct results" : "Using stored results"}
-            </span>
-            <div className="relative">
-              <input 
-                type="checkbox" 
-                checked={useDirectResults}
-                onChange={() => setUseDirectResults(!useDirectResults)}
-                className="sr-only peer" 
-              />
-              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-            </div>
-          </label>
-        </div>
+        <DebugInfo>
+          <div className="mt-2 flex items-center justify-end">
+            <label className="inline-flex items-center cursor-pointer">
+              <span className="mr-2 text-xs text-blue-700">
+                {useDirectResults ? "Using direct results" : "Using stored results"}
+              </span>
+              <div className="relative">
+                <input 
+                  type="checkbox" 
+                  checked={useDirectResults}
+                  onChange={() => setUseDirectResults(!useDirectResults)}
+                  className="sr-only peer" 
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </div>
+            </label>
+          </div>
+        </DebugInfo>
       </div>
     );
   };
@@ -1166,6 +1211,7 @@ export default function ProfilePage() {
                   <thead>
                     <tr className="bg-gray-100">
                       <th className="p-2 text-left">Submission</th>
+                      <th className="p-2 text-left">Competition</th>
                       <th className="p-2 text-center">Position</th>
                       <th className="p-2 text-right">Total Rating</th>
                       <th className="p-2 text-right">Multiplier</th>
@@ -1195,6 +1241,7 @@ export default function ProfilePage() {
                         return (
                           <tr key={index} className="border-b">
                             <td className="p-2">{detail.title || 'Untitled'}</td>
+                            <td className="p-2">{detail.competitionName || 'Unknown Competition'}</td>
                             <td className="p-2 text-center">{detail.position}</td>
                             <td className="p-2 text-right">{detail.totalRating.toFixed(1)}</td>
                             <td className="p-2 text-right">×{multiplier}</td>
@@ -1219,6 +1266,7 @@ export default function ProfilePage() {
                           return Array.from(uniqueOtherSubmissionsMap.values()).map((sub, index) => (
                             <tr key={`other-${index}`} className="border-b bg-green-50">
                               <td className="p-2">{sub.title || 'Untitled'}</td>
+                              <td className="p-2">{sub.competitionName || 'Unknown Competition'}</td>
                               <td className="p-2 text-center">4+</td>
                               <td className="p-2 text-right">{sub.totalRating.toFixed(1)}</td>
                               <td className="p-2 text-right">×1</td>
@@ -1243,6 +1291,7 @@ export default function ProfilePage() {
                           (click to view photos)
                         </span>
                       </td>
+                      <td className="p-2">-</td>
                       <td className="p-2 text-center">-</td>
                       <td className="p-2 text-right">{correctedVotingPoints}</td>
                       <td className="p-2 text-right">×1</td>
@@ -1251,7 +1300,7 @@ export default function ProfilePage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-100 font-bold">
-                      <td className="p-2" colSpan={4}>Total</td>
+                      <td className="p-2" colSpan={5}>Total</td>
                       <td className="p-2 text-right">{totalCalculatedPoints}</td>
                     </tr>
                   </tfoot>
@@ -1305,7 +1354,7 @@ export default function ProfilePage() {
             {/* Profile picture */}
             <div className="flex-shrink-0 w-28 h-28 rounded-full overflow-hidden border-2 border-[#e0c36a] bg-gray-100">
               <ImageWithFallback
-                src={typedSession?.user?.image || 'https://placehold.co/200x200?text=No+Image'}
+                src={(dbUserData?.image || typedSession?.user?.image) || 'https://placehold.co/200x200?text=No+Image'}
                 alt={typedSession?.user?.name || 'Profile photo'}
                 width={112}
                 height={112}
@@ -1320,8 +1369,6 @@ export default function ProfilePage() {
                   <Link href="/dashboard/edit-profile">
                     <button className="px-4 py-1 bg-[#e6f0f3] text-[#1a4d5c] font-semibold rounded-lg border border-[#e0c36a] hover:bg-[#d1e6ed] transition text-sm">Edit profile</button>
                   </Link>
-                  <button className="px-4 py-1 bg-[#e6f0f3] text-[#1a4d5c] font-semibold rounded-lg border border-[#e0c36a] hover:bg-[#d1e6ed] transition text-sm">View archive</button>
-                  <button className="p-2 bg-[#e6f0f3] rounded-full border border-[#e0c36a] hover:bg-[#d1e6ed] transition"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#1a4d5c" className="w-5 h-5"><circle cx="12" cy="12" r="10" stroke="#1a4d5c" strokeWidth="2" fill="none" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l2 2" /></svg></button>
                 </div>
               </div>
               {/* New dynamic stats section */}
@@ -1366,18 +1413,20 @@ export default function ProfilePage() {
             ) : achievements ? (
               <>
                 {/* Debug Information */}
-                <div className="bg-gray-100 p-3 rounded-md mb-4 text-xs whitespace-pre-wrap">
-                  <p><strong>Debug Info:</strong></p>
-                  <p>User ID: {getUserId()}</p>
-                  <p>Stats: First={getAchievementStats().firstPlace}, Second={getAchievementStats().secondPlace}, Third={getAchievementStats().thirdPlace}</p>
-                  <p>Raw Achievements Count: {achievements.achievements?.length || 0}</p>
-                  <details>
-                    <summary className="cursor-pointer text-blue-600">View Raw Achievement Data</summary>
-                    <pre className="mt-2 overflow-auto max-h-40 text-xs">
-                      {JSON.stringify(achievements, null, 2)}
-                    </pre>
-                  </details>
-                </div>
+                <DebugInfo>
+                  <div className="bg-gray-100 p-3 rounded-md mb-4 text-xs whitespace-pre-wrap">
+                    <p><strong>Debug Info:</strong></p>
+                    <p>User ID: {getUserId()}</p>
+                    <p>Stats: First={getAchievementStats().firstPlace}, Second={getAchievementStats().secondPlace}, Third={getAchievementStats().thirdPlace}</p>
+                    <p>Raw Achievements Count: {achievements.achievements?.length || 0}</p>
+                    <details>
+                      <summary className="cursor-pointer text-blue-600">View Raw Achievement Data</summary>
+                      <pre className="mt-2 overflow-auto max-h-40 text-xs">
+                        {JSON.stringify(achievements, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                </DebugInfo>
                 
                 {/* Achievement Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

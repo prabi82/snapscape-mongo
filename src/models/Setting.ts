@@ -2,6 +2,8 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface ISetting extends Document {
   allowNotificationDeletion: boolean;
+  debugModeEnabled: boolean;
+  debugModeUsers: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -11,6 +13,14 @@ const SettingSchema: Schema = new Schema(
     allowNotificationDeletion: {
       type: Boolean,
       default: true
+    },
+    debugModeEnabled: {
+      type: Boolean,
+      default: false
+    },
+    debugModeUsers: {
+      type: [String],
+      default: []
     }
   },
   {

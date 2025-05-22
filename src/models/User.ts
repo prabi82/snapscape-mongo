@@ -39,6 +39,8 @@ const userSchema = new mongoose.Schema({
   mobile: {
     type: String,
     trim: true,
+    unique: true,
+    sparse: true, // This allows null/undefined values and only enforces uniqueness for actual values
   },
   country: {
     type: String,

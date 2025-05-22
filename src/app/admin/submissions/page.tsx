@@ -43,6 +43,10 @@ export default function SubmissionsManagement() {
     searchParams.get('competition') || 'all'
   );
 
+  // State for confirmation modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ id: string; status: 'approved' | 'rejected' } | null>(null);
+
   // Fetch submissions and competitions
   useEffect(() => {
     const fetchData = async () => {
@@ -91,8 +95,18 @@ export default function SubmissionsManagement() {
     return true;
   });
 
+  // Handle open confirmation for approve/reject
+  const confirmUpdateStatus = (id: string, status: 'approved' | 'rejected') => {
+    setConfirmAction({ id, status });
+    setShowConfirmModal(true);
+  };
+
   // Handle approve/reject submission
-  const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
+  const handleUpdateStatus = async () => {
+    if (!confirmAction) return;
+    
+    const { id, status } = confirmAction;
+    
     try {
       const response = await fetch(`/api/photo-submissions/${id}`, {
         method: 'PATCH',
@@ -112,9 +126,17 @@ export default function SubmissionsManagement() {
           sub._id === id ? { ...sub, status } : sub
         )
       );
+      
+      // Close modal
+      setShowConfirmModal(false);
+      setConfirmAction(null);
     } catch (err: any) {
       console.error(`Error updating submission status:`, err);
       alert(err.message || `An error occurred while updating the submission status`);
+      
+      // Close modal even on error
+      setShowConfirmModal(false);
+      setConfirmAction(null);
     }
   };
 
@@ -266,7 +288,7 @@ export default function SubmissionsManagement() {
                   {submission.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => handleUpdateStatus(submission._id, 'approved')}
+                        onClick={() => confirmUpdateStatus(submission._id, 'approved')}
                         className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                       >
                         <svg
@@ -285,7 +307,7 @@ export default function SubmissionsManagement() {
                       </button>
                       
                       <button
-                        onClick={() => handleUpdateStatus(submission._id, 'rejected')}
+                        onClick={() => confirmUpdateStatus(submission._id, 'rejected')}
                         className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                       >
                         <svg
@@ -308,6 +330,41 @@ export default function SubmissionsManagement() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {confirmAction?.status === 'approved' ? 'Approve Submission' : 'Reject Submission'}
+            </h3>
+            <p className="mt-2 text-sm text-gray-500">
+              Are you sure you want to {confirmAction?.status} this submission?
+            </p>
+            <div className="mt-4 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setConfirmAction(null);
+                }}
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateStatus}
+                className={`px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white ${
+                  confirmAction?.status === 'approved'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

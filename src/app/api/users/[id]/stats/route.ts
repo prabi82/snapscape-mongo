@@ -6,6 +6,7 @@ import PhotoSubmission from '@/models/PhotoSubmission';
 import Rating from '@/models/Rating';
 import Badge from '@/models/Badge';
 import Result from '@/models/Result';
+import Competition from '@/models/Competition';
 import mongoose from 'mongoose';
 import { Session } from 'next-auth';
 
@@ -20,6 +21,7 @@ interface PointBreakdownDetail {
     id: string;
     title: string;
   };
+  competitionName: string;
 }
 
 // Define the structure for other submissions
@@ -32,6 +34,7 @@ interface OtherSubmissionDetail {
     id: string;
     title: string;
   } | null;
+  competitionName: string;
 }
 
 // Define the overall points breakdown structure
@@ -44,6 +47,26 @@ interface PointsBreakdown {
   details: PointBreakdownDetail[];
   otherSubmissions: OtherSubmissionDetail[];
 }
+
+// Create a map to cache competition names by ID to avoid repetitive lookups
+const competitionNamesMap = new Map<string, string>();
+
+// Function to get competition name from ID - caching results
+const getCompetitionName = async (competitionId: string): Promise<string> => {
+  if (competitionNamesMap.has(competitionId)) {
+    return competitionNamesMap.get(competitionId) || 'Unknown Competition';
+  }
+  
+  try {
+    const competition = await Competition.findById(competitionId).select('title');
+    const title = competition?.title || 'Unknown Competition';
+    competitionNamesMap.set(competitionId, title);
+    return title;
+  } catch (error) {
+    console.error(`Error fetching competition ${competitionId}:`, error);
+    return 'Unknown Competition';
+  }
+};
 
 export async function GET(
   req: NextRequest,
@@ -285,7 +308,8 @@ export async function GET(
           competition: {
             id: submission.competition.toString(),
             title: 'Competition' // We could fetch the competition title here if needed
-          }
+          },
+          competitionName: await getCompetitionName(submission.competition.toString())
         });
       }
     }
@@ -352,7 +376,8 @@ export async function GET(
           competition: {
             id: competitionId,
             title: 'Competition' 
-          }
+          },
+          competitionName: await getCompetitionName(competitionId)
         });
       } else {
         // Store details about this submission in the otherSubmissions array
@@ -364,7 +389,8 @@ export async function GET(
           competition: submission.competition ? {
             id: submission.competition.toString(),
             title: 'Competition'
-          } : null
+          } : null,
+          competitionName: submission.competition ? await getCompetitionName(submission.competition.toString()) : 'Unknown Competition'
         });
       }
     }

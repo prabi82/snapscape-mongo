@@ -338,19 +338,159 @@ export default function CompetitionDetail() {
     return format(new Date(dateString), 'MMMM d, yyyy');
   };
 
-  // Handle file input change with file size check
-  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file input change with file size check and compression
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileSizeError('');
     const file = e.target.files?.[0] || null;
+    
     if (file) {
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        setFileSizeError('The selected image is above the 10MB limit. Please choose a smaller file.');
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setFileSizeError('Please upload a valid image file (JPG, PNG or WebP)');
         setPhotoFile(null);
         return;
       }
+      
+      // Check original file size
+      const originalSize = file.size / (1024 * 1024); // Size in MB
+      console.log(`Original image size: ${originalSize.toFixed(2)} MB`);
+      
+      // ORIGINAL SIZE LIMIT: 10MB for initial selection
+      if (file.size > 10 * 1024 * 1024) {
+        setFileSizeError(`Image size must be less than 10MB (current size: ${originalSize.toFixed(2)} MB)`);
+        setPhotoFile(null);
+        return;
+      }
+      
+      // Automatically compress if file is over 5MB (Vercel's limit)
+      if (file.size > 5 * 1024 * 1024) {
+        try {
+          // Create an image element from the file
+          const img = document.createElement('img');
+          const reader = new FileReader();
+          
+          // Wait for the image to load
+          await new Promise<void>((resolve) => {
+            reader.onload = (e) => {
+              img.src = e.target?.result as string;
+              img.onload = () => resolve();
+            };
+            reader.readAsDataURL(file);
+          });
+          
+          // Create a canvas and compress the image
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions while maintaining aspect ratio
+          let width = img.width;
+          let height = img.height;
+          
+          // Reduce dimensions if larger than 2000px on any side
+          const maxDimension = 2000;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height / width) * maxDimension);
+              width = maxDimension;
+            } else {
+              width = Math.round((width / height) * maxDimension);
+              height = maxDimension;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw image on canvas
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Calculate compression quality based on file size
+          // Larger files need more compression
+          let quality = 0.7;
+          if (file.size > 8 * 1024 * 1024) {
+            quality = 0.5; // More aggressive compression for very large files
+          }
+          
+          // Convert to blob with quality reduction
+          const compressedBlob = await new Promise<Blob>((resolve) => {
+            canvas.toBlob(
+              (blob) => {
+                // This should never happen, but TypeScript requires us to check
+                if (!blob) {
+                  resolve(new Blob([]));
+                  return;
+                }
+                resolve(blob);
+              },
+              file.type,
+              quality
+            );
+          });
+          
+          // Create new File from compressed blob
+          const compressedFile = new File([compressedBlob], file.name, {
+            type: file.type,
+            lastModified: Date.now(),
+          });
+          
+          console.log(`Compressed image size: ${(compressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((compressedFile.size / file.size) * 100)}% of original)`);
+          
+          // If compression wasn't enough, try one more time with more aggressive settings
+          if (compressedFile.size > 5 * 1024 * 1024) {
+            const canvas2 = document.createElement('canvas');
+            const ctx2 = canvas2.getContext('2d');
+            
+            // Reduce dimensions further if still too large
+            width = Math.round(width * 0.8);
+            height = Math.round(height * 0.8);
+            
+            canvas2.width = width;
+            canvas2.height = height;
+            
+            ctx2?.drawImage(img, 0, 0, width, height);
+            
+            const recompressedBlob = await new Promise<Blob>((resolve) => {
+              canvas2.toBlob(
+                (blob) => {
+                  if (!blob) {
+                    resolve(new Blob([]));
+                    return;
+                  }
+                  resolve(blob);
+                },
+                file.type,
+                0.4 // Much more aggressive compression
+              );
+            });
+            
+            const recompressedFile = new File([recompressedBlob], file.name, {
+              type: file.type,
+              lastModified: Date.now(),
+            });
+            
+            console.log(`Re-compressed image size: ${(recompressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((recompressedFile.size / file.size) * 100)}% of original)`);
+            
+            // Use the recompressed file
+            setPhotoFile(recompressedFile);
+          } else {
+            // Use the compressed file
+            setPhotoFile(compressedFile);
+          }
+        } catch (error) {
+          console.error('Error compressing image:', error);
+          // If compression fails, inform the user they need a smaller image
+          setFileSizeError(`Unable to compress image. Please use an image smaller than 5MB.`);
+          setPhotoFile(null);
+          return;
+        }
+      } else {
+        // For smaller files, just use them as is
+        setPhotoFile(file);
+      }
+    } else {
+      setPhotoFile(null);
     }
-    setPhotoFile(file);
   };
 
   if (loading) {
@@ -400,7 +540,7 @@ export default function CompetitionDetail() {
           {/* Left: Image and main info */}
           <div className="flex flex-col items-start gap-3">
             {competition.coverImage && (
-              <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden border border-[#e0c36a] bg-[#e6f0f3] relative mb-4">
+              <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden border border-[#e0c36a] bg-[#e6f0f3] relative">
                 <Image
                   src={competition.coverImage}
                   alt={competition.title}
@@ -410,7 +550,139 @@ export default function CompetitionDetail() {
                 />
               </div>
             )}
-            {/* View All Submissions button below the image */}
+            
+            {/* Submit photo section for active competitions - MOVED HERE */}
+            {competition.status === 'active' && (
+              <div className="w-full px-4 py-4 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg">
+                <div className="text-center">
+                  {/* Show submission count */}
+                  <div className="mb-2">
+                    <p className="text-[#1a4d5c] font-semibold">
+                      Your submissions: <span className="font-bold">{competition.userSubmissionsCount}</span> of <span className="font-bold">{competition.submissionLimit}</span>
+                    </p>
+                    {competition.hasSubmitted && !competition.canSubmitMore && (
+                      <p className="text-red-600 font-semibold mt-1 text-sm">
+                        You've reached the maximum number of submissions for this competition.
+                      </p>
+                    )}
+                    {competition.hasSubmitted && competition.canSubmitMore && (
+                      <p className="text-green-600 font-semibold mt-1 text-sm">
+                        You can submit {competition.submissionLimit - competition.userSubmissionsCount} more photo{competition.submissionLimit - competition.userSubmissionsCount !== 1 ? 's' : ''}.
+                      </p>
+                    )}
+                  </div>
+
+                  {showSubmitForm ? (
+                    <div>
+                      <h3 className="text-lg font-bold text-[#1a4d5c] mb-2">Submit Your Photo</h3>
+                      
+                      {submitError && (
+                        <div className="bg-red-50 border-l-4 border-red-400 p-3 mb-3 text-left rounded-md">
+                          <p className="text-red-700 font-semibold">{submitError}</p>
+                        </div>
+                      )}
+                      
+                      {fileSizeError && (
+                        <div className="bg-red-50 border-l-4 border-red-400 p-2 mt-2 rounded-md">
+                          <p className="text-red-700 text-sm font-semibold">{fileSizeError}</p>
+                        </div>
+                      )}
+                      
+                      <form onSubmit={handleSubmitPhoto} className="max-w-md mx-auto text-left">
+                        <div className="mb-3">
+                          <label htmlFor="photoTitle" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
+                            Photo Title <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            id="photoTitle"
+                            value={photoTitle}
+                            onChange={(e) => setPhotoTitle(e.target.value)}
+                            className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
+                            required
+                          />
+                        </div>
+                        
+                        <div className="mb-3">
+                          <label htmlFor="photoDescription" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
+                            Description <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            id="photoDescription"
+                            value={photoDescription}
+                            onChange={(e) => setPhotoDescription(e.target.value)}
+                            rows={3}
+                            className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
+                            required
+                          />
+                        </div>
+                        
+                        <div className="mb-3">
+                          <label htmlFor="photoFile" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
+                            Photo <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="file"
+                            id="photoFile"
+                            accept="image/*"
+                            onChange={handlePhotoFileChange}
+                            className="mt-1 block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border-[#e0c36a]"
+                            required
+                          />
+                          <p className="mt-1 text-xs text-gray-500">
+                            JPG, PNG or GIF up to 10MB
+                          </p>
+                        </div>
+                        
+                        <div className="flex justify-end space-x-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowSubmitForm(false)}
+                            className="inline-flex items-center px-4 py-2 border-2 border-[#e0c36a] shadow-sm text-sm font-semibold rounded-lg text-[#1a4d5c] bg-[#fffbe6] hover:bg-[#e6f0f3]"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50"
+                          >
+                            {isSubmitting ? 'Submitting...' : 'Submit Photo'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : (
+                    <div>
+                      {submitSuccess && (
+                        <div className="bg-green-50 border-l-4 border-green-400 p-3 mb-3 rounded-md">
+                          <p className="text-green-700 font-semibold">{submitSuccess}</p>
+                        </div>
+                      )}
+                      
+                      {competition.canSubmitMore ? (
+                        <button
+                          onClick={() => setShowSubmitForm(true)}
+                          className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c]"
+                        >
+                          {competition.hasSubmitted ? 'Submit Another Photo' : 'Submit Your Photo'}
+                        </button>
+                      ) : (
+                        <p className="text-gray-500">
+                          You've reached the maximum number of submissions for this competition.
+                        </p>
+                      )}
+                      
+                      <p className="mt-2 text-sm text-gray-500">
+                        Submission period ends on {formatDate(competition.endDate)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* View All Submissions button */}
             {competition.submissionCount > 0 && (
               <Link 
                 href={`/dashboard/competitions/${competition._id}/view-submissions`}
@@ -472,137 +744,6 @@ export default function CompetitionDetail() {
         </div>
       </div>
       
-      {/* Submit photo section for active competitions - MOVED TO TOP */}
-      {competition.status === 'active' && (
-        <div className="px-6 py-6 bg-[#fffbe6] border-t-2 border-[#e0c36a]">
-          <div className="text-center">
-            {/* Show submission count */}
-            <div className="mb-3">
-              <p className="text-[#1a4d5c] font-semibold">
-                Your submissions: <span className="font-bold">{competition.userSubmissionsCount}</span> of <span className="font-bold">{competition.submissionLimit}</span>
-              </p>
-              {competition.hasSubmitted && !competition.canSubmitMore && (
-                <p className="text-red-600 font-semibold mt-1">
-                  You've reached the maximum number of submissions for this competition.
-                </p>
-              )}
-              {competition.hasSubmitted && competition.canSubmitMore && (
-                <p className="text-green-600 font-semibold mt-1">
-                  You can submit {competition.submissionLimit - competition.userSubmissionsCount} more photo{competition.submissionLimit - competition.userSubmissionsCount !== 1 ? 's' : ''}.
-                </p>
-              )}
-            </div>
-
-            {showSubmitForm ? (
-              <div>
-                <h3 className="text-xl font-bold text-[#1a4d5c] mb-3">Submit Your Photo</h3>
-                
-                {submitError && (
-                  <div className="bg-red-50 border-l-4 border-red-400 p-3 mb-3 text-left rounded-md">
-                    <p className="text-red-700 font-semibold">{submitError}</p>
-                  </div>
-                )}
-                
-                {fileSizeError && (
-                  <div className="bg-red-50 border-l-4 border-red-400 p-2 mt-2 rounded-md">
-                    <p className="text-red-700 text-sm font-semibold">{fileSizeError}</p>
-                  </div>
-                )}
-                
-                <form onSubmit={handleSubmitPhoto} className="max-w-md mx-auto text-left">
-                  <div className="mb-3">
-                    <label htmlFor="photoTitle" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
-                      Photo Title <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="photoTitle"
-                      value={photoTitle}
-                      onChange={(e) => setPhotoTitle(e.target.value)}
-                      className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="photoDescription" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
-                      Description <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      id="photoDescription"
-                      value={photoDescription}
-                      onChange={(e) => setPhotoDescription(e.target.value)}
-                      rows={3}
-                      className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="photoFile" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
-                      Photo <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="file"
-                      id="photoFile"
-                      accept="image/*"
-                      onChange={handlePhotoFileChange}
-                      className="mt-1 block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border-[#e0c36a]"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      JPG, PNG or GIF up to 10MB
-                    </p>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowSubmitForm(false)}
-                      className="inline-flex items-center px-4 py-2 border-2 border-[#e0c36a] shadow-sm text-sm font-semibold rounded-lg text-[#1a4d5c] bg-[#fffbe6] hover:bg-[#e6f0f3]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50"
-                    >
-                      {isSubmitting ? 'Submitting...' : 'Submit Photo'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            ) : (
-              <div>
-                {submitSuccess && (
-                  <div className="bg-green-50 border-l-4 border-green-400 p-3 mb-3 rounded-md">
-                    <p className="text-green-700 font-semibold">{submitSuccess}</p>
-                  </div>
-                )}
-                
-                {competition.canSubmitMore ? (
-                  <button
-                    onClick={() => setShowSubmitForm(true)}
-                    className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c]"
-                  >
-                    {competition.hasSubmitted ? 'Submit Another Photo' : 'Submit Your Photo'}
-                  </button>
-                ) : (
-                  <p className="text-gray-500">
-                    You've reached the maximum number of submissions for this competition.
-                  </p>
-                )}
-                
-                <p className="mt-2 text-sm text-gray-500">
-                  Submission period ends on {formatDate(competition.endDate)}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Important Dates - MOVED UP */}
       <div className="px-6 py-6 border-t-2 border-[#e0c36a] bg-[#e6f0f3] rounded-b-2xl">
         <h2 className="text-lg font-bold text-[#1a4d5c] mb-2">Important Dates</h2>

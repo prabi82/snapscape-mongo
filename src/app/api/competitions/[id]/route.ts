@@ -5,9 +5,26 @@ import connectDB from '@/lib/mongodb';
 import Competition from '@/models/Competition';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Photo from '@/models/Photo';
+import Result from '@/models/Result';
+import Rating from '@/models/Rating';
 import formidable, { File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import { PassThrough } from 'stream';
+import mongoose from 'mongoose';
+import { Session } from 'next-auth';
+
+// Add a custom interface for the session user with role
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+}
+
+interface ExtendedSession extends Session {
+  user?: ExtendedUser;
+}
 
 export const config = {
   api: {
@@ -24,7 +41,7 @@ export async function GET(
     await connectDB();
 
     // Get the user session for user-specific data
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const userId = session?.user?.id;
 
     const { id } = params;
@@ -293,62 +310,127 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  console.log('DELETE request received for competition:', params.id);
+  
   try {
-    await connectDB();
-    const session = await getServerSession();
     const { id } = params;
     
-    // Check authentication and admin role
-    if (!session || !session.user) {
+    if (!id) {
+      console.log('Missing ID parameter');
       return NextResponse.json(
-        { success: false, message: 'Not authenticated' },
-        { status: 401 }
-      );
-    }
-    
-    // Find the competition
-    const competition = await Competition.findById(id);
-    
-    if (!competition) {
-      return NextResponse.json(
-        { success: false, message: 'Competition not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Check if user is authorized to delete
-    // In a real implementation, you would check if the user is an admin
-    // This is just a placeholder
-    // if (!isAdmin && competition.createdBy.toString() !== session.user.id) {
-    //   return NextResponse.json(
-    //     { success: false, message: 'Not authorized' },
-    //     { status: 403 }
-    //   );
-    // }
-    
-    // Check if there are any submissions
-    const submissionsExist = await PhotoSubmission.exists({ competition: id });
-    
-    if (submissionsExist) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Cannot delete competition with existing submissions' 
-        },
+        { success: false, message: 'Competition ID is required' },
         { status: 400 }
       );
     }
     
-    // Delete competition
-    await Competition.findByIdAndDelete(id);
+    // Basic DB connection test
+    console.log('Connecting to MongoDB...');
+    try {
+      await connectDB();
+      console.log('MongoDB connection successful');
+    } catch (dbError: any) {
+      console.error('MongoDB connection failed:', dbError);
+      return NextResponse.json(
+        { success: false, message: 'Database connection failed', error: dbError.message },
+        { status: 500 }
+      );
+    }
     
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Competition deleted successfully' 
-    });
+    console.log('Checking if competition exists:', id);
+    try {
+      // Just verify the competition exists
+      const exists = await Competition.exists({ _id: id });
+      console.log('Competition exists check result:', exists);
+      
+      if (!exists) {
+        return NextResponse.json(
+          { success: false, message: 'Competition not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Create a summary object to track what was deleted
+      const deleteSummary = {
+        results: 0,
+        photoSubmissions: 0,
+        photos: 0,
+        ratings: 0,
+        votingPoints: 0,
+        competition: 0
+      };
+      
+      // 1. First, delete all Result records (achievements) associated with this competition
+      console.log('Deleting competition results/achievements...');
+      const resultDeleteResult = await Result.deleteMany({ competition: id });
+      console.log('Results delete outcome:', resultDeleteResult);
+      deleteSummary.results = resultDeleteResult.deletedCount;
+      
+      // 2. Get IDs of all photo submissions for this competition before deleting them
+      console.log('Finding photo submission IDs...');
+      const photoSubmissionIds = await PhotoSubmission.find(
+        { competition: id },
+        { _id: 1 }
+      ).lean().then(docs => docs.map(doc => doc._id));
+      
+      console.log(`Found ${photoSubmissionIds.length} photo submission IDs to process`);
+      
+      // 3. Delete ratings for these submissions (these count as voting points)
+      if (photoSubmissionIds.length > 0) {
+        console.log('Deleting ratings for submissions...');
+        const ratingDeleteResult = await Rating.deleteMany({ photo: { $in: photoSubmissionIds } });
+        console.log('Ratings delete outcome:', ratingDeleteResult);
+        deleteSummary.ratings = ratingDeleteResult.deletedCount;
+        
+        // These also count as voting points (1 point per vote cast)
+        deleteSummary.votingPoints = ratingDeleteResult.deletedCount;
+      }
+      
+      // 4. Delete the photo submissions
+      console.log('Deleting photo submissions...');
+      const photoSubmissionDeleteResult = await PhotoSubmission.deleteMany({ competition: id });
+      console.log('Photo submissions delete outcome:', photoSubmissionDeleteResult);
+      deleteSummary.photoSubmissions = photoSubmissionDeleteResult.deletedCount;
+      
+      // 5. Find and delete photos linked to this competition (from older model)
+      console.log('Deleting photos linked to this competition...');
+      const photoDeleteResult = await Photo.deleteMany({ competition: id });
+      console.log('Photos delete outcome:', photoDeleteResult);
+      deleteSummary.photos = photoDeleteResult.deletedCount;
+      
+      // 6. Finally, delete the competition itself
+      console.log('Deleting competition...');
+      const competitionDeleteResult = await Competition.deleteOne({ _id: id });
+      console.log('Competition delete result:', competitionDeleteResult);
+      deleteSummary.competition = competitionDeleteResult.deletedCount;
+      
+      if (competitionDeleteResult.deletedCount === 0) {
+        return NextResponse.json(
+          { success: false, message: 'Failed to delete competition' },
+          { status: 500 }
+        );
+      }
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Competition and all related data deleted successfully',
+        deleteSummary
+      });
+    } catch (error: any) {
+      console.error('MongoDB operation error:', error);
+      // Detailed error info for debugging
+      return NextResponse.json({
+        success: false,
+        message: 'MongoDB operation failed',
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code
+      }, { status: 500 });
+    }
   } catch (error: any) {
+    console.error('Unhandled error in DELETE handler:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, message: 'An unexpected error occurred', error: error.toString() },
       { status: 500 }
     );
   }

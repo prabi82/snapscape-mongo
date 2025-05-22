@@ -39,8 +39,9 @@ export const sendEmail = async ({ to, subject, html }: EmailOptions) => {
 };
 
 export const sendVerificationEmail = async (email: string, name: string, token: string) => {
-  // Determine the base URL (use environment variable if available, otherwise hardcode for now)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // Determine the base URL - try multiple environment variables with appropriate fallbacks
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+  console.log(`Using base URL for verification email: ${baseUrl}`);
   const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
   
   const html = `
