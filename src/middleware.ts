@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import dbConnect from './lib/dbConnect';
-import Setting from './models/Setting';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -68,44 +66,10 @@ export async function middleware(request: NextRequest) {
       },
     });
   }
-  
-  try {
-    // Get the token and user information
-    const token = await getToken({ req: request });
-    
-    if (!token || !token.sub) {
-      return NextResponse.next();
-    }
 
-    // Connect to database
-    await dbConnect();
-
-    // Fetch settings
-    const settings = await Setting.findOne({});
-    
-    // If debug mode is not enabled, continue without modification
-    if (!settings || !settings.debugModeEnabled) {
-      return NextResponse.next();
-    }
-
-    // Check if current user is in the debug users list
-    const isDebugUser = settings.debugModeUsers.includes(token.sub);
-    
-    // Clone the request headers to modify them
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-debug-mode', isDebugUser ? 'true' : 'false');
-
-    // Return the response with the modified headers
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
-  } catch (error) {
-    console.error('Middleware error:', error);
-    // Continue without modification in case of error
-    return NextResponse.next();
-  }
+  // Removed database operations to fix Edge Runtime compatibility
+  // Debug mode checking should be handled at the component/API level instead
+  return NextResponse.next();
 }
 
 export const config = {
