@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthContext from "./context/AuthContext";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -31,6 +32,7 @@ export default function RootLayout({
         <link rel="icon" href="/logo.png" />
       </head>
       <body className={inter.className} style={{ isolation: "isolate" }}>
+        <GoogleAnalytics />
         <AuthContext>
           {children}
         </AuthContext>
