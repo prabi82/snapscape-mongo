@@ -2,7 +2,7 @@ export const GA_MEASUREMENT_ID = 'G-RRYXC5YM1B'
 
 // https://developers.google.com/analytics/devguides/collection/gtagjs/pages
 export const pageview = (url: string) => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.gtag) {
     window.gtag('config', GA_MEASUREMENT_ID, {
       page_location: url,
     })
@@ -19,7 +19,7 @@ export const event = (action: string, {
   event_label?: string
   value?: number
 }) => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.gtag) {
     window.gtag('event', action, {
       event_category,
       event_label,
@@ -61,6 +61,20 @@ export const trackLogin = (method: string) => {
   event('login', {
     event_category: 'engagement',
     event_label: method,
+  })
+}
+
+export const trackFeedbackSubmission = (rating: number, category: string) => {
+  event('feedback_submission', {
+    event_category: 'engagement',
+    event_label: category,
+    value: rating,
+  })
+}
+
+export const trackFeedbackView = () => {
+  event('feedback_page_view', {
+    event_category: 'engagement',
   })
 }
 
