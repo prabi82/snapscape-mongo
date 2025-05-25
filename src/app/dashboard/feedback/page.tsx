@@ -24,6 +24,7 @@ export default function FeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     rating: 5,
@@ -91,6 +92,34 @@ export default function FeedbackPage() {
       alert('Error submitting feedback');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const deleteFeedback = async (feedbackId: string, title: string) => {
+    const confirmed = window.confirm(`Are you sure you want to delete the feedback "${title}"? This action cannot be undone.`);
+    
+    if (!confirmed) return;
+
+    setDeletingId(feedbackId);
+
+    try {
+      const response = await fetch(`/api/feedback?id=${feedbackId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Feedback deleted successfully!');
+        fetchFeedback(); // Refresh the list
+      } else {
+        alert(data.message || 'Error deleting feedback');
+      }
+    } catch (error) {
+      console.error('Error deleting feedback:', error);
+      alert('Error deleting feedback');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -305,6 +334,26 @@ export default function FeedbackPage() {
                           </span>
                         </div>
                       </div>
+                      <button
+                        onClick={() => deleteFeedback(item._id, item.title)}
+                        disabled={deletingId === item._id}
+                        className="ml-4 px-3 py-1 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
+                        title="Delete feedback"
+                      >
+                        {deletingId === item._id ? (
+                          <>
+                            <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Deleting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Delete</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                     
                     <p className="text-gray-700 mb-3">{item.feedback}</p>

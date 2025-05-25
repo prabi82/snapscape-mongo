@@ -150,4 +150,50 @@ export async function PUT(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// DELETE - Delete feedback (admin only)
+export async function DELETE(req: NextRequest) {
+  try {
+    await dbConnect();
+    const session = await getServerSession(authOptions) as Session | null;
+
+    if (!session?.user || session.user.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, message: 'Not authorized - Admin access required' },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const feedbackId = searchParams.get('id');
+
+    if (!feedbackId) {
+      return NextResponse.json(
+        { success: false, message: 'Feedback ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const deletedFeedback = await Feedback.findByIdAndDelete(feedbackId);
+
+    if (!deletedFeedback) {
+      return NextResponse.json(
+        { success: false, message: 'Feedback not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Feedback deleted successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Error deleting feedback:', error);
+    return NextResponse.json(
+      { success: false, message: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
 } 

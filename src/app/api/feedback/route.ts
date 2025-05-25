@@ -110,4 +110,56 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// DELETE - Delete user's own feedback
+export async function DELETE(req: NextRequest) {
+  try {
+    await dbConnect();
+    const session = await getServerSession(authOptions) as Session | null;
+
+    if (!session?.user) {
+      return NextResponse.json(
+        { success: false, message: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const feedbackId = searchParams.get('id');
+
+    if (!feedbackId) {
+      return NextResponse.json(
+        { success: false, message: 'Feedback ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Find the feedback and ensure it belongs to the current user
+    const feedback = await Feedback.findOne({
+      _id: feedbackId,
+      user: session.user.id
+    });
+
+    if (!feedback) {
+      return NextResponse.json(
+        { success: false, message: 'Feedback not found or unauthorized' },
+        { status: 404 }
+      );
+    }
+
+    await Feedback.findByIdAndDelete(feedbackId);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Feedback deleted successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Error deleting feedback:', error);
+    return NextResponse.json(
+      { success: false, message: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
 } 
