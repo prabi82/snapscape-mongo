@@ -72,3 +72,7 @@ test-cloudinary*.js
 test-cloudinary*.ts
 *-credentials.json
 sensitive-*.txt
+
+# backup files - never commit these
+*.backup
+.env*.backup
