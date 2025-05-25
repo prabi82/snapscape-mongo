@@ -22,6 +22,7 @@ interface Competition {
   votingEndDate: string;
   submissionLimit: number;
   votingCriteria: string;
+  submissionFormat: string;
   hasSubmitted: boolean;
   userSubmissionsCount: number;
   canSubmitMore: boolean;
@@ -42,6 +43,45 @@ interface Submission {
   ratingsCount: number;
   userRating?: number;
   createdAt?: string;
+}
+
+// Accordion Component
+interface AccordionItemProps {
+  title: string;
+  content: string;
+  defaultContent?: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+function AccordionItem({ title, content, defaultContent, isExpanded, onToggle }: AccordionItemProps) {
+  const displayContent = content || defaultContent || '';
+  
+  return (
+    <div className="border border-[#e0c36a] rounded-lg overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-3 bg-[#fffbe6] hover:bg-[#f5f1d4] text-left flex items-center justify-between transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#2699a6] focus:ring-inset"
+      >
+        <h3 className="font-bold text-[#1a4d5c] text-base">{title}</h3>
+        <svg 
+          className={`w-5 h-5 text-[#1a4d5c] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isExpanded && (
+        <div className="px-4 py-3 bg-white border-t border-[#e0c36a]">
+          <div className="text-gray-700">
+            <MarkdownRenderer content={displayContent} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Expandable Section Component
@@ -115,7 +155,8 @@ export default function CompetitionDetail() {
   const [expandedSections, setExpandedSections] = useState({
     description: false,
     rules: false,
-    prizes: false
+    prizes: false,
+    submissionFormat: false
   });
   
   // Photo submission state
@@ -781,35 +822,43 @@ export default function CompetitionDetail() {
               </span>
             </div>
             
-            <ExpandableSection
-              title="Description"
-              content={competition.description}
-              isExpanded={expandedSections.description}
-              onToggle={() => toggleSection('description')}
-              maxLines={3}
-            />
+            {/* Competition Details Accordion */}
+            <div className="space-y-2">
+              <AccordionItem
+                title="Description"
+                content={competition.description}
+                isExpanded={expandedSections.description}
+                onToggle={() => toggleSection('description')}
+              />
+              
+              <AccordionItem
+                title="Rules & Regulations"
+                content={competition.rules}
+                defaultContent="Standard rules apply."
+                isExpanded={expandedSections.rules}
+                onToggle={() => toggleSection('rules')}
+              />
+              
+              <AccordionItem
+                title="Prizes"
+                content={competition.prizes}
+                defaultContent="No prize information is available for this competition."
+                isExpanded={expandedSections.prizes}
+                onToggle={() => toggleSection('prizes')}
+              />
+              
+              <AccordionItem
+                title="Submission Format"
+                content={competition.submissionFormat || 'JPEG, minimum resolution of 700px × 700px, maximum size 25MB'}
+                isExpanded={expandedSections.submissionFormat}
+                onToggle={() => toggleSection('submissionFormat')}
+              />
+            </div>
             
-            <ExpandableSection
-              title="Rules & Regulations"
-              content={competition.rules}
-              defaultContent="Standard rules apply."
-              isExpanded={expandedSections.rules}
-              onToggle={() => toggleSection('rules')}
-              maxLines={3}
-            />
-            
-            <ExpandableSection
-              title="Prizes"
-              content={competition.prizes}
-              defaultContent="No prize information is available for this competition."
-              isExpanded={expandedSections.prizes}
-              onToggle={() => toggleSection('prizes')}
-              maxLines={2}
-            />
-            
+            {/* Voting Criteria - Compact display */}
             {competition.votingCriteria && (
-              <div>
-                <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Voting Criteria</h3>
+              <div className="bg-[#fffbe6] border border-[#e0c36a] rounded-lg p-3">
+                <h3 className="font-bold text-[#1a4d5c] mb-2 text-base">Voting Criteria</h3>
                 <div className="flex flex-wrap gap-2">
                   {competition.votingCriteria.split(',').map((criteria, index) => (
                     <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-[#e6f0f3] text-[#1a4d5c] border border-[#e0c36a]">
@@ -819,13 +868,11 @@ export default function CompetitionDetail() {
                 </div>
               </div>
             )}
-            <div>
-              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Submission Format</h3>
-              <div className="text-gray-700">JPEG, minimum resolution of 700px × 700px, maximum size 25MB</div>
-            </div>
-            <div>
+            
+            {/* Copyright - Compact display */}
+            <div className="bg-[#fffbe6] border border-[#e0c36a] rounded-lg p-3">
               <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Copyright</h3>
-              <div className="text-gray-700">You maintain the copyrights to all photos you submit. You must own all submitted images.</div>
+              <div className="text-gray-700 text-sm">You maintain the copyrights to all photos you submit. You must own all submitted images.</div>
             </div>
           </div>
         </div>

@@ -212,7 +212,7 @@ export async function PUT(
       if (Object.prototype.hasOwnProperty.call(fields, key)) {
         const value = fields[key];
         // If the field is an array and we expect a string, take the first element
-        if (Array.isArray(value) && ['title', 'theme', 'description', 'rules', 'prizes', 'votingCriteria', 'status'].includes(key)) {
+        if (Array.isArray(value) && ['title', 'theme', 'description', 'rules', 'prizes', 'votingCriteria', 'submissionFormat', 'status'].includes(key)) {
           updateData[key] = value[0];
         } else {
           updateData[key] = value;

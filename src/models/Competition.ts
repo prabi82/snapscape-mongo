@@ -75,6 +75,11 @@ const competitionSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  submissionFormat: {
+    type: String,
+    trim: true,
+    default: 'JPEG, minimum resolution of 700px × 700px, maximum size 25MB',
+  },
   coverImage: {
     type: String,
     trim: true,

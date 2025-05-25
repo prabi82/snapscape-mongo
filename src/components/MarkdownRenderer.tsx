@@ -22,7 +22,8 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
           whiteSpace: 'pre-wrap',
           backgroundColor: 'transparent',
           color: 'inherit',
-          padding: 0
+          padding: 0,
+          lineHeight: '1.4'
         }}
         wrapperElement={{
           'data-color-mode': 'light'

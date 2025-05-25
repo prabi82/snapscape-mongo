@@ -22,6 +22,7 @@ interface Competition {
   votingEndDate: string;
   submissionLimit: number;
   votingCriteria: string;
+  submissionFormat: string;
   status: string;
   coverImage?: string;
   hideOtherSubmissions?: boolean;
@@ -50,6 +51,7 @@ export default function EditCompetition() {
     votingEndDate: '',
     submissionLimit: 5,
     votingCriteria: '',
+    submissionFormat: '',
     status: 'upcoming',
     hideOtherSubmissions: false
   });
@@ -140,6 +142,7 @@ export default function EditCompetition() {
           votingEndDate: formatDateForInput(data.data.votingEndDate),
           submissionLimit: data.data.submissionLimit || 5,
           votingCriteria: data.data.votingCriteria || '',
+          submissionFormat: data.data.submissionFormat || '',
           status: data.data.status,
           hideOtherSubmissions: data.data.hideOtherSubmissions || false
         });
@@ -781,6 +784,20 @@ export default function EditCompetition() {
                 />
               </div>
               <p className="mt-1 text-xs text-gray-500">Separate criteria with commas</p>
+            </div>
+            
+            {/* Submission Format */}
+            <div className="sm:col-span-6">
+              <label htmlFor="submissionFormat" className="block text-sm font-medium text-gray-700">
+                Submission Format
+              </label>
+              <div className="mt-1">
+                <RichTextEditor
+                  value={formData.submissionFormat}
+                  onChange={(value) => handleRichTextChange('submissionFormat', value)}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Specify the requirements for photo submissions (format, resolution, file size, etc.)</p>
             </div>
             
             {/* Cover Image - REPLACEMENT START */}

@@ -67,6 +67,71 @@ body {
   margin-bottom: 0;
 }
 
+/* More specific selectors to override MDEditor's default styles */
+.markdown-content .w-md-editor-text-container ul li,
+.markdown-content .w-md-editor-text ul li,
+.markdown-content .wmde-markdown ul li,
+.markdown-content div[data-color-mode="light"] ul li {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.markdown-content .w-md-editor-text-container ol li,
+.markdown-content .w-md-editor-text ol li,
+.markdown-content .wmde-markdown ol li,
+.markdown-content div[data-color-mode="light"] ol li {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+  line-height: 1.4 !important;
+}
+
+/* Override any paragraph spacing within list items */
+.markdown-content li p {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Ensure tight spacing for nested lists */
+.markdown-content ul ul,
+.markdown-content ol ol,
+.markdown-content ul ol,
+.markdown-content ol ul {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Additional overrides for all possible MDEditor wrapper classes */
+.markdown-content * ul li,
+.markdown-content * ol li {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+  line-height: 1.4 !important;
+}
+
+/* Override MDEditor's default paragraph margins in lists */
+.markdown-content ul li > p,
+.markdown-content ol li > p,
+.markdown-content li > p:first-child,
+.markdown-content li > p:last-child {
+  margin: 0 !important;
+  display: inline !important;
+}
+
+/* Force tight spacing on all list elements */
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+  line-height: 1.4 !important;
+}
+
+/* Override any default browser list spacing */
+.markdown-content ul li::marker,
+.markdown-content ol li::marker {
+  line-height: 1.4 !important;
+}
+
 .markdown-content strong {
   font-weight: bold;
 }
