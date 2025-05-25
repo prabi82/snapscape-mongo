@@ -8,6 +8,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import RichTextEditor from '@/components/RichTextEditor';
 
 interface Competition {
   _id: string;
@@ -98,7 +99,7 @@ export default function EditCompetition() {
   // Fetch competition data
   useEffect(() => {
     // Redirect if not admin
-    if (sessionStatus === 'authenticated' && session?.user?.role !== 'admin') {
+    if (sessionStatus === 'authenticated' && (session?.user as any)?.role !== 'admin') {
       router.push('/dashboard');
       return;
     }
@@ -170,6 +171,14 @@ export default function EditCompetition() {
         [name]: value
       }));
     }
+  };
+  
+  // Handle rich text editor changes
+  const handleRichTextChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
   
   // Handle image changes
@@ -499,7 +508,7 @@ export default function EditCompetition() {
   }
   
   // Check if user is admin
-  if (sessionStatus === 'authenticated' && session?.user?.role !== 'admin') {
+  if (sessionStatus === 'authenticated' && (session?.user as any)?.role !== 'admin') {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
@@ -584,14 +593,9 @@ export default function EditCompetition() {
                 Description <span className="text-red-500">*</span>
               </label>
               <div className="mt-1">
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={4}
+                <RichTextEditor
                   value={formData.description}
-                  onChange={handleChange}
-                  required
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  onChange={(value) => handleRichTextChange('description', value)}
                 />
               </div>
             </div>
@@ -602,13 +606,9 @@ export default function EditCompetition() {
                 Rules
               </label>
               <div className="mt-1">
-                <textarea
-                  id="rules"
-                  name="rules"
-                  rows={4}
+                <RichTextEditor
                   value={formData.rules}
-                  onChange={handleChange}
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  onChange={(value) => handleRichTextChange('rules', value)}
                 />
               </div>
             </div>
@@ -619,13 +619,9 @@ export default function EditCompetition() {
                 Prizes
               </label>
               <div className="mt-1">
-                <textarea
-                  id="prizes"
-                  name="prizes"
-                  rows={4}
+                <RichTextEditor
                   value={formData.prizes}
-                  onChange={handleChange}
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  onChange={(value) => handleRichTextChange('prizes', value)}
                 />
               </div>
             </div>

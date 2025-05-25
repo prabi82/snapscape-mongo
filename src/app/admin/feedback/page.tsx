@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
+import { formatDate } from '@/utils/dateFormatter';
 
 interface ExtendedUser {
   id?: string;
@@ -62,11 +63,17 @@ export default function AdminFeedbackPage() {
   const [responseText, setResponseText] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     category: '',
     page: 1
   });
+
+  // Ensure we're on the client side to prevent hydration mismatches
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Redirect if not authenticated or not admin
   if (status === 'loading') return <div>Loading...</div>;
@@ -339,7 +346,7 @@ export default function AdminFeedbackPage() {
                         <span>
                           {item.isAnonymous ? 'Anonymous User' : (item.user.name || item.user.email)}
                         </span>
-                        <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                        <span>{isClient ? formatDate(item.createdAt) : 'Loading date...'}</span>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -396,7 +403,7 @@ export default function AdminFeedbackPage() {
                         )}
                         {item.adminResponseDate && (
                           <span className="text-sm text-green-600 ml-2">
-                            on {new Date(item.adminResponseDate).toLocaleDateString()}
+                            on {isClient ? formatDate(item.adminResponseDate) : 'Loading date...'}
                           </span>
                         )}
                       </div>

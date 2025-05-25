@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { PlusIcon } from '@heroicons/react/24/solid';
 import { useRouter } from 'next/navigation';
+import { formatDate } from '@/utils/dateFormatter';
 
 // Helper function to format time since a date
 function formatTimeSince(date: Date): string {
@@ -145,6 +146,13 @@ export default function DashboardPage() {
   const [appSettings, setAppSettings] = useState({
     allowNotificationDeletion: true
   });
+
+  const [isClient, setIsClient] = useState(false);
+
+  // Ensure we're on the client side to prevent hydration mismatches
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const fetchActivities = async (page = 1) => {
     setActivitiesLoading(true);
@@ -1057,7 +1065,9 @@ export default function DashboardPage() {
                                 <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(displayTimestamp))}</p>
                                 <p className="text-sm text-gray-600 mb-1">Theme: {activeComp.theme}</p>
                                 <p className="text-sm text-gray-500 mb-2">
-                                  {activeComp.status === 'upcoming' ? `Starts: ${new Date(activeComp.startDate).toLocaleDateString()}` : `Ends: ${new Date(activeComp.endDate).toLocaleDateString()}`}
+                                  {activeComp.status === 'upcoming' 
+                                    ? `Starts: ${isClient ? formatDate(activeComp.startDate) : 'Loading...'}` 
+                                    : `Ends: ${isClient ? formatDate(activeComp.endDate) : 'Loading...'}`}
                                 </p>
                               </div>
                               <div className="mt-auto flex justify-between items-center">
@@ -1427,7 +1437,7 @@ export default function DashboardPage() {
                     <div className="font-bold text-lg mb-1 text-gray-900">{comp.title}</div>
                     <div className="text-gray-500 text-sm mb-3 line-clamp-2">{comp.theme}</div>
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                      <span className="flex items-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> Ends: {new Date(comp.endDate).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> Ends: {isClient ? formatDate(comp.endDate) : 'Loading...'}</span>
                       <span className="flex items-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A2 2 0 0021 6.382V5a2 2 0 00-2-2H5a2 2 0 00-2 2v1.382a2 2 0 001.447 1.342L9 10m6 0v10a2 2 0 01-2 2H7a2 2 0 01-2-2V10m6 0V4" /></svg> {comp.submissionCount || 0} submissions</span>
                     </div>
                     <Link href={`/dashboard/competitions/${comp._id}`} className="mt-auto inline-block w-full text-center px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition">Submit Photo</Link>

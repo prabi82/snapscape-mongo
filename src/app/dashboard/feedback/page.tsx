@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
 import { trackFeedbackView, trackFeedbackSubmission } from '@/lib/gtag';
+import { formatDate } from '@/utils/dateFormatter';
 
 interface FeedbackItem {
   _id: string;
@@ -25,6 +26,7 @@ export default function FeedbackPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     rating: 5,
@@ -32,6 +34,11 @@ export default function FeedbackPage() {
     category: 'general',
     isAnonymous: false
   });
+
+  // Ensure we're on the client side to prevent hydration mismatches
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Redirect if not authenticated
   if (status === 'loading') return <div>Loading...</div>;
@@ -41,7 +48,10 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     fetchFeedback();
-    trackFeedbackView();
+    // Only track on client side to prevent SSR issues
+    if (typeof window !== 'undefined') {
+      trackFeedbackView();
+    }
   }, []);
 
   const fetchFeedback = async () => {
@@ -330,7 +340,7 @@ export default function FeedbackPage() {
                         <div className="flex items-center gap-3 mb-2">
                           {renderStars(item.rating)}
                           <span className="text-sm text-gray-500">
-                            {new Date(item.createdAt).toLocaleDateString()}
+                            {isClient ? formatDate(item.createdAt) : 'Loading date...'}
                           </span>
                         </div>
                       </div>
@@ -364,7 +374,7 @@ export default function FeedbackPage() {
                           <span className="font-medium text-green-800">Admin Response:</span>
                           {item.adminResponseDate && (
                             <span className="text-sm text-green-600 ml-2">
-                              {new Date(item.adminResponseDate).toLocaleDateString()}
+                              {isClient ? formatDate(item.adminResponseDate) : 'Loading date...'}
                             </span>
                           )}
                         </div>

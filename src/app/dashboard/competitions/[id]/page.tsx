@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
 import React from 'react';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 
 interface Competition {
   _id: string;
@@ -40,6 +41,62 @@ interface Submission {
   averageRating: number;
   ratingsCount: number;
   userRating?: number;
+  createdAt?: string;
+}
+
+// Expandable Section Component
+interface ExpandableSectionProps {
+  title: string;
+  content: string;
+  defaultContent?: string;
+  maxLines?: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+function ExpandableSection({ title, content, defaultContent, maxLines = 3, isExpanded, onToggle }: ExpandableSectionProps) {
+  // Determine if content should be expandable (has more than a reasonable amount of text)
+  const shouldBeExpandable = content && content.length > 200;
+  const displayContent = content || defaultContent || '';
+
+  return (
+    <div>
+      <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">{title}</h3>
+      <div className="text-gray-700">
+        <div 
+          className={!isExpanded && shouldBeExpandable ? 'overflow-hidden' : ''}
+          style={
+            !isExpanded && shouldBeExpandable 
+              ? {
+                  display: '-webkit-box',
+                  WebkitLineClamp: maxLines,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden'
+                }
+              : {}
+          }
+        >
+          <MarkdownRenderer content={displayContent} />
+        </div>
+        {shouldBeExpandable && (
+          <button
+            onClick={onToggle}
+            className="mt-2 inline-flex items-center text-[#2699a6] hover:text-[#1a4d5c] text-sm font-medium transition-colors duration-200 focus:outline-none group"
+          >
+            <span className="mr-1">{isExpanded ? 'Show Less' : 'Show More'}</span>
+            <svg 
+              className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function CompetitionDetail() {
@@ -53,6 +110,13 @@ export default function CompetitionDetail() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Expandable sections state
+  const [expandedSections, setExpandedSections] = useState({
+    description: false,
+    rules: false,
+    prizes: false
+  });
   
   // Photo submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -493,6 +557,14 @@ export default function CompetitionDetail() {
     }
   };
 
+  // Function to toggle expanded sections
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -708,18 +780,33 @@ export default function CompetitionDetail() {
                 {competition.status.charAt(0).toUpperCase() + competition.status.slice(1)}
               </span>
             </div>
-            <div>
-              <h2 className="font-bold text-[#1a4d5c] mb-1 text-base">Description</h2>
-              <p className="text-gray-700 whitespace-pre-line line-clamp-3">{competition.description}</p>
-            </div>
-            <div>
-              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Rules & Regulations</h3>
-              <div className="text-gray-700 whitespace-pre-line line-clamp-3">{competition.rules || 'Standard rules apply.'}</div>
-            </div>
-            <div>
-              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Prizes</h3>
-              <div className="text-gray-700 whitespace-pre-line line-clamp-2">{competition.prizes || 'No prize information is available for this competition.'}</div>
-            </div>
+            
+            <ExpandableSection
+              title="Description"
+              content={competition.description}
+              isExpanded={expandedSections.description}
+              onToggle={() => toggleSection('description')}
+              maxLines={3}
+            />
+            
+            <ExpandableSection
+              title="Rules & Regulations"
+              content={competition.rules}
+              defaultContent="Standard rules apply."
+              isExpanded={expandedSections.rules}
+              onToggle={() => toggleSection('rules')}
+              maxLines={3}
+            />
+            
+            <ExpandableSection
+              title="Prizes"
+              content={competition.prizes}
+              defaultContent="No prize information is available for this competition."
+              isExpanded={expandedSections.prizes}
+              onToggle={() => toggleSection('prizes')}
+              maxLines={2}
+            />
+            
             {competition.votingCriteria && (
               <div>
                 <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Voting Criteria</h3>
