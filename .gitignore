@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -76,3 +76,30 @@ sensitive-*.txt
 # backup files - never commit these
 *.backup
 .env*.backup
+
+# Sensitive files - DO NOT COMMIT
+**/test-*.js
+**/test-*.ts
+**/*-test.js
+**/*-test.ts
+**/credentials.*
+**/secrets.*
+**/*-credentials.*
+**/*-secrets.*
+**/config/production.*
+**/config/staging.*
+
+# Documentation with sensitive info
+**/RECAPTCHA_*.md
+**/EMAIL_*.md
+**/API_KEYS*.md
+**/CREDENTIALS*.md
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db

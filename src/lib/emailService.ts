@@ -9,12 +9,12 @@ interface EmailOptions {
 // Create a transporter with verified email service configuration
 const createTransporter = () => {
   return nodemailer.createTransport({
-    host: 'euk-113072.eukservers.com',
-    port: 465,
+    host: process.env.EMAIL_HOST || 'euk-113072.eukservers.com',
+    port: parseInt(process.env.EMAIL_PORT || '465'),
     secure: true, // use SSL
     auth: {
-      user: 'info@onlyoman.com',
-      pass: 'l@fbCMLFA)Uy'
+      user: process.env.EMAIL_USER || 'info@onlyoman.com',
+      pass: process.env.EMAIL_PASSWORD || ''
     },
     tls: {
       // Ignore certificate validation issues
@@ -33,7 +33,7 @@ export const sendEmail = async ({ to, subject, html }: EmailOptions) => {
     console.log('SMTP connection verified successfully');
     
     const info = await transporter.sendMail({
-      from: '"SnapScape" <info@onlyoman.com>',
+      from: `"SnapScape" <${process.env.EMAIL_USER || 'info@onlyoman.com'}>`,
       to,
       subject,
       html,
@@ -119,4 +119,4 @@ export const sendPasswordResetEmail = async (email: string, name: string, token:
     subject: "Reset Your SnapScape Password",
     html,
   });
-}; 
+};
