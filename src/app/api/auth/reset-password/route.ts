@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from 'bcryptjs';
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 
@@ -44,16 +43,12 @@ export async function POST(req: NextRequest) {
     
     console.log(`User found for password reset: ${user._id} (${user.email})`);
     
-    // Hash the new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    
-    console.log('Password hashed successfully, updating user...');
-    
-    // Update user password and clear reset token fields
-    user.password = hashedPassword;
+    // Set the new password (let the User model's pre-save hook handle hashing)
+    user.password = password;
     user.passwordResetToken = null;
     user.passwordResetExpires = null;
+    
+    console.log('Saving user with new password (will be hashed by pre-save hook)...');
     await user.save();
     
     console.log(`Password reset completed successfully for user: ${user.email}`);
