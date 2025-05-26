@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useImperativeHandle, forwardRef } from 'react';
 
 // Define props for the component
 interface ReCaptchaProps {
@@ -9,37 +9,43 @@ interface ReCaptchaProps {
   onVerify: (token: string) => void;
 }
 
-export default function ReCaptchaV3({
+// Define ref methods
+export interface ReCaptchaRef {
+  refreshToken: () => void;
+}
+
+const ReCaptchaV3 = forwardRef<ReCaptchaRef, ReCaptchaProps>(({
   siteKey,
   action,
   onVerify
-}: ReCaptchaProps) {
+}, ref) => {
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [tokenGenerated, setTokenGenerated] = useState(false);
+  const executionRef = useRef(false);
 
-  // Log props for debugging
-  useEffect(() => {
-    console.log('ReCaptcha component initialized with:', { siteKey, action });
-    console.log('NEXT_PUBLIC_RECAPTCHA_SITE_KEY:', process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
-  }, [siteKey, action]);
+  // Expose refresh method to parent components
+  useImperativeHandle(ref, () => ({
+    refreshToken: () => {
+      setTokenGenerated(false);
+      executionRef.current = false;
+    }
+  }));
 
   // Load reCAPTCHA script
   useEffect(() => {
     // Check if script is already loaded
     if (document.querySelector(`script[src*="recaptcha/api.js"]`)) {
-      console.log('reCAPTCHA script already loaded');
       setScriptLoaded(true);
       return;
     }
 
     // Only load if not already loaded
-    console.log('Loading reCAPTCHA script...');
     const script = document.createElement('script');
     script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
     script.async = true;
     script.defer = true;
     
     script.onload = () => {
-      console.log('reCAPTCHA script loaded successfully');
       setScriptLoaded(true);
     };
     
@@ -50,61 +56,62 @@ export default function ReCaptchaV3({
     document.head.appendChild(script);
 
     return () => {
-      // Cleanup if needed
-      if (document.querySelector(`script[src*="recaptcha/api.js"]`) && !window.location.pathname.includes('/auth')) {
-        console.log('Cleaning up reCAPTCHA script');
+      // Cleanup script if component unmounts and no other instances need it
+      const scripts = document.querySelectorAll(`script[src*="recaptcha/api.js"]`);
+      if (scripts.length === 1) {
         document.head.removeChild(script);
       }
     };
   }, [siteKey]);
 
-  // Execute reCAPTCHA when the script is loaded
+  // Execute reCAPTCHA when the script is loaded (only once)
   useEffect(() => {
-    if (!scriptLoaded || !siteKey) {
-      console.log('Script not loaded or no site key, skipping execution');
+    if (!scriptLoaded || !siteKey || tokenGenerated || executionRef.current) {
       return;
     }
 
     const executeRecaptcha = () => {
-      console.log('Attempting to execute reCAPTCHA...');
       if (window.grecaptcha && window.grecaptcha.ready) {
+        executionRef.current = true;
         try {
-          console.log('grecaptcha is ready, executing with action:', action);
           window.grecaptcha.ready(() => {
             window.grecaptcha
               .execute(siteKey, { action })
               .then(token => {
-                console.log('reCAPTCHA token obtained successfully');
                 onVerify(token);
+                setTokenGenerated(true);
               })
               .catch(error => {
                 console.error('reCAPTCHA execution error:', error);
+                executionRef.current = false;
               });
           });
         } catch (error) {
           console.error('Error executing reCAPTCHA:', error);
+          executionRef.current = false;
         }
       } else {
-        // If grecaptcha isn't properly initialized, try again after a short delay
-        console.log('grecaptcha not ready, retrying in 1 second');
+        // If grecaptcha isn't ready, try again after a short delay
         setTimeout(executeRecaptcha, 1000);
       }
     };
 
-    // Initial execution
     executeRecaptcha();
+  }, [scriptLoaded, siteKey, action, onVerify, tokenGenerated]);
 
-    // Re-execute every 2 minutes to get a fresh token
-    const intervalId = setInterval(executeRecaptcha, 120000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [scriptLoaded, siteKey, action, onVerify]);
+  // Reset token when action changes (for different forms)
+  useEffect(() => {
+    setTokenGenerated(false);
+    executionRef.current = false;
+  }, [action]);
 
   // No visible UI for v3
   return null;
-}
+});
+
+ReCaptchaV3.displayName = 'ReCaptchaV3';
+
+export default ReCaptchaV3;
 
 // Type declaration for global window object
 declare global {
