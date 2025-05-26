@@ -26,6 +26,10 @@ const createTransporter = () => {
 export const sendEmail = async ({ to, subject, html }: EmailOptions) => {
   try {
     console.log(`Attempting to send email to: ${to} with subject: ${subject}`);
+    console.log(`Environment check - EMAIL_HOST: ${process.env.EMAIL_HOST ? 'SET' : 'NOT SET'}`);
+    console.log(`Environment check - EMAIL_USER: ${process.env.EMAIL_USER ? 'SET' : 'NOT SET'}`);
+    console.log(`Environment check - EMAIL_PASSWORD: ${process.env.EMAIL_PASSWORD ? 'SET' : 'NOT SET'}`);
+    
     const transporter = createTransporter();
     
     // Verify transporter configuration
