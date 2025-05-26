@@ -17,7 +17,10 @@ const nextConfig = {
     // !! WARN !!
     ignoreBuildErrors: true,
   },
-  // Increase build memory limit
+  // External packages that should be treated as server components
+  serverExternalPackages: ['mongoose'],
+  
+  // Experimental features
   experimental: {
     // Detect and optimize duplicate dependencies in the build
     optimizeCss: true,
@@ -25,10 +28,9 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
-    serverComponentsExternalPackages: ['mongoose'],
+    // Increase function execution timeout
+    proxyTimeout: 300000, // 5 minutes
   },
-  // External packages that should be treated as server components
-  serverExternalPackages: ['mongoose'],
   
   // Add image configuration to handle external images
   images: {
@@ -42,12 +44,7 @@ const nextConfig = {
     domains: ['res.cloudinary.com'],
     formats: ['image/webp', 'image/avif'],
   },
-  // Increase body size limits for file uploads
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
+  
   // Add headers for CORS and file upload optimization
   async headers() {
     return [
@@ -60,12 +57,6 @@ const nextConfig = {
         ],
       },
     ];
-  },
-  // Increase function timeout for uploads
-  experimental: {
-    serverComponentsExternalPackages: ['mongoose'],
-    // Increase function execution timeout
-    proxyTimeout: 300000, // 5 minutes
   },
 };
 
