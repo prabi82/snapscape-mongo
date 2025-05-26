@@ -18,9 +18,18 @@ export async function POST(req: NextRequest) {
     
     console.log(`Password reset requested for email: ${email}`);
     
-    // Check if email environment variables are set
-    const emailConfigured = process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD;
+    // Check if email environment variables are set and not empty
+    const emailConfigured = process.env.EMAIL_HOST && 
+                           process.env.EMAIL_USER && 
+                           process.env.EMAIL_PASSWORD &&
+                           process.env.EMAIL_HOST.trim() !== '' &&
+                           process.env.EMAIL_USER.trim() !== '' &&
+                           process.env.EMAIL_PASSWORD.trim() !== '';
+    
     console.log(`Email service configured: ${emailConfigured ? 'YES' : 'NO'}`);
+    console.log(`EMAIL_HOST: ${process.env.EMAIL_HOST ? 'SET' : 'NOT SET'}`);
+    console.log(`EMAIL_USER: ${process.env.EMAIL_USER ? 'SET' : 'NOT SET'}`);
+    console.log(`EMAIL_PASSWORD: ${process.env.EMAIL_PASSWORD ? 'SET' : 'NOT SET'}`);
     
     if (!emailConfigured) {
       console.error('Email service not configured - missing environment variables');
