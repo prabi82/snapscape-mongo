@@ -23,6 +23,28 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* General form input styling for better visibility */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+  background-color: white;
+  color: #1a4d5c;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Ensure placeholder text is visible */
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
 /* Text content styling for Lexical editor output */
 .text-content {
   line-height: 1.4;
@@ -197,6 +219,64 @@ body {
 
 .tinymce-wrapper .tox-edit-area {
   background-color: white;
+}
+
+/* Mobile form input fixes */
+@media (max-width: 768px) {
+  /* Ensure form inputs are visible on mobile */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="date"],
+  input[type="file"],
+  textarea,
+  select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: white !important;
+    color: #1a4d5c !important;
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    line-height: 1.5 !important;
+    padding: 12px !important;
+    border: 1px solid #e0c36a !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+  
+  /* Focus states for mobile */
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  input[type="tel"]:focus,
+  input[type="number"]:focus,
+  input[type="date"]:focus,
+  textarea:focus,
+  select:focus {
+    border-color: #2699a6 !important;
+    box-shadow: 0 0 0 2px rgba(38, 153, 166, 0.2) !important;
+  }
+  
+  /* Placeholder text visibility */
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af !important;
+    opacity: 1 !important;
+  }
+  
+  /* File input specific styling */
+  input[type="file"] {
+    padding: 8px !important;
+  }
+  
+  /* Textarea specific styling */
+  textarea {
+    resize: vertical !important;
+    min-height: 80px !important;
+  }
 }
 
 /* Legacy markdown content styling - keeping for backward compatibility */

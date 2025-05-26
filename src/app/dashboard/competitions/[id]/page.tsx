@@ -666,7 +666,7 @@ export default function CompetitionDetail() {
                             id="photoTitle"
                             value={photoTitle}
                             onChange={(e) => setPhotoTitle(e.target.value)}
-                            className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
+                            className="mt-1 block w-full px-3 py-2 text-[#1a4d5c] bg-white border border-[#e0c36a] rounded-lg shadow-sm focus:ring-2 focus:ring-[#2699a6] focus:border-[#2699a6] text-base"
                             required
                           />
                         </div>
@@ -680,7 +680,7 @@ export default function CompetitionDetail() {
                             value={photoDescription}
                             onChange={(e) => setPhotoDescription(e.target.value)}
                             rows={3}
-                            className="mt-1 block w-full shadow-sm sm:text-sm rounded-lg border-[#e0c36a] focus:ring-[#2699a6] focus:border-[#2699a6] py-2"
+                            className="mt-1 block w-full px-3 py-2 text-[#1a4d5c] bg-white border border-[#e0c36a] rounded-lg shadow-sm focus:ring-2 focus:ring-[#2699a6] focus:border-[#2699a6] text-base resize-vertical"
                             required
                           />
                         </div>
