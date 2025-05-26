@@ -8,6 +8,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import React from 'react';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+import { compressImage, isValidImageType, formatFileSize } from '@/utils/imageCompression';
 
 interface Competition {
   _id: string;
@@ -168,6 +169,8 @@ export default function CompetitionDetail() {
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [fileSizeError, setFileSizeError] = useState('');
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<string>('');
 
   // New state for user's submissions to this competition
   const [userSubmissions, setUserSubmissions] = useState<Submission[]>([]);
@@ -266,6 +269,66 @@ export default function CompetitionDetail() {
     }
   }, [competition, showSubmitParam]);
 
+  // Handle file input change with file size check and compression
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileSizeError('');
+    setCompressionInfo('');
+    setIsCompressing(false);
+    const file = e.target.files?.[0] || null;
+    
+    if (file) {
+      // Validate file type
+      if (!isValidImageType(file)) {
+        setFileSizeError('Please upload a valid image file (JPG, PNG or WebP)');
+        setPhotoFile(null);
+        return;
+      }
+      
+      // Check original file size (10MB limit)
+      const originalSize = file.size / (1024 * 1024); // Size in MB
+      console.log(`Original image size: ${originalSize.toFixed(2)} MB`);
+      
+      if (file.size > 10 * 1024 * 1024) {
+        setFileSizeError(`Image size must be less than 10MB (current size: ${originalSize.toFixed(2)} MB)`);
+        setPhotoFile(null);
+        return;
+      }
+      
+      // If file is larger than 4MB, compress it
+      if (file.size > 4 * 1024 * 1024) {
+        try {
+          setIsCompressing(true);
+          setCompressionInfo('Compressing image...');
+          
+          const compressionResult = await compressImage(file, {
+            maxSizeMB: 4,
+            maxWidthOrHeight: 2048,
+            initialQuality: 0.9
+          });
+          
+          setPhotoFile(compressionResult.file);
+          setCompressionInfo(
+            `Image compressed: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${Math.round(compressionResult.compressionRatio * 100)}% of original)`
+          );
+          
+          console.log('Compression successful:', compressionResult);
+        } catch (error) {
+          console.error('Error compressing image:', error);
+          setFileSizeError('Failed to compress image. Please try a smaller file or compress it manually.');
+          setPhotoFile(null);
+        } finally {
+          setIsCompressing(false);
+        }
+      } else {
+        // For smaller files, just use them as is
+        setPhotoFile(file);
+        setCompressionInfo(`Image ready: ${formatFileSize(file.size)}`);
+      }
+    } else {
+      setPhotoFile(null);
+    }
+  };
+
   // Handle photo submission
   const handleSubmitPhoto = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,10 +343,10 @@ export default function CompetitionDetail() {
         throw new Error('Please fill in all fields and select a photo');
       }
       
-      // Enhanced file size check (4MB limit for better compatibility)
-      const maxSize = 4 * 1024 * 1024; // 4MB (Vercel-safe limit)
+      // Final size check (should be under 4MB after compression)
+      const maxSize = 4.5 * 1024 * 1024; // 4.5MB (slightly under Vercel limit)
       if (photoFile.size > maxSize) {
-        setFileSizeError('The selected image is above the 4MB limit. Please choose a smaller file or compress your image.');
+        setFileSizeError('The processed image is still too large. Please try a smaller original image.');
         setIsSubmitting(false);
         return;
       }
@@ -337,7 +400,7 @@ export default function CompetitionDetail() {
           
           // Handle specific HTTP status codes
           if (response.status === 413) {
-            errorMessage = 'File too large for upload. Please compress your image to under 4MB and try again.';
+            errorMessage = 'File too large for upload. Please try a smaller original image.';
           } else if (response.status === 400) {
             errorMessage = 'Invalid request. Please check your file and try again.';
           } else if (response.status === 401) {
@@ -362,7 +425,7 @@ export default function CompetitionDetail() {
               
               // Handle specific error types
               if (errorData.error === 'PAYLOAD_TOO_LARGE' || errorData.error === 'FILE_TOO_LARGE') {
-                setFileSizeError(errorData.message || 'File too large. Please compress your image and try again.');
+                setFileSizeError(errorData.message || 'File too large. Please try a smaller original image.');
                 setIsSubmitting(false);
                 return;
               }
@@ -404,6 +467,7 @@ export default function CompetitionDetail() {
         setPhotoTitle('');
         setPhotoDescription('');
         setPhotoFile(null);
+        setCompressionInfo('');
         setShowSubmitForm(false);
         
         // Refresh competition data to update submission status
@@ -424,7 +488,7 @@ export default function CompetitionDetail() {
         
         // Handle specific network errors
         if (errorMessage.includes('413')) {
-          setFileSizeError('File too large for upload. Please compress your image to under 4MB and try again.');
+          setFileSizeError('File too large for upload. Please try a smaller original image.');
           setIsSubmitting(false);
           return;
         }
@@ -439,7 +503,7 @@ export default function CompetitionDetail() {
       
       // Provide helpful guidance based on error type
       if (userErrorMessage.includes('413') || userErrorMessage.includes('too large') || userErrorMessage.includes('payload')) {
-        setFileSizeError('Your image file is too large. Please compress it to under 4MB and try again.');
+        setFileSizeError('Your image file is too large. Please try a smaller original image.');
       } else if (userErrorMessage.includes('network') || userErrorMessage.includes('fetch')) {
         setSubmitError('Network error occurred. Please check your internet connection and try again.');
       } else if (userErrorMessage.includes('timeout')) {
@@ -487,161 +551,6 @@ export default function CompetitionDetail() {
   // Format date for display
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'MMMM d, yyyy');
-  };
-
-  // Handle file input change with file size check and compression
-  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFileSizeError('');
-    const file = e.target.files?.[0] || null;
-    
-    if (file) {
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        setFileSizeError('Please upload a valid image file (JPG, PNG or WebP)');
-        setPhotoFile(null);
-        return;
-      }
-      
-      // Check original file size
-      const originalSize = file.size / (1024 * 1024); // Size in MB
-      console.log(`Original image size: ${originalSize.toFixed(2)} MB`);
-      
-      // ORIGINAL SIZE LIMIT: 10MB for initial selection
-      if (file.size > 10 * 1024 * 1024) {
-        setFileSizeError(`Image size must be less than 10MB (current size: ${originalSize.toFixed(2)} MB)`);
-        setPhotoFile(null);
-        return;
-      }
-      
-      // Automatically compress if file is over 5MB (Vercel's limit)
-      if (file.size > 5 * 1024 * 1024) {
-        try {
-          // Create an image element from the file
-          const img = document.createElement('img');
-          const reader = new FileReader();
-          
-          // Wait for the image to load
-          await new Promise<void>((resolve) => {
-            reader.onload = (e) => {
-              img.src = e.target?.result as string;
-              img.onload = () => resolve();
-            };
-            reader.readAsDataURL(file);
-          });
-          
-          // Create a canvas and compress the image
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          // Calculate new dimensions while maintaining aspect ratio
-          let width = img.width;
-          let height = img.height;
-          
-          // Reduce dimensions if larger than 2000px on any side
-          const maxDimension = 2000;
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height / width) * maxDimension);
-              width = maxDimension;
-            } else {
-              width = Math.round((width / height) * maxDimension);
-              height = maxDimension;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Draw image on canvas
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          // Calculate compression quality based on file size
-          // Larger files need more compression
-          let quality = 0.7;
-          if (file.size > 8 * 1024 * 1024) {
-            quality = 0.5; // More aggressive compression for very large files
-          }
-          
-          // Convert to blob with quality reduction
-          const compressedBlob = await new Promise<Blob>((resolve) => {
-            canvas.toBlob(
-              (blob) => {
-                // This should never happen, but TypeScript requires us to check
-                if (!blob) {
-                  resolve(new Blob([]));
-                  return;
-                }
-                resolve(blob);
-              },
-              file.type,
-              quality
-            );
-          });
-          
-          // Create new File from compressed blob
-          const compressedFile = new File([compressedBlob], file.name, {
-            type: file.type,
-            lastModified: Date.now(),
-          });
-          
-          console.log(`Compressed image size: ${(compressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((compressedFile.size / file.size) * 100)}% of original)`);
-          
-          // If compression wasn't enough, try one more time with more aggressive settings
-          if (compressedFile.size > 5 * 1024 * 1024) {
-            const canvas2 = document.createElement('canvas');
-            const ctx2 = canvas2.getContext('2d');
-            
-            // Reduce dimensions further if still too large
-            width = Math.round(width * 0.8);
-            height = Math.round(height * 0.8);
-            
-            canvas2.width = width;
-            canvas2.height = height;
-            
-            ctx2?.drawImage(img, 0, 0, width, height);
-            
-            const recompressedBlob = await new Promise<Blob>((resolve) => {
-              canvas2.toBlob(
-                (blob) => {
-                  if (!blob) {
-                    resolve(new Blob([]));
-                    return;
-                  }
-                  resolve(blob);
-                },
-                file.type,
-                0.4 // Much more aggressive compression
-              );
-            });
-            
-            const recompressedFile = new File([recompressedBlob], file.name, {
-              type: file.type,
-              lastModified: Date.now(),
-            });
-            
-            console.log(`Re-compressed image size: ${(recompressedFile.size / (1024 * 1024)).toFixed(2)} MB (${Math.round((recompressedFile.size / file.size) * 100)}% of original)`);
-            
-            // Use the recompressed file
-            setPhotoFile(recompressedFile);
-          } else {
-            // Use the compressed file
-            setPhotoFile(compressedFile);
-          }
-        } catch (error) {
-          console.error('Error compressing image:', error);
-          // If compression fails, inform the user they need a smaller image
-          setFileSizeError(`Unable to compress image. Please use an image smaller than 5MB.`);
-          setPhotoFile(null);
-          return;
-        }
-      } else {
-        // For smaller files, just use them as is
-        setPhotoFile(file);
-      }
-    } else {
-      setPhotoFile(null);
-    }
   };
 
   // Function to toggle expanded sections
@@ -787,10 +696,29 @@ export default function CompetitionDetail() {
                             onChange={handlePhotoFileChange}
                             className="mt-1 block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border-[#e0c36a]"
                             required
+                            disabled={isCompressing}
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            JPG, PNG or GIF up to 10MB
+                            JPG, PNG or WebP up to 10MB (automatically compressed if needed)
                           </p>
+                          
+                          {/* Compression status */}
+                          {isCompressing && (
+                            <div className="mt-2 flex items-center text-sm text-[#2699a6]">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#2699a6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Compressing image...
+                            </div>
+                          )}
+                          
+                          {/* Compression info */}
+                          {compressionInfo && !isCompressing && (
+                            <div className="mt-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md p-2">
+                              ✓ {compressionInfo}
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex justify-end space-x-3">
@@ -798,15 +726,16 @@ export default function CompetitionDetail() {
                             type="button"
                             onClick={() => setShowSubmitForm(false)}
                             className="inline-flex items-center px-4 py-2 border-2 border-[#e0c36a] shadow-sm text-sm font-semibold rounded-lg text-[#1a4d5c] bg-[#fffbe6] hover:bg-[#e6f0f3]"
+                            disabled={isSubmitting || isCompressing}
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
-                            disabled={isSubmitting}
-                            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50"
+                            disabled={isSubmitting || isCompressing}
+                            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {isSubmitting ? 'Submitting...' : 'Submit Photo'}
+                            {isSubmitting ? 'Submitting...' : isCompressing ? 'Processing...' : 'Submit Photo'}
                           </button>
                         </div>
                       </form>

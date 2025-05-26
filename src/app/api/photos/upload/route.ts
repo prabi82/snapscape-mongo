@@ -16,7 +16,7 @@ const corsHeaders = {
 
 // Vercel function payload limits
 const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5MB (Vercel limit)
-const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB (safe limit for processing)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB (user can upload, but will be compressed on frontend)
 
 // Handle OPTIONS requests for CORS preflight
 export async function OPTIONS(request: NextRequest) {
@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           success: false, 
-          message: `File size too large. Maximum allowed size is 4MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please compress your image and try again.`,
+          message: `File size too large. Maximum allowed size is 10MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please compress your image and try again.`,
           error: 'FILE_TOO_LARGE',
           currentSize: `${(photo.size / 1024 / 1024).toFixed(2)}MB`,
-          maxSize: '4MB'
+          maxSize: '10MB'
         },
         { status: 413, headers: corsHeaders }
       );
