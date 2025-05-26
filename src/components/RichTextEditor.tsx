@@ -25,7 +25,7 @@ export default function RichTextEditor({
   return (
     <div className="tinymce-wrapper">
       <Editor
-        apiKey="ozvny1j4zjrs8ph2ez4on56povvn1e5kuqfcieatr3ct89k8" // Your TinyMCE API key
+        apiKey="no-api-key" // Self-hosted mode to avoid domain registration
         onInit={(evt, editor) => editorRef.current = editor}
         value={value}
         onEditorChange={handleEditorChange}
@@ -35,7 +35,7 @@ export default function RichTextEditor({
           plugins: [
             // Core editing features
             'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'image', 'link', 'lists', 'media', 'searchreplace', 'table', 'visualblocks', 'wordcount',
-            // Premium features (available until Jun 9, 2025)
+            // Premium features (available until Jun 9, 2025) - removed tinymcespellchecker
             'checklist', 'mediaembed', 'casechange', 'formatpainter', 'pageembed', 'a11ychecker', 'permanentpen', 'powerpaste', 'advtable', 'advcode', 'editimage', 'advtemplate', 'mentions', 'tableofcontents', 'footnotes', 'mergetags', 'autocorrect', 'typography', 'inlinecss', 'markdown', 'importword', 'exportword', 'exportpdf'
           ],
           toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link image media table mergetags | a11ycheck typography | align lineheight | checklist numlist bullist indent outdent | emoticons charmap | removeformat',
@@ -70,6 +70,8 @@ export default function RichTextEditor({
           content_css: 'default',
           directionality: 'ltr',
           language: 'en',
+          // Cloud-hosted configuration - automatically handles domains
+          cloud_image_cors_hosts: ['picsum.photos'],
           // Premium features configuration
           mergetags_list: [
             { value: 'Competition.Title', title: 'Competition Title' },
