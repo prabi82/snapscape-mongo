@@ -16,12 +16,21 @@ const createTransporter = () => {
       user: 'info@onlyoman.com',
       pass: 'l@fbCMLFA)Uy'
     },
+    tls: {
+      // Ignore certificate validation issues
+      rejectUnauthorized: false
+    }
   });
 };
 
 export const sendEmail = async ({ to, subject, html }: EmailOptions) => {
   try {
+    console.log(`Attempting to send email to: ${to} with subject: ${subject}`);
     const transporter = createTransporter();
+    
+    // Verify transporter configuration
+    await transporter.verify();
+    console.log('SMTP connection verified successfully');
     
     const info = await transporter.sendMail({
       from: '"SnapScape" <info@onlyoman.com>',
@@ -30,10 +39,17 @@ export const sendEmail = async ({ to, subject, html }: EmailOptions) => {
       html,
     });
     
-    console.log(`Email sent: ${info.messageId}`);
+    console.log(`Email sent successfully: ${info.messageId}`);
+    console.log(`Email response: ${JSON.stringify(info.response)}`);
     return true;
   } catch (error) {
     console.error('Error sending email:', error);
+    console.error('Email error details:', {
+      to,
+      subject,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return false;
   }
 };

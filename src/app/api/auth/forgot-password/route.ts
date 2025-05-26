@@ -16,10 +16,13 @@ export async function POST(req: NextRequest) {
       );
     }
     
+    console.log(`Password reset requested for email: ${email}`);
+    
     // Find user by email
     const user = await User.findOne({ email });
     
     if (!user) {
+      console.log(`No user found with email: ${email}`);
       // For security, don't reveal if email exists or not
       return NextResponse.json(
         { 
@@ -29,6 +32,8 @@ export async function POST(req: NextRequest) {
         { status: 200 }
       );
     }
+    
+    console.log(`User found: ${user.name} (${user.email})`);
     
     // Generate password reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -40,8 +45,20 @@ export async function POST(req: NextRequest) {
     user.passwordResetExpires = resetExpires;
     await user.save();
     
+    console.log(`Reset token generated and saved for user: ${user.email}`);
+    
     // Send password reset email
-    await sendPasswordResetEmail(user.email, user.name, resetToken);
+    const emailSent = await sendPasswordResetEmail(user.email, user.name, resetToken);
+    
+    if (!emailSent) {
+      console.error(`Failed to send password reset email to: ${user.email}`);
+      return NextResponse.json(
+        { success: false, message: 'Failed to send password reset email. Please try again later.' },
+        { status: 500 }
+      );
+    }
+    
+    console.log(`Password reset email sent successfully to: ${user.email}`);
     
     return NextResponse.json(
       {
