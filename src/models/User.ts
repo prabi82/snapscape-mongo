@@ -16,6 +16,8 @@ interface IUserDocument extends mongoose.Document {
   isActive: boolean;
   verificationToken: string | null;
   verificationExpires: Date | null;
+  passwordResetToken: string | null;
+  passwordResetExpires: Date | null;
   createdAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
@@ -92,6 +94,15 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
   verificationExpires: {
+    type: Date,
+    default: null,
+  },
+  // Password reset fields
+  passwordResetToken: {
+    type: String,
+    default: null,
+  },
+  passwordResetExpires: {
     type: Date,
     default: null,
   },

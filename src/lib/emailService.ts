@@ -69,4 +69,38 @@ export const sendVerificationEmail = async (email: string, name: string, token: 
     subject: "Verify Your SnapScape Account",
     html,
   });
+};
+
+export const sendPasswordResetEmail = async (email: string, name: string, token: string) => {
+  // Determine the base URL - try multiple environment variables with appropriate fallbacks
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+  console.log(`Using base URL for password reset email: ${baseUrl}`);
+  const resetUrl = `${baseUrl}/auth/reset-password/confirm?token=${token}`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0c36a; border-radius: 8px; background-color: #f5f5f5;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <img src="${baseUrl}/logo.png" alt="SnapScape Logo" style="width: 150px;">
+      </div>
+      <h2 style="color: #1a4d5c; text-align: center; margin-bottom: 20px;">Reset Your Password</h2>
+      <p style="color: #333; font-size: 16px; line-height: 1.5;">Hello ${name},</p>
+      <p style="color: #333; font-size: 16px; line-height: 1.5;">We received a request to reset your password for your SnapScape account. Click the button below to create a new password:</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-image: linear-gradient(to right, #1a4d5c, #2699a6); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: 2px solid #e0c36a;">Reset Password</a>
+      </div>
+      <p style="color: #333; font-size: 16px; line-height: 1.5;">This link will expire in 1 hour for security reasons.</p>
+      <p style="color: #333; font-size: 16px; line-height: 1.5;">If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
+      <p style="color: #333; font-size: 16px; line-height: 1.5;">If the button doesn't work, you can also copy and paste the following link into your browser:</p>
+      <p style="background-color: #e6f0f3; padding: 10px; border-radius: 4px; word-break: break-all;">${resetUrl}</p>
+      <div style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
+        <p>&copy; ${new Date().getFullYear()} SnapScape. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+  
+  return await sendEmail({
+    to: email,
+    subject: "Reset Your SnapScape Password",
+    html,
+  });
 }; 
