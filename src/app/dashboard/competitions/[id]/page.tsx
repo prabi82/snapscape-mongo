@@ -280,10 +280,10 @@ export default function CompetitionDetail() {
         throw new Error('Please fill in all fields and select a photo');
       }
       
-      // Check file size (limit: 10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB
+      // Enhanced file size check (4MB limit for better compatibility)
+      const maxSize = 4 * 1024 * 1024; // 4MB (Vercel-safe limit)
       if (photoFile.size > maxSize) {
-        setFileSizeError('The selected image is above the 10MB limit. Please choose a smaller file.');
+        setFileSizeError('The selected image is above the 4MB limit. Please choose a smaller file or compress your image.');
         setIsSubmitting(false);
         return;
       }
@@ -301,6 +301,7 @@ export default function CompetitionDetail() {
         description: photoDescription?.substring(0, 30) + '...',
         competitionId,
         photoSize: photoFile?.size,
+        photoSizeMB: (photoFile?.size / 1024 / 1024).toFixed(2),
         photoType: photoFile?.type
       });
       
@@ -330,22 +331,46 @@ export default function CompetitionDetail() {
         });
         console.log('Response headers:', headerObj);
         
-        // Check for error responses
+        // Enhanced error handling for 413 and other status codes
         if (!response.ok) {
           let errorMessage = `Error: ${response.status} ${response.statusText}`;
           
+          // Handle specific HTTP status codes
+          if (response.status === 413) {
+            errorMessage = 'File too large for upload. Please compress your image to under 4MB and try again.';
+          } else if (response.status === 400) {
+            errorMessage = 'Invalid request. Please check your file and try again.';
+          } else if (response.status === 401) {
+            errorMessage = 'Authentication required. Please refresh the page and try again.';
+          } else if (response.status === 404) {
+            errorMessage = 'Competition not found. Please refresh the page.';
+          } else if (response.status >= 500) {
+            errorMessage = 'Server error. Please try again later.';
+          }
+          
           try {
-            // Try to parse the error response
+            // Try to parse the error response for more details
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.indexOf('application/json') !== -1) {
               const errorData = await response.json();
               console.log('Error response data:', errorData);
-              errorMessage = errorData.message || errorMessage;
+              
+              // Use server-provided error message if available
+              if (errorData.message) {
+                errorMessage = errorData.message;
+              }
+              
+              // Handle specific error types
+              if (errorData.error === 'PAYLOAD_TOO_LARGE' || errorData.error === 'FILE_TOO_LARGE') {
+                setFileSizeError(errorData.message || 'File too large. Please compress your image and try again.');
+                setIsSubmitting(false);
+                return;
+              }
             } else {
               // If not JSON, try to get text
               const textResponse = await response.text();
               console.log('Non-JSON error response:', textResponse);
-              if (textResponse) {
+              if (textResponse && textResponse.length < 200) {
                 errorMessage += ` - ${textResponse}`;
               }
             }
@@ -396,11 +421,32 @@ export default function CompetitionDetail() {
       } catch (fetchError: unknown) {
         console.error('Fetch operation failed:', fetchError);
         const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown network error';
+        
+        // Handle specific network errors
+        if (errorMessage.includes('413')) {
+          setFileSizeError('File too large for upload. Please compress your image to under 4MB and try again.');
+          setIsSubmitting(false);
+          return;
+        }
+        
         throw new Error(`Network error: ${errorMessage}`);
       }
     } catch (err: any) {
       console.error('Error submitting photo:', err);
-      setSubmitError(err.message || 'An error occurred while submitting your photo');
+      
+      // Enhanced error message for users
+      let userErrorMessage = err.message || 'An error occurred while submitting your photo';
+      
+      // Provide helpful guidance based on error type
+      if (userErrorMessage.includes('413') || userErrorMessage.includes('too large') || userErrorMessage.includes('payload')) {
+        setFileSizeError('Your image file is too large. Please compress it to under 4MB and try again.');
+      } else if (userErrorMessage.includes('network') || userErrorMessage.includes('fetch')) {
+        setSubmitError('Network error occurred. Please check your internet connection and try again.');
+      } else if (userErrorMessage.includes('timeout')) {
+        setSubmitError('Upload timed out. Please try again with a smaller image or check your connection.');
+      } else {
+        setSubmitError(userErrorMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }

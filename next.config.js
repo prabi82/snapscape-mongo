@@ -25,6 +25,7 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
+    serverComponentsExternalPackages: ['mongoose'],
   },
   // External packages that should be treated as server components
   serverExternalPackages: ['mongoose'],
@@ -39,7 +40,33 @@ const nextConfig = {
       },
     ],
     domains: ['res.cloudinary.com'],
-  }
+    formats: ['image/webp', 'image/avif'],
+  },
+  // Increase body size limits for file uploads
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+  // Add headers for CORS and file upload optimization
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
+    ];
+  },
+  // Increase function timeout for uploads
+  experimental: {
+    serverComponentsExternalPackages: ['mongoose'],
+    // Increase function execution timeout
+    proxyTimeout: 300000, // 5 minutes
+  },
 };
 
 module.exports = nextConfig; 

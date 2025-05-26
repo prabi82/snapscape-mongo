@@ -14,6 +14,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Vercel function payload limits
+const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5MB (Vercel limit)
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB (safe limit for processing)
+
 // Handle OPTIONS requests for CORS preflight
 export async function OPTIONS(request: NextRequest) {
   console.log('OPTIONS request received at /api/photos/upload');
@@ -32,30 +36,19 @@ function createTimeoutPromise(ms: number, operation: string) {
   });
 }
 
-// Helper function to retry operations
-async function retryOperation<T>(
-  operation: () => Promise<T>,
-  maxRetries: number = 3,
-  delay: number = 1000
-): Promise<T> {
-  let lastError: Error;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error as Error;
-      console.log(`Attempt ${attempt} failed:`, error);
-      
-      if (attempt < maxRetries) {
-        console.log(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; // Exponential backoff
-      }
+// Helper function to validate request size before processing
+function validateRequestSize(request: NextRequest): boolean {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength) {
+    const size = parseInt(contentLength, 10);
+    console.log(`Request content-length: ${(size / 1024 / 1024).toFixed(2)}MB`);
+    
+    if (size > VERCEL_PAYLOAD_LIMIT) {
+      console.log(`Request too large: ${size} bytes > ${VERCEL_PAYLOAD_LIMIT} bytes`);
+      return false;
     }
   }
-  
-  throw lastError!;
+  return true;
 }
 
 // Simple handling for other HTTP methods
@@ -67,6 +60,19 @@ export async function POST(request: NextRequest) {
   console.log('POST /api/photos/upload called');
   
   try {
+    // Early request size validation
+    if (!validateRequestSize(request)) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'File too large for upload. Please compress your image to under 4MB and try again.',
+          error: 'PAYLOAD_TOO_LARGE',
+          maxSize: '4MB'
+        },
+        { status: 413, headers: corsHeaders }
+      );
+    }
+
     // Check authentication
     const session = await getServerSession(authOptions);
     console.log('Authentication check:', { hasSession: Boolean(session), hasUser: Boolean(session?.user) });
@@ -82,15 +88,33 @@ export async function POST(request: NextRequest) {
     await connectDB();
     console.log('Connected to database');
 
-    // Parse FormData with error handling
+    // Parse FormData with enhanced error handling
     let formData;
     try {
-      formData = await request.formData();
+      // Add timeout for FormData parsing
+      const formDataPromise = request.formData();
+      const timeoutPromise = createTimeoutPromise(30000, 'FormData parsing');
+      
+      formData = await Promise.race([formDataPromise, timeoutPromise]);
       console.log('FormData parsed successfully');
     } catch (formError: any) {
       console.error('Failed to parse FormData:', formError);
+      
+      // Check if it's a size-related error
+      if (formError.message.includes('413') || formError.message.includes('too large') || formError.message.includes('payload')) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            message: 'File too large for upload. Please compress your image to under 4MB and try again.',
+            error: 'PAYLOAD_TOO_LARGE',
+            maxSize: '4MB'
+          },
+          { status: 413, headers: corsHeaders }
+        );
+      }
+      
       return NextResponse.json(
-        { success: false, message: 'Failed to parse form data - request may be too large or corrupted', error: formError?.message || 'Unknown error' },
+        { success: false, message: 'Failed to parse form data - request may be corrupted', error: formError?.message || 'Unknown error' },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -108,6 +132,7 @@ export async function POST(request: NextRequest) {
       photoName: photo?.name,
       photoType: photo?.type,
       photoSize: photo?.size,
+      photoSizeMB: photo?.size ? (photo.size / 1024 / 1024).toFixed(2) : 'unknown',
     });
 
     // Validate required fields
@@ -119,12 +144,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (10MB limit)
-    const maxFileSize = 10 * 1024 * 1024; // 10MB
-    if (photo.size > maxFileSize) {
-      console.log('File too large:', photo.size);
+    // Enhanced file size validation with specific limits
+    if (photo.size > MAX_FILE_SIZE) {
+      console.log(`File too large: ${photo.size} bytes (${(photo.size / 1024 / 1024).toFixed(2)}MB)`);
       return NextResponse.json(
-        { success: false, message: `File size too large. Maximum allowed size is 10MB` },
+        { 
+          success: false, 
+          message: `File size too large. Maximum allowed size is 4MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please compress your image and try again.`,
+          error: 'FILE_TOO_LARGE',
+          currentSize: `${(photo.size / 1024 / 1024).toFixed(2)}MB`,
+          maxSize: '4MB'
+        },
+        { status: 413, headers: corsHeaders }
+      );
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(photo.type)) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Invalid file type. Please upload a JPEG, PNG, or WebP image.',
+          error: 'INVALID_FILE_TYPE',
+          allowedTypes: allowedTypes
+        },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -156,19 +200,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload image to Cloudinary with timeout handling
+    // Upload image to Cloudinary with enhanced error handling
     try {
       console.log('Preparing to upload image to Cloudinary');
+      
+      // Convert file to buffer with memory management
       const arrayBuffer = await photo.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const uniqueFilename = `${session.user.id}_${Date.now()}`;
 
-      console.log('Starting Cloudinary upload with unique filename:', uniqueFilename);
+      console.log(`Starting Cloudinary upload - File: ${uniqueFilename}, Size: ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
       
-      // Add timeout to Cloudinary upload
+      // Upload with timeout and enhanced options
       const uploadPromise = uploadToCloudinary(buffer, {
         folder: `snapscape/competitions/${competitionId}`,
         public_id: uniqueFilename,
+        // Add Cloudinary-specific optimizations
+        quality: 'auto:good',
+        fetch_format: 'auto',
+        flags: 'progressive',
       });
       
       const timeoutPromise = createTimeoutPromise(120000, 'Cloudinary upload'); // 2 minute timeout
@@ -187,10 +237,10 @@ export async function POST(request: NextRequest) {
 
       console.log('Image uploaded successfully:', uploadResult.secure_url);
 
-      // Create thumbnail URL
+      // Create optimized thumbnail URL
       const thumbnailUrl = uploadResult.secure_url.replace(
         `/upload/`, 
-        `/upload/c_fill,h_300,w_300/`
+        `/upload/c_fill,h_300,w_300,q_auto,f_auto/`
       );
 
       // Create submission in database
@@ -234,14 +284,20 @@ export async function POST(request: NextRequest) {
     } catch (cloudinaryError: any) {
       console.error('Cloudinary error:', cloudinaryError);
       
-      // Provide more specific error messages
+      // Enhanced error message handling
       let errorMessage = 'Error uploading image to cloud storage';
-      if (cloudinaryError.message.includes('timeout')) {
+      let statusCode = 500;
+      
+      if (cloudinaryError.message.includes('413') || cloudinaryError.message.includes('too large') || cloudinaryError.message.includes('payload')) {
+        errorMessage = 'Image file is too large for processing. Please compress your image to under 4MB and try again.';
+        statusCode = 413;
+      } else if (cloudinaryError.message.includes('timeout')) {
         errorMessage = 'Upload timed out - please try again with a smaller image or check your internet connection';
       } else if (cloudinaryError.message.includes('network')) {
         errorMessage = 'Network error during upload - please check your internet connection and try again';
       } else if (cloudinaryError.message.includes('size')) {
         errorMessage = 'Image file is too large - please compress your image and try again';
+        statusCode = 413;
       }
       
       return NextResponse.json(
@@ -249,17 +305,23 @@ export async function POST(request: NextRequest) {
           success: false, 
           message: errorMessage,
           error: cloudinaryError.message,
-          retryable: cloudinaryError.message.includes('timeout') || cloudinaryError.message.includes('network')
+          retryable: cloudinaryError.message.includes('timeout') || cloudinaryError.message.includes('network'),
+          maxSize: '4MB'
         },
-        { status: 500, headers: corsHeaders }
+        { status: statusCode, headers: corsHeaders }
       );
     }
   } catch (error: any) {
     console.error('Server error:', error);
     
-    // Provide more specific error messages
+    // Enhanced error message handling
     let errorMessage = 'Server error occurred while processing your request';
-    if (error.message.includes('timeout')) {
+    let statusCode = 500;
+    
+    if (error.message.includes('413') || error.message.includes('too large') || error.message.includes('payload')) {
+      errorMessage = 'Request too large - please compress your image to under 4MB and try again';
+      statusCode = 413;
+    } else if (error.message.includes('timeout')) {
       errorMessage = 'Request timed out - please try again';
     } else if (error.message.includes('network')) {
       errorMessage = 'Network error - please check your connection and try again';
@@ -270,9 +332,10 @@ export async function POST(request: NextRequest) {
         success: false, 
         message: errorMessage, 
         error: error.message,
-        retryable: error.message.includes('timeout') || error.message.includes('network')
+        retryable: error.message.includes('timeout') || error.message.includes('network'),
+        maxSize: '4MB'
       },
-      { status: 500, headers: corsHeaders }
+      { status: statusCode, headers: corsHeaders }
     );
   }
 } 
