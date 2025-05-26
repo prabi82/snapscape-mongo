@@ -1,8 +1,5 @@
 'use client';
 
-import '@uiw/react-md-editor/markdown-editor.css';
-import MDEditor from '@uiw/react-md-editor';
-
 interface MarkdownRendererProps {
   content: string;
   className?: string;
@@ -14,21 +11,14 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
     return null;
   }
 
+  // Sanitize and render HTML content from TinyMCE
   return (
-    <div className={`markdown-content ${className}`} data-color-mode="light">
-      <MDEditor.Markdown 
-        source={content} 
-        style={{ 
-          whiteSpace: 'pre-wrap',
-          backgroundColor: 'transparent',
-          color: 'inherit',
-          padding: 0,
-          lineHeight: '1.4'
-        }}
-        wrapperElement={{
-          'data-color-mode': 'light'
-        }}
-      />
-    </div>
+    <div 
+      className={`tinymce-content ${className}`}
+      dangerouslySetInnerHTML={{ __html: content }}
+      style={{
+        lineHeight: '1.4'
+      }}
+    />
   );
 } 

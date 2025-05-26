@@ -23,7 +23,126 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Markdown content styling */
+/* TinyMCE content styling */
+.tinymce-content {
+  line-height: 1.4;
+}
+
+.tinymce-content h1,
+.tinymce-content h2,
+.tinymce-content h3,
+.tinymce-content h4,
+.tinymce-content h5,
+.tinymce-content h6 {
+  font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #1a4d5c;
+}
+
+.tinymce-content h1 { font-size: 1.5rem; }
+.tinymce-content h2 { font-size: 1.3rem; }
+.tinymce-content h3 { font-size: 1.1rem; }
+.tinymce-content h4 { font-size: 1rem; }
+
+.tinymce-content p {
+  margin-bottom: 0.5rem;
+}
+
+.tinymce-content ul,
+.tinymce-content ol {
+  margin-bottom: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.tinymce-content ul {
+  list-style-type: disc;
+}
+
+.tinymce-content ol {
+  list-style-type: decimal;
+}
+
+.tinymce-content li {
+  margin-bottom: 0.1rem;
+  line-height: 1.4;
+}
+
+.tinymce-content strong {
+  font-weight: bold;
+}
+
+.tinymce-content em {
+  font-style: italic;
+}
+
+.tinymce-content a {
+  color: #2699a6;
+  text-decoration: underline;
+}
+
+.tinymce-content a:hover {
+  color: #1a4d5c;
+}
+
+.tinymce-content blockquote {
+  border-left: 4px solid #e0c36a;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  background-color: #fffbe6;
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+}
+
+.tinymce-content code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+}
+
+.tinymce-content pre {
+  background-color: #f3f4f6;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.tinymce-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.tinymce-content hr {
+  border: none;
+  border-top: 2px solid #e0c36a;
+  margin: 1.5rem 0;
+}
+
+/* TinyMCE wrapper styling */
+.tinymce-wrapper {
+  border: 1px solid #e0c36a;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.tinymce-wrapper .tox-tinymce {
+  border: none;
+}
+
+.tinymce-wrapper .tox-toolbar {
+  background-color: #fffbe6;
+  border-bottom: 1px solid #e0c36a;
+}
+
+.tinymce-wrapper .tox-edit-area {
+  background-color: white;
+}
+
+/* Legacy markdown content styling - keeping for backward compatibility */
 .markdown-content {
   line-height: 1.6;
 }
