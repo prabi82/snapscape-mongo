@@ -18,6 +18,18 @@ export async function POST(req: NextRequest) {
     
     console.log(`Password reset requested for email: ${email}`);
     
+    // Check if email environment variables are set
+    const emailConfigured = process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD;
+    console.log(`Email service configured: ${emailConfigured ? 'YES' : 'NO'}`);
+    
+    if (!emailConfigured) {
+      console.error('Email service not configured - missing environment variables');
+      return NextResponse.json(
+        { success: false, message: 'Email service is not configured. Please contact support.' },
+        { status: 500 }
+      );
+    }
+    
     // Find user by email
     const user = await User.findOne({ email });
     
@@ -25,52 +37,53 @@ export async function POST(req: NextRequest) {
       console.log(`No user found with email: ${email}`);
       // For security, don't reveal if email exists or not
       return NextResponse.json(
-        { 
-          success: true, 
-          message: 'If an account with that email exists, we have sent a password reset link.' 
-        },
+        { success: true, message: 'If an account with that email exists, a password reset link has been sent.' },
         { status: 200 }
       );
     }
     
-    console.log(`User found: ${user.name} (${user.email})`);
+    console.log(`User found: ${user._id}, generating reset token`);
     
-    // Generate password reset token
+    // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date();
-    resetExpires.setHours(resetExpires.getHours() + 1); // Token expires in 1 hour
+    const resetExpires = new Date(Date.now() + 3600000); // 1 hour from now
     
-    // Update user with reset token
+    // Save reset token to user
     user.passwordResetToken = resetToken;
     user.passwordResetExpires = resetExpires;
     await user.save();
     
-    console.log(`Reset token generated and saved for user: ${user.email}`);
+    console.log(`Reset token saved for user ${user._id}, expires at: ${resetExpires}`);
     
     // Send password reset email
-    const emailSent = await sendPasswordResetEmail(user.email, user.name, resetToken);
-    
-    if (!emailSent) {
-      console.error(`Failed to send password reset email to: ${user.email}`);
+    try {
+      const emailSent = await sendPasswordResetEmail(email, user.name, resetToken);
+      
+      if (emailSent) {
+        console.log(`Password reset email sent successfully to: ${email}`);
+        return NextResponse.json(
+          { success: true, message: 'Password reset email sent successfully' },
+          { status: 200 }
+        );
+      } else {
+        console.error(`Failed to send password reset email to: ${email}`);
+        return NextResponse.json(
+          { success: false, message: 'Failed to send password reset email. Please try again later.' },
+          { status: 500 }
+        );
+      }
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
       return NextResponse.json(
         { success: false, message: 'Failed to send password reset email. Please try again later.' },
         { status: 500 }
       );
     }
     
-    console.log(`Password reset email sent successfully to: ${user.email}`);
-    
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'If an account with that email exists, we have sent a password reset link.',
-      },
-      { status: 200 }
-    );
   } catch (error) {
     console.error('Forgot password error:', error);
     return NextResponse.json(
-      { success: false, message: 'Error sending password reset email' },
+      { success: false, message: 'An error occurred while processing your request' },
       { status: 500 }
     );
   }
