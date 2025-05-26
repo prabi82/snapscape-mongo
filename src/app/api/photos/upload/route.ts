@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/mongodb';
@@ -21,6 +21,41 @@ export async function OPTIONS(request: NextRequest) {
     status: 200,
     headers: corsHeaders,
   });
+}
+
+// Helper function to create timeout promise
+function createTimeoutPromise(ms: number, operation: string) {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`${operation} timed out after ${ms}ms`));
+    }, ms);
+  });
+}
+
+// Helper function to retry operations
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<T> {
+  let lastError: Error;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      console.log(`Attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      }
+    }
+  }
+  
+  throw lastError!;
 }
 
 // Simple handling for other HTTP methods
@@ -52,10 +87,10 @@ export async function POST(request: NextRequest) {
     try {
       formData = await request.formData();
       console.log('FormData parsed successfully');
-    } catch (formError) {
+    } catch (formError: any) {
       console.error('Failed to parse FormData:', formError);
       return NextResponse.json(
-        { success: false, message: 'Failed to parse form data', error: formError.message },
+        { success: false, message: 'Failed to parse form data - request may be too large or corrupted', error: formError?.message || 'Unknown error' },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -80,6 +115,16 @@ export async function POST(request: NextRequest) {
       console.log('Missing required fields');
       return NextResponse.json(
         { success: false, message: 'All fields are required: title, description, competition, photo' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Validate file size (10MB limit)
+    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    if (photo.size > maxFileSize) {
+      console.log('File too large:', photo.size);
+      return NextResponse.json(
+        { success: false, message: `File size too large. Maximum allowed size is 10MB` },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -111,26 +156,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload image to Cloudinary
+    // Upload image to Cloudinary with timeout handling
     try {
       console.log('Preparing to upload image to Cloudinary');
       const arrayBuffer = await photo.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const uniqueFilename = `${session.user.id}_${Date.now()}`;
 
-      // Simple upload with minimal options
       console.log('Starting Cloudinary upload with unique filename:', uniqueFilename);
-      const uploadResult = await uploadToCloudinary(buffer, {
+      
+      // Add timeout to Cloudinary upload
+      const uploadPromise = uploadToCloudinary(buffer, {
         folder: `snapscape/competitions/${competitionId}`,
         public_id: uniqueFilename,
       });
+      
+      const timeoutPromise = createTimeoutPromise(120000, 'Cloudinary upload'); // 2 minute timeout
+      
+      const uploadResult = await Promise.race([uploadPromise, timeoutPromise]);
 
       console.log('Cloudinary upload result received:', uploadResult ? 'success' : 'undefined');
       
       if (!uploadResult || !uploadResult.secure_url) {
         console.error('No URL returned from Cloudinary');
         return NextResponse.json(
-          { success: false, message: 'Failed to upload image', error: 'No URL returned from cloud storage' },
+          { success: false, message: 'Failed to upload image - no URL returned from cloud storage' },
           { status: 500, headers: corsHeaders }
         );
       }
@@ -157,7 +207,7 @@ export async function POST(request: NextRequest) {
 
       console.log('Submission created:', submission._id);
       
-      // Send notification to admins
+      // Send notification to admins (don't fail if this fails)
       try {
         await notifyAdminsOfPhotoSubmission(
           submission._id.toString(),
@@ -180,22 +230,48 @@ export async function POST(request: NextRequest) {
           title: submission.title,
         }
       }, { headers: corsHeaders });
+      
     } catch (cloudinaryError: any) {
       console.error('Cloudinary error:', cloudinaryError);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Error uploading image to cloud storage';
+      if (cloudinaryError.message.includes('timeout')) {
+        errorMessage = 'Upload timed out - please try again with a smaller image or check your internet connection';
+      } else if (cloudinaryError.message.includes('network')) {
+        errorMessage = 'Network error during upload - please check your internet connection and try again';
+      } else if (cloudinaryError.message.includes('size')) {
+        errorMessage = 'Image file is too large - please compress your image and try again';
+      }
+      
       return NextResponse.json(
         { 
           success: false, 
-          message: 'Error uploading image to cloud storage',
+          message: errorMessage,
           error: cloudinaryError.message,
-          stack: cloudinaryError.stack 
+          retryable: cloudinaryError.message.includes('timeout') || cloudinaryError.message.includes('network')
         },
         { status: 500, headers: corsHeaders }
       );
     }
   } catch (error: any) {
     console.error('Server error:', error);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Server error occurred while processing your request';
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Request timed out - please try again';
+    } else if (error.message.includes('network')) {
+      errorMessage = 'Network error - please check your connection and try again';
+    }
+    
     return NextResponse.json(
-      { success: false, message: 'Server error', error: error.message, stack: error.stack },
+      { 
+        success: false, 
+        message: errorMessage, 
+        error: error.message,
+        retryable: error.message.includes('timeout') || error.message.includes('network')
+      },
       { status: 500, headers: corsHeaders }
     );
   }
