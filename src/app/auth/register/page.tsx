@@ -501,9 +501,16 @@ export default function RegisterPage() {
             {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
-        <div className="text-center w-full mt-4">
-          <span className="text-[#1a4d5c]">Already have an account? </span>
-          <Link href="/" className="text-[#e0c36a] font-semibold hover:underline">Sign in</Link>
+        <div className="text-center w-full mt-4 space-y-2">
+          <div>
+            <span className="text-[#1a4d5c]">Already have an account? </span>
+            <Link href="/" className="text-[#e0c36a] font-semibold hover:underline">Sign in</Link>
+          </div>
+          <div>
+            <Link href="/about" className="text-[#1a4d5c] hover:text-[#2699a6] transition-colors text-sm">
+              Learn more about SnapScape
+            </Link>
+          </div>
         </div>
       </div>
     </div>

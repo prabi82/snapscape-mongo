@@ -266,9 +266,16 @@ function HomeWithSearchParams() {
             return null;
           })}
         </div>
-        <div className="text-center w-full">
-          <span className="text-[#1a4d5c]">Don't have an account? </span>
-          <Link href="/auth/register" className="text-[#e0c36a] font-semibold hover:underline">Signup</Link>
+        <div className="text-center w-full space-y-2">
+          <div>
+            <span className="text-[#1a4d5c]">Don't have an account? </span>
+            <Link href="/auth/register" className="text-[#e0c36a] font-semibold hover:underline">Signup</Link>
+          </div>
+          <div>
+            <Link href="/about" className="text-[#1a4d5c] hover:text-[#2699a6] transition-colors text-sm">
+              Learn more about SnapScape
+            </Link>
+          </div>
         </div>
         
         {/* Email Verification Modal */}
