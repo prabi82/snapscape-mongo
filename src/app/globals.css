@@ -23,8 +23,40 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* TinyMCE content styling */
-.tinymce-content {
+/* Text content styling for Lexical editor output */
+.text-content {
+  line-height: 1.4;
+}
+
+.text-content p {
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.text-content p:last-child {
+  margin-bottom: 0;
+}
+
+.text-content ul {
+  margin-bottom: 0.5rem;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.text-content li {
+  margin-bottom: 0.1rem;
+  line-height: 1.4;
+}
+
+.text-content ul:last-child {
+  margin-bottom: 0;
+}
+
+/* Remove old TinyMCE styles and replace with simple text styling */
+
+/* TinyMCE and HTML content styling */
+.tinymce-content,
+.html-content {
   line-height: 1.4;
 }
 
@@ -33,59 +65,80 @@ body {
 .tinymce-content h3,
 .tinymce-content h4,
 .tinymce-content h5,
-.tinymce-content h6 {
+.tinymce-content h6,
+.html-content h1,
+.html-content h2,
+.html-content h3,
+.html-content h4,
+.html-content h5,
+.html-content h6 {
   font-weight: bold;
   margin-top: 1rem;
   margin-bottom: 0.5rem;
   color: #1a4d5c;
 }
 
-.tinymce-content h1 { font-size: 1.5rem; }
-.tinymce-content h2 { font-size: 1.3rem; }
-.tinymce-content h3 { font-size: 1.1rem; }
-.tinymce-content h4 { font-size: 1rem; }
+.tinymce-content h1,
+.html-content h1 { font-size: 1.5rem; }
+.tinymce-content h2,
+.html-content h2 { font-size: 1.3rem; }
+.tinymce-content h3,
+.html-content h3 { font-size: 1.1rem; }
+.tinymce-content h4,
+.html-content h4 { font-size: 1rem; }
 
-.tinymce-content p {
+.tinymce-content p,
+.html-content p {
   margin-bottom: 0.5rem;
 }
 
 .tinymce-content ul,
-.tinymce-content ol {
+.tinymce-content ol,
+.html-content ul,
+.html-content ol {
   margin-bottom: 0.5rem;
   padding-left: 1.5rem;
 }
 
-.tinymce-content ul {
+.tinymce-content ul,
+.html-content ul {
   list-style-type: disc;
 }
 
-.tinymce-content ol {
+.tinymce-content ol,
+.html-content ol {
   list-style-type: decimal;
 }
 
-.tinymce-content li {
+.tinymce-content li,
+.html-content li {
   margin-bottom: 0.1rem;
   line-height: 1.4;
 }
 
-.tinymce-content strong {
+.tinymce-content strong,
+.html-content strong {
   font-weight: bold;
 }
 
-.tinymce-content em {
+.tinymce-content em,
+.html-content em {
   font-style: italic;
 }
 
-.tinymce-content a {
+.tinymce-content a,
+.html-content a {
   color: #2699a6;
   text-decoration: underline;
 }
 
-.tinymce-content a:hover {
+.tinymce-content a:hover,
+.html-content a:hover {
   color: #1a4d5c;
 }
 
-.tinymce-content blockquote {
+.tinymce-content blockquote,
+.html-content blockquote {
   border-left: 4px solid #e0c36a;
   padding-left: 1rem;
   margin: 1rem 0;
@@ -95,7 +148,8 @@ body {
   border-radius: 0.25rem;
 }
 
-.tinymce-content code {
+.tinymce-content code,
+.html-content code {
   background-color: #f3f4f6;
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
@@ -103,7 +157,8 @@ body {
   font-size: 0.875rem;
 }
 
-.tinymce-content pre {
+.tinymce-content pre,
+.html-content pre {
   background-color: #f3f4f6;
   padding: 1rem;
   border-radius: 0.5rem;
@@ -111,12 +166,14 @@ body {
   margin: 1rem 0;
 }
 
-.tinymce-content pre code {
+.tinymce-content pre code,
+.html-content pre code {
   background-color: transparent;
   padding: 0;
 }
 
-.tinymce-content hr {
+.tinymce-content hr,
+.html-content hr {
   border: none;
   border-top: 2px solid #e0c36a;
   margin: 1.5rem 0;

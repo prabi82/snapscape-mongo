@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
-    "@tinymce/tinymce-react": "^6.1.0",
+    "@lexical/plain-text": "^0.31.2",
+    "@lexical/rich-text": "^0.31.2",
+    "@lexical/utils": "^0.31.2",
     "@types/formidable": "^3.4.5",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.6.0",
