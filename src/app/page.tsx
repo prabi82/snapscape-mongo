@@ -176,7 +176,7 @@ function HomeWithSearchParams() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-[#e6f0f3] to-[#1a4d5c]">
       {/* Invisible reCAPTCHA v3 */}
       <ReCaptchaV3
-        siteKey="6LegLkMrAAAAAOSRdKTQ33Oa6UT4EzOvqdhsSpM3" // Temporarily hardcoded for testing
+        siteKey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LegLkMrAAAAAOSRdKTQ33Oa6UT4EzOvqdhsSpM3"}
         action="login"
         onVerify={handleRecaptchaVerify}
       />
