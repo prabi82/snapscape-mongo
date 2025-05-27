@@ -174,6 +174,7 @@ export default function CompetitionDetail() {
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionInfo, setCompressionInfo] = useState<string>('');
   const [showCompressionInfo, setShowCompressionInfo] = useState(true);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // New state for user's submissions to this competition
   const [userSubmissions, setUserSubmissions] = useState<Submission[]>([]);
@@ -373,6 +374,10 @@ export default function CompetitionDetail() {
         throw new Error('Please fill in all fields and select a photo');
       }
       
+      if (!agreedToTerms) {
+        throw new Error('Please confirm that you have reviewed and agree to the competition terms');
+      }
+      
       // Final size check (should be under 10MB after optimization)
       const maxSize = 10 * 1024 * 1024; // 10MB maximum
       if (photoFile.size > maxSize) {
@@ -498,6 +503,7 @@ export default function CompetitionDetail() {
         setPhotoDescription('');
         setPhotoFile(null);
         setCompressionInfo('');
+        setAgreedToTerms(false);
         setShowSubmitForm(false);
         
         // Refresh competition data to update submission status
@@ -751,6 +757,47 @@ export default function CompetitionDetail() {
                           )}
                         </div>
                         
+                        {/* Terms and Conditions Agreement */}
+                        <div className="mb-4 p-3 bg-[#fffbe6] border border-[#e0c36a] rounded-lg">
+                          <div className="flex items-start space-x-3">
+                            <input
+                              type="checkbox"
+                              id="agreedToTerms"
+                              checked={agreedToTerms}
+                              onChange={(e) => setAgreedToTerms(e.target.checked)}
+                              className="mt-1 h-4 w-4 text-[#2699a6] focus:ring-[#2699a6] border-[#e0c36a] rounded"
+                              required
+                            />
+                            <label htmlFor="agreedToTerms" className="text-sm text-[#1a4d5c] leading-relaxed">
+                              <span className="font-semibold text-red-600">*</span> I confirm that I have carefully reviewed and agree to this competition's{' '}
+                              <button
+                                type="button"
+                                onClick={() => toggleSection('description')}
+                                className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
+                              >
+                                description
+                              </button>
+                              ,{' '}
+                              <button
+                                type="button"
+                                onClick={() => toggleSection('rules')}
+                                className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
+                              >
+                                rules & regulations
+                              </button>
+                              , and{' '}
+                              <button
+                                type="button"
+                                onClick={() => toggleSection('copyright')}
+                                className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
+                              >
+                                copyright terms
+                              </button>
+                              . I understand that by submitting my photo, I am bound by these terms and confirm that I own all rights to the submitted image.
+                            </label>
+                          </div>
+                        </div>
+                        
                         <div className="flex justify-end space-x-3">
                           <button
                             type="button"
@@ -762,7 +809,7 @@ export default function CompetitionDetail() {
                           </button>
                           <button
                             type="submit"
-                            disabled={isSubmitting || isCompressing}
+                            disabled={isSubmitting || isCompressing || !agreedToTerms}
                             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isSubmitting ? 'Submitting...' : isCompressing ? 'Processing...' : 'Submit Photo'}
