@@ -23,6 +23,7 @@ interface Competition {
   submissionLimit: number;
   votingCriteria: string;
   submissionFormat: string;
+  copyrightNotice: string;
   status: string;
   coverImage?: string;
   hideOtherSubmissions?: boolean;
@@ -52,6 +53,7 @@ export default function EditCompetition() {
     submissionLimit: 5,
     votingCriteria: '',
     submissionFormat: '',
+    copyrightNotice: '',
     status: 'upcoming',
     hideOtherSubmissions: false
   });
@@ -143,6 +145,7 @@ export default function EditCompetition() {
           submissionLimit: data.data.submissionLimit || 5,
           votingCriteria: data.data.votingCriteria || '',
           submissionFormat: data.data.submissionFormat || '',
+          copyrightNotice: data.data.copyrightNotice || 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
           status: data.data.status,
           hideOtherSubmissions: data.data.hideOtherSubmissions || false
         });
@@ -798,6 +801,20 @@ export default function EditCompetition() {
                 />
               </div>
               <p className="mt-1 text-xs text-gray-500">Specify the requirements for photo submissions (format, resolution, file size, etc.)</p>
+            </div>
+
+            {/* Copyright Notice */}
+            <div className="sm:col-span-6">
+              <label htmlFor="copyrightNotice" className="block text-sm font-medium text-gray-700">
+                Copyright Notice
+              </label>
+              <div className="mt-1">
+                <RichTextEditor
+                  value={formData.copyrightNotice}
+                  onChange={(value) => handleRichTextChange('copyrightNotice', value)}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Copyright information displayed to users when submitting photos</p>
             </div>
             
             {/* Cover Image - REPLACEMENT START */}

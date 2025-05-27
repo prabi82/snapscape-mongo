@@ -24,6 +24,7 @@ interface Competition {
   submissionLimit: number;
   votingCriteria: string;
   submissionFormat: string;
+  copyrightNotice: string;
   hasSubmitted: boolean;
   userSubmissionsCount: number;
   canSubmitMore: boolean;
@@ -875,7 +876,9 @@ export default function CompetitionDetail() {
             {/* Copyright - Compact display */}
             <div className="bg-[#fffbe6] border border-[#e0c36a] rounded-lg p-3">
               <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Copyright</h3>
-              <div className="text-gray-700 text-sm">You maintain the copyrights to all photos you submit. You must own all submitted images.</div>
+              <div className="text-gray-700 text-sm">
+                <MarkdownRenderer content={competition.copyrightNotice || 'You maintain the copyrights to all photos you submit. You must own all submitted images.'} />
+              </div>
             </div>
           </div>
         </div>

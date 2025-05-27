@@ -80,6 +80,11 @@ const competitionSchema = new mongoose.Schema({
     trim: true,
     default: 'JPEG, minimum resolution of 700px × 700px, maximum size 25MB',
   },
+  copyrightNotice: {
+    type: String,
+    trim: true,
+    default: 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
+  },
   coverImage: {
     type: String,
     trim: true,

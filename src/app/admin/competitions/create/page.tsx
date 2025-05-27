@@ -20,6 +20,7 @@ interface CompetitionFormData {
   submissionLimit: number;
   votingCriteria: string;
   submissionFormat: string;
+  copyrightNotice: string;
   status: 'upcoming' | 'active' | 'voting' | 'completed';
 }
 
@@ -43,6 +44,7 @@ export default function CreateCompetition() {
     submissionLimit: 5,
     votingCriteria: 'composition,creativity,technical',
     submissionFormat: '',
+    copyrightNotice: 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
     status: 'upcoming',
   });
 
@@ -491,6 +493,7 @@ export default function CreateCompetition() {
         submissionLimit: 5,
         votingCriteria: 'composition,creativity,technical',
         submissionFormat: '',
+        copyrightNotice: 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
         status: 'upcoming',
       });
 
@@ -769,6 +772,20 @@ export default function CreateCompetition() {
                 />
               </div>
               <p className="mt-1 text-xs text-gray-500">Specify the requirements for photo submissions (format, resolution, file size, etc.)</p>
+            </div>
+
+            {/* Copyright Notice */}
+            <div className="sm:col-span-6">
+              <label htmlFor="copyrightNotice" className="block text-sm font-medium text-gray-700">
+                Copyright Notice
+              </label>
+              <div className="mt-1">
+                <RichTextEditor
+                  value={formData.copyrightNotice}
+                  onChange={(value) => handleRichTextChange('copyrightNotice', value)}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Copyright information displayed to users when submitting photos</p>
             </div>
 
             {/* Cover Image */}
