@@ -111,7 +111,13 @@ export default function ViewSubmissions() {
     setIsLoadingMore(true);
     try {
       console.log('Fetching submissions for competition:', competitionId); // Debug log
-      const res = await fetch(`/api/submissions?competition=${competitionId}&status=approved&showAll=true&limit=12&page=${resetPage ? 1 : page}`);
+      
+      // For active competitions, only show user's own submissions unless admin
+      // For voting/completed competitions, show all submissions
+      const shouldShowAll = competition?.status === 'voting' || competition?.status === 'completed' || isAdmin;
+      const showAllParam = shouldShowAll ? '&showAll=true' : '';
+      
+      const res = await fetch(`/api/submissions?competition=${competitionId}&status=approved${showAllParam}&limit=12&page=${resetPage ? 1 : page}`);
       if (!res.ok) throw new Error('Failed to fetch submissions');
       const data = await res.json();
       console.log('Fetched submissions:', data); // Debug log
@@ -161,6 +167,14 @@ export default function ViewSubmissions() {
       fetchSubmissions();
     }
   }, [competitionId, status, page]);
+
+  // Separate effect to refetch when competition status changes
+  useEffect(() => {
+    if (competition && competitionId && status === 'authenticated') {
+      setPage(1);
+      fetchSubmissions(true);
+    }
+  }, [competition?.status]);
 
   // Infinite scroll handler
   useEffect(() => {
@@ -251,7 +265,9 @@ export default function ViewSubmissions() {
         setIsLoadingMore(true);
         try {
           const nextPage = page + 1;
-          const res = await fetch(`/api/submissions?competition=${competitionId}&status=approved&showAll=true&limit=12&page=${nextPage}`);
+          const shouldShowAll = competition?.status === 'voting' || competition?.status === 'completed' || isAdmin;
+          const showAllParam = shouldShowAll ? '&showAll=true' : '';
+          const res = await fetch(`/api/submissions?competition=${competitionId}&status=approved${showAllParam}&limit=12&page=${nextPage}`);
           if (!res.ok) throw new Error('Failed to fetch more submissions');
           const data = await res.json();
           
