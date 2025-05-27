@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
       votingEndDate: formData.get('votingEndDate'),
       submissionLimit: Number(formData.get('submissionLimit')) || 5,
       votingCriteria: formData.get('votingCriteria') || '',
+      submissionFormat: formData.get('submissionFormat') || '',
+      copyrightNotice: formData.get('copyrightNotice') || 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
       createdBy: session.user.id,
     };
     
