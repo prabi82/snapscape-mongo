@@ -19,6 +19,7 @@ interface CompetitionFormData {
   votingEndDate: string;
   submissionLimit: number;
   votingCriteria: string;
+  submissionFormat: string;
   status: 'upcoming' | 'active' | 'voting' | 'completed';
 }
 
@@ -41,6 +42,7 @@ export default function CreateCompetition() {
     votingEndDate: '',
     submissionLimit: 5,
     votingCriteria: 'composition,creativity,technical',
+    submissionFormat: '',
     status: 'upcoming',
   });
 
@@ -488,6 +490,7 @@ export default function CreateCompetition() {
         votingEndDate: '',
         submissionLimit: 5,
         votingCriteria: 'composition,creativity,technical',
+        submissionFormat: '',
         status: 'upcoming',
       });
 
@@ -752,6 +755,20 @@ export default function CreateCompetition() {
                 />
               </div>
               <p className="mt-1 text-xs text-gray-500">Separate criteria with commas</p>
+            </div>
+
+            {/* Submission Format */}
+            <div className="sm:col-span-6">
+              <label htmlFor="submissionFormat" className="block text-sm font-medium text-gray-700">
+                Submission Format
+              </label>
+              <div className="mt-1">
+                <RichTextEditor
+                  value={formData.submissionFormat}
+                  onChange={(value) => handleRichTextChange('submissionFormat', value)}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Specify the requirements for photo submissions (format, resolution, file size, etc.)</p>
             </div>
 
             {/* Cover Image */}
