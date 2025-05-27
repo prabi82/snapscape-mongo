@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import RichTextEditor from '@/components/RichTextEditor';
 
 interface CompetitionFormData {
   title: string;
@@ -105,6 +106,14 @@ export default function CreateCompetition() {
         [name]: value,
       });
     }
+  };
+
+  // Handle rich text editor changes
+  const handleRichTextChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   // Update the handleImageChange function to validate image file
@@ -584,14 +593,9 @@ export default function CreateCompetition() {
                 Description <span className="text-red-500">*</span>
               </label>
               <div className="mt-1">
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={4}
+                <RichTextEditor
                   value={formData.description}
-                  onChange={handleChange}
-                  required
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  onChange={(value) => handleRichTextChange('description', value)}
                 />
               </div>
             </div>
@@ -602,13 +606,9 @@ export default function CreateCompetition() {
                 Rules
               </label>
               <div className="mt-1">
-                <textarea
-                  id="rules"
-                  name="rules"
-                  rows={4}
+                <RichTextEditor
                   value={formData.rules}
-                  onChange={handleChange}
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  onChange={(value) => handleRichTextChange('rules', value)}
                 />
               </div>
             </div>
@@ -619,13 +619,9 @@ export default function CreateCompetition() {
                 Prizes
               </label>
               <div className="mt-1">
-                <textarea
-                  id="prizes"
-                  name="prizes"
-                  rows={4}
+                <RichTextEditor
                   value={formData.prizes}
-                  onChange={handleChange}
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  onChange={(value) => handleRichTextChange('prizes', value)}
                 />
               </div>
             </div>

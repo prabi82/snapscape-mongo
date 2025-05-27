@@ -1135,13 +1135,13 @@ export default function ProfilePage() {
     );
     
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-4xl max-h-[95vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold">Points Breakdown</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900">Points Breakdown</h3>
             <button 
               onClick={() => setShowPointsBreakdown(false)}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 p-2 -m-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1149,73 +1149,73 @@ export default function ProfilePage() {
             </button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
             {recalculatedFirstPlacePoints > 0 && (
-              <div className="bg-yellow-50 p-3 rounded">
-                <p className="text-yellow-700 font-semibold">1st Place Points</p>
-                <p className="text-xl">{Math.round(recalculatedFirstPlacePoints)}</p>
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                <p className="text-yellow-800 font-semibold text-sm sm:text-base">🥇 1st Place Points</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{Math.round(recalculatedFirstPlacePoints)}</p>
               </div>
             )}
             
             {recalculatedSecondPlacePoints > 0 && (
-              <div className="bg-gray-100 p-3 rounded">
-                <p className="text-gray-700 font-semibold">2nd Place Points</p>
-                <p className="text-xl">{Math.round(recalculatedSecondPlacePoints)}</p>
+              <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
+                <p className="text-gray-800 font-semibold text-sm sm:text-base">🥈 2nd Place Points</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{Math.round(recalculatedSecondPlacePoints)}</p>
               </div>
             )}
             
             {recalculatedThirdPlacePoints > 0 && (
-              <div className="bg-orange-50 p-3 rounded">
-                <p className="text-orange-700 font-semibold">3rd Place Points</p>
-                <p className="text-xl">{Math.round(recalculatedThirdPlacePoints)}</p>
+              <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+                <p className="text-orange-800 font-semibold text-sm sm:text-base">🥉 3rd Place Points</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{Math.round(recalculatedThirdPlacePoints)}</p>
               </div>
             )}
             
             {recalculatedOtherSubmissionsPoints > 0 && (
-              <div className="bg-green-50 p-3 rounded">
-                <p className="text-green-700 font-semibold">Other Submissions Points</p>
-                <p className="text-xl">{Math.round(recalculatedOtherSubmissionsPoints)}</p>
-                <p className="text-xs text-green-600">(4th place and beyond)</p>
+              <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                <p className="text-green-800 font-semibold text-sm sm:text-base">Other Submissions Points</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{Math.round(recalculatedOtherSubmissionsPoints)}</p>
+                <p className="text-xs sm:text-sm text-green-700">(4th place and beyond)</p>
               </div>
             )}
             
             <div 
-              className="bg-blue-50 p-3 rounded cursor-pointer hover:bg-blue-100 transition-colors"
+              className="bg-blue-50 border border-blue-200 p-4 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
               onClick={() => {
                 setShowPointsBreakdown(false);
                 setShowVotedPhotos(true);
               }}
             >
-              <p className="text-blue-700 font-semibold">Voting Points</p>
-              <p className="text-xl">{correctedVotingPoints}</p>
-              <p className="text-xs text-blue-600 mt-1">
+              <p className="text-blue-800 font-semibold text-sm sm:text-base">🗳️ Voting Points</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{correctedVotingPoints}</p>
+              <p className="text-xs sm:text-sm text-blue-700 mt-1">
                 {correctedVotingPoints} {correctedVotingPoints === 1 ? 'vote' : 'votes'} × 1 point each
               </p>
-              <p className="text-xs text-blue-600 mt-1 underline">
+              <p className="text-xs sm:text-sm text-blue-700 mt-1 underline">
                 Click to view voted photos
               </p>
             </div>
             
-            <div className="bg-purple-50 p-3 rounded">
-              <p className="text-purple-700 font-semibold">Total Points</p>
-              <p className="text-xl font-bold">{totalCalculatedPoints}</p>
+            <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
+              <p className="text-purple-800 font-semibold text-sm sm:text-base">🏆 Total Points</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{totalCalculatedPoints}</p>
             </div>
           </div>
           
-          <div className="border-t pt-4">
-            <h4 className="font-semibold mb-2">Detailed Breakdown</h4>
+          <div className="border-t border-gray-200 pt-4 mt-6">
+            <h4 className="font-semibold mb-4 text-base sm:text-lg text-gray-900">Detailed Breakdown</h4>
             
             {pointsBreakdown.details && pointsBreakdown.details.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="w-full text-xs sm:text-sm min-w-[600px]">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Submission</th>
-                      <th className="p-2 text-left">Competition</th>
-                      <th className="p-2 text-center">Position</th>
-                      <th className="p-2 text-right">Total Rating</th>
-                      <th className="p-2 text-right">Multiplier</th>
-                      <th className="p-2 text-right">Points</th>
+                      <th className="p-2 sm:p-3 text-left font-semibold text-gray-900">Submission</th>
+                      <th className="p-2 sm:p-3 text-left font-semibold text-gray-900">Competition</th>
+                      <th className="p-2 sm:p-3 text-center font-semibold text-gray-900">Position</th>
+                      <th className="p-2 sm:p-3 text-right font-semibold text-gray-900">Total Rating</th>
+                      <th className="p-2 sm:p-3 text-right font-semibold text-gray-900">Multiplier</th>
+                      <th className="p-2 sm:p-3 text-right font-semibold text-gray-900">Points</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1239,13 +1239,17 @@ export default function ProfilePage() {
                         else if (detail.position === 3) multiplier = 2;
                         
                         return (
-                          <tr key={index} className="border-b">
-                            <td className="p-2">{detail.title || 'Untitled'}</td>
-                            <td className="p-2">{detail.competitionName || 'Unknown Competition'}</td>
-                            <td className="p-2 text-center">{detail.position}</td>
-                            <td className="p-2 text-right">{detail.totalRating.toFixed(1)}</td>
-                            <td className="p-2 text-right">×{multiplier}</td>
-                            <td className="p-2 text-right font-medium">{Math.round(detail.points)}</td>
+                          <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="p-2 sm:p-3 text-gray-900 font-medium">{detail.title || 'Untitled'}</td>
+                            <td className="p-2 sm:p-3 text-gray-700">{detail.competitionName || 'Unknown Competition'}</td>
+                            <td className="p-2 sm:p-3 text-center">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {detail.position}
+                              </span>
+                            </td>
+                            <td className="p-2 sm:p-3 text-right text-gray-900 font-medium">{detail.totalRating.toFixed(1)}</td>
+                            <td className="p-2 sm:p-3 text-right text-gray-700">×{multiplier}</td>
+                            <td className="p-2 sm:p-3 text-right font-bold text-gray-900">{Math.round(detail.points)}</td>
                           </tr>
                         );
                       });
@@ -1264,13 +1268,17 @@ export default function ProfilePage() {
                           });
                           
                           return Array.from(uniqueOtherSubmissionsMap.values()).map((sub, index) => (
-                            <tr key={`other-${index}`} className="border-b bg-green-50">
-                              <td className="p-2">{sub.title || 'Untitled'}</td>
-                              <td className="p-2">{sub.competitionName || 'Unknown Competition'}</td>
-                              <td className="p-2 text-center">4+</td>
-                              <td className="p-2 text-right">{sub.totalRating.toFixed(1)}</td>
-                              <td className="p-2 text-right">×1</td>
-                              <td className="p-2 text-right font-medium">{Math.round(sub.points)}</td>
+                            <tr key={`other-${index}`} className="border-b border-gray-200 bg-green-50 hover:bg-green-100">
+                              <td className="p-2 sm:p-3 text-gray-900 font-medium">{sub.title || 'Untitled'}</td>
+                              <td className="p-2 sm:p-3 text-gray-700">{sub.competitionName || 'Unknown Competition'}</td>
+                              <td className="p-2 sm:p-3 text-center">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  4+
+                                </span>
+                              </td>
+                              <td className="p-2 sm:p-3 text-right text-gray-900 font-medium">{sub.totalRating.toFixed(1)}</td>
+                              <td className="p-2 sm:p-3 text-right text-gray-700">×1</td>
+                              <td className="p-2 sm:p-3 text-right font-bold text-gray-900">{Math.round(sub.points)}</td>
                             </tr>
                           ));
                         })()}
@@ -1279,35 +1287,38 @@ export default function ProfilePage() {
                     
                     {/* Voting points row */}
                     <tr 
-                      className="bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors"
+                      className="bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors border-b border-gray-200"
                       onClick={() => {
                         setShowPointsBreakdown(false);
                         setShowVotedPhotos(true);
                       }}
                     >
-                      <td className="p-2">
-                        Votes Cast 
-                        <span className="ml-1 text-xs text-blue-600 underline">
+                      <td className="p-2 sm:p-3 text-gray-900 font-medium">
+                        🗳️ Votes Cast 
+                        <span className="ml-1 text-xs text-blue-700 underline">
                           (click to view photos)
                         </span>
                       </td>
-                      <td className="p-2">-</td>
-                      <td className="p-2 text-center">-</td>
-                      <td className="p-2 text-right">{correctedVotingPoints}</td>
-                      <td className="p-2 text-right">×1</td>
-                      <td className="p-2 text-right font-medium">{correctedVotingPoints}</td>
+                      <td className="p-2 sm:p-3 text-gray-500">-</td>
+                      <td className="p-2 sm:p-3 text-center text-gray-500">-</td>
+                      <td className="p-2 sm:p-3 text-right text-gray-900 font-medium">{correctedVotingPoints}</td>
+                      <td className="p-2 sm:p-3 text-right text-gray-700">×1</td>
+                      <td className="p-2 sm:p-3 text-right font-bold text-gray-900">{correctedVotingPoints}</td>
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-100 font-bold">
-                      <td className="p-2" colSpan={5}>Total</td>
-                      <td className="p-2 text-right">{totalCalculatedPoints}</td>
+                    <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                      <td className="p-2 sm:p-3 text-gray-900 font-bold" colSpan={5}>🏆 Total Points</td>
+                      <td className="p-2 sm:p-3 text-right text-gray-900 font-bold text-lg">{totalCalculatedPoints}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             ) : (
-              <p className="text-gray-500 italic">No detailed breakdown available</p>
+              <div className="text-center py-8">
+                <p className="text-gray-600 text-sm sm:text-base">No detailed breakdown available</p>
+                <p className="text-gray-500 text-xs sm:text-sm mt-1">Submit photos to competitions to see detailed points!</p>
+              </div>
             )}
           </div>
         </div>
