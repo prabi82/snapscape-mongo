@@ -38,16 +38,8 @@ export async function compressImage(
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
   const originalSize = file.size;
 
-  // If file is already small enough, return as-is
-  if (originalSize <= maxSizeBytes) {
-    return {
-      file,
-      originalSize,
-      compressedSize: originalSize,
-      compressionRatio: 1,
-      quality: 1
-    };
-  }
+  // Always compress if this function is called - the caller decides when to compress
+  // We don't return early here since the caller already determined compression is needed
 
   console.log(`Starting compression: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> target: ${maxSizeMB}MB`);
 
@@ -85,11 +77,18 @@ export async function compressImage(
         // Try different quality levels to achieve target size
         let compressedFile: File | null = null;
         let attempts = 0;
-        const maxAttempts = 8;
+        const maxAttempts = 10;
+        
+        // For files over 3MB, we want to achieve meaningful compression
+        // Target around 60-80% of original size for good balance
+        const targetSizeBytes = Math.min(maxSizeBytes, originalSize * 0.7); // Target 70% of original or maxSize, whichever is smaller
 
         while (attempts < maxAttempts) {
+          // For PNG files, convert to JPEG for better compression
+          const outputType = file.type === 'image/png' ? 'image/jpeg' : file.type;
+          
           const blob = await new Promise<Blob | null>((resolve) => {
-            canvas.toBlob(resolve, file.type, currentQuality);
+            canvas.toBlob(resolve, outputType, currentQuality);
           });
 
           if (!blob) {
@@ -97,16 +96,21 @@ export async function compressImage(
             return;
           }
 
-          compressedFile = new File([blob], file.name, {
-            type: file.type,
+          // Update filename extension if we converted PNG to JPEG
+          const fileName = file.type === 'image/png' && outputType === 'image/jpeg' 
+            ? file.name.replace(/\.png$/i, '.jpg')
+            : file.name;
+            
+          compressedFile = new File([blob], fileName, {
+            type: outputType,
             lastModified: Date.now(),
           });
 
           const compressedSize = compressedFile.size;
-          console.log(`Attempt ${attempts + 1}: Quality ${currentQuality.toFixed(2)} -> ${(compressedSize / 1024 / 1024).toFixed(2)}MB`);
+          console.log(`Attempt ${attempts + 1}: Quality ${currentQuality.toFixed(2)} -> ${(compressedSize / 1024 / 1024).toFixed(2)}MB (target: ${(targetSizeBytes / 1024 / 1024).toFixed(2)}MB)`);
 
           // If we've achieved the target size, we're done
-          if (compressedSize <= maxSizeBytes) {
+          if (compressedSize <= targetSizeBytes) {
             break;
           }
 
@@ -115,8 +119,8 @@ export async function compressImage(
             break;
           }
 
-          // Reduce quality more gradually to preserve image quality
-          currentQuality = Math.max(0.3, currentQuality * 0.9); // Less aggressive reduction, minimum 30% quality
+          // Reduce quality more aggressively to achieve meaningful compression
+          currentQuality = Math.max(0.4, currentQuality * 0.85); // More aggressive reduction, minimum 40% quality
           attempts++;
         }
 
