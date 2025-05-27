@@ -832,11 +832,7 @@ export default function CompetitionDetail() {
                         >
                           {competition.hasSubmitted ? 'Submit Another Photo' : 'Submit Your Photo'}
                         </button>
-                      ) : (
-                        <p className="text-gray-500">
-                          You've reached the maximum number of submissions for this competition.
-                        </p>
-                      )}
+                      ) : null}
                       
                       <p className="mt-2 text-sm text-gray-500">
                         Submission period ends on {formatDate(competition.endDate)}
