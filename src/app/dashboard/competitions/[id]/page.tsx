@@ -158,7 +158,8 @@ export default function CompetitionDetail() {
     description: false,
     rules: false,
     prizes: false,
-    submissionFormat: false
+    submissionFormat: false,
+    copyright: false
   });
   
   // Photo submission state
@@ -873,13 +874,13 @@ export default function CompetitionDetail() {
               </div>
             )}
             
-            {/* Copyright - Compact display */}
-            <div className="bg-[#fffbe6] border border-[#e0c36a] rounded-lg p-3">
-              <h3 className="font-bold text-[#1a4d5c] mb-1 text-base">Copyright</h3>
-              <div className="text-gray-700 text-sm">
-                <MarkdownRenderer content={competition.copyrightNotice || 'You maintain the copyrights to all photos you submit. You must own all submitted images.'} />
-              </div>
-            </div>
+            {/* Copyright - Collapsible display */}
+            <AccordionItem
+              title="Copyright"
+              content={competition.copyrightNotice || 'You maintain the copyrights to all photos you submit. You must own all submitted images.'}
+              isExpanded={expandedSections.copyright}
+              onToggle={() => toggleSection('copyright')}
+            />
           </div>
         </div>
       </div>
