@@ -10,19 +10,22 @@ export async function GET(req: NextRequest) {
     // Get settings document - there should only be one
     let settings = await Setting.findOne({});
     
-    // If no settings exist yet, use default values
+    // If no settings exist yet, create default settings
     if (!settings) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          allowNotificationDeletion: true
-        }
+      settings = await Setting.create({
+        allowNotificationDeletion: true,
+        enableImageCompressionDisplay: true
       });
     }
 
+    // Return only the settings that should be public
+    const publicSettings = {
+      enableImageCompressionDisplay: settings.enableImageCompressionDisplay
+    };
+
     return NextResponse.json({
       success: true,
-      data: settings
+      data: publicSettings
     });
   } catch (error) {
     console.error('Error fetching public settings:', error);

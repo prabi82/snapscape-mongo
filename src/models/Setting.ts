@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface ISetting extends Document {
   allowNotificationDeletion: boolean;
+  enableImageCompressionDisplay: boolean;
   debugModeEnabled: boolean;
   debugModeUsers: string[];
   createdAt: Date;
@@ -11,6 +12,10 @@ export interface ISetting extends Document {
 const SettingSchema: Schema = new Schema(
   {
     allowNotificationDeletion: {
+      type: Boolean,
+      default: true
+    },
+    enableImageCompressionDisplay: {
       type: Boolean,
       default: true
     },

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 interface AppSettings {
   allowNotificationDeletion: boolean;
+  enableImageCompressionDisplay: boolean;
   debugModeEnabled: boolean;
   debugModeUsers: string[];
 }
@@ -12,6 +13,7 @@ interface AppSettings {
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<AppSettings>({
     allowNotificationDeletion: true,
+    enableImageCompressionDisplay: true,
     debugModeEnabled: false,
     debugModeUsers: []
   });
@@ -228,6 +230,27 @@ export default function AdminSettingsPage() {
                   </label>
                   <p className="text-gray-500">
                     When enabled, users can delete activity items and notifications from their dashboard feed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="enableImageCompressionDisplay"
+                    name="enableImageCompressionDisplay"
+                    type="checkbox"
+                    checked={settings.enableImageCompressionDisplay}
+                    onChange={() => handleToggleChange('enableImageCompressionDisplay')}
+                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="enableImageCompressionDisplay" className="font-medium text-gray-700">
+                    Enable Image Compression Display
+                  </label>
+                  <p className="text-gray-500">
+                    When enabled, users will see compression status messages when uploading images over 3MB.
                   </p>
                 </div>
               </div>

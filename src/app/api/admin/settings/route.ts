@@ -35,7 +35,8 @@ export async function GET(req: NextRequest) {
     // If no settings exist yet, create default settings
     if (!settings) {
       settings = await Setting.create({
-        allowNotificationDeletion: true
+        allowNotificationDeletion: true,
+        enableImageCompressionDisplay: true
       });
     }
 

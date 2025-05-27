@@ -171,6 +171,7 @@ export default function CompetitionDetail() {
   const [fileSizeError, setFileSizeError] = useState('');
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionInfo, setCompressionInfo] = useState<string>('');
+  const [showCompressionInfo, setShowCompressionInfo] = useState(true);
 
   // New state for user's submissions to this competition
   const [userSubmissions, setUserSubmissions] = useState<Submission[]>([]);
@@ -262,6 +263,26 @@ export default function CompetitionDetail() {
     fetchUserSubmissions();
   }, [session, competitionId]);
 
+  // Fetch settings to determine if compression info should be shown
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            setShowCompressionInfo(data.data.enableImageCompressionDisplay);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+        // Default to showing compression info if fetch fails
+        setShowCompressionInfo(true);
+      }
+    };
+    fetchSettings();
+  }, []);
+
   // Modify the useEffect to show the form based on URL parameter
   useEffect(() => {
     if (showSubmitParam === 'true' && competition?.status === 'active' && !competition?.hasSubmitted) {
@@ -298,7 +319,9 @@ export default function CompetitionDetail() {
       if (file.size > 3 * 1024 * 1024) {
         try {
           setIsCompressing(true);
-          setCompressionInfo('Optimizing image for high-quality desktop viewing...');
+          if (showCompressionInfo) {
+            setCompressionInfo('Optimizing image for high-quality desktop viewing...');
+          }
           
           const compressionResult = await compressImage(file, {
             maxSizeMB: 10, // Set to 10MB maximum (but compress from 3MB+)
@@ -308,9 +331,11 @@ export default function CompetitionDetail() {
           });
           
           setPhotoFile(compressionResult.file);
-          setCompressionInfo(
-            `Image compressed: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${Math.round(compressionResult.compressionRatio * 100)}% of original)`
-          );
+          if (showCompressionInfo) {
+            setCompressionInfo(
+              `Image compressed: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${Math.round(compressionResult.compressionRatio * 100)}% of original)`
+            );
+          }
           
           console.log('Compression successful:', compressionResult);
         } catch (error) {
@@ -323,7 +348,9 @@ export default function CompetitionDetail() {
               } else {
         // For files 3MB and under, use them as-is (no compression needed)
         setPhotoFile(file);
-        setCompressionInfo(`Image ready: ${formatFileSize(file.size)} (no compression needed)`);
+        if (showCompressionInfo) {
+          setCompressionInfo(`Image ready: ${formatFileSize(file.size)} (no compression needed)`);
+        }
       }
     } else {
       setPhotoFile(null);
@@ -704,7 +731,7 @@ export default function CompetitionDetail() {
                           </p>
                           
                           {/* Compression status */}
-                          {isCompressing && (
+                          {showCompressionInfo && isCompressing && (
                             <div className="mt-2 flex items-center text-sm text-[#2699a6]">
                               <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#2699a6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -715,7 +742,7 @@ export default function CompetitionDetail() {
                           )}
                           
                           {/* Compression info */}
-                          {compressionInfo && !isCompressing && (
+                          {showCompressionInfo && compressionInfo && !isCompressing && (
                             <div className="mt-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md p-2">
                               ✓ {compressionInfo}
                             </div>
