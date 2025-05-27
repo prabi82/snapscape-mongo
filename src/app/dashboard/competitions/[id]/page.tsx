@@ -294,14 +294,14 @@ export default function CompetitionDetail() {
         return;
       }
       
-      // If file is larger than 10MB, compress it to fit within 10MB limit
-      if (file.size > 10 * 1024 * 1024) {
+      // If file is larger than 3MB, compress it for optimization
+      if (file.size > 3 * 1024 * 1024) {
         try {
           setIsCompressing(true);
           setCompressionInfo('Optimizing image for high-quality desktop viewing...');
           
           const compressionResult = await compressImage(file, {
-            maxSizeMB: 10, // Set to 10MB maximum
+            maxSizeMB: 10, // Set to 10MB maximum (but compress from 3MB+)
             maxWidthOrHeight: 3840, // Support up to 4K resolution
             initialQuality: 0.95, // Start with very high quality
             alwaysKeepResolution: false // Allow smart resizing only when necessary
@@ -320,10 +320,10 @@ export default function CompetitionDetail() {
         } finally {
           setIsCompressing(false);
         }
-      } else {
-        // For smaller files, just use them as is
+              } else {
+        // For files 3MB and under, use them as-is (no compression needed)
         setPhotoFile(file);
-        setCompressionInfo(`Image ready: ${formatFileSize(file.size)}`);
+        setCompressionInfo(`Image ready: ${formatFileSize(file.size)} (no compression needed)`);
       }
     } else {
       setPhotoFile(null);
@@ -700,7 +700,7 @@ export default function CompetitionDetail() {
                             disabled={isCompressing}
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            JPG, PNG or WebP up to 10MB (automatically optimized for high-quality desktop viewing)
+                            JPG, PNG or WebP up to 10MB (images over 3MB automatically optimized for high-quality desktop viewing)
                           </p>
                           
                           {/* Compression status */}

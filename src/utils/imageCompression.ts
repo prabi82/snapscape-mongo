@@ -1,6 +1,6 @@
 /**
  * Image compression utility for client-side image processing
- * Compresses images to under 4MB while maintaining good quality
+ * Compresses images above 3MB threshold while maintaining high quality
  */
 
 interface CompressionOptions {
@@ -28,7 +28,7 @@ export async function compressImage(
   options: CompressionOptions = {}
 ): Promise<CompressionResult> {
   const {
-    maxSizeMB = 10, // Set to 10MB maximum as per requirements
+    maxSizeMB = 8, // Default to 8MB for good balance (can be overridden)
     maxWidthOrHeight = 3840, // Support 4K resolution (3840x2160)
     quality: targetQuality = 0.85, // Slightly higher quality
     initialQuality = 0.95, // Start with higher quality
