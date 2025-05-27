@@ -14,9 +14,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Updated payload limits for high-quality images
-const VERCEL_PAYLOAD_LIMIT = 8.5 * 1024 * 1024; // 8.5MB (increased for better quality)
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB (user can upload, will be optimized on frontend)
+// Updated payload limits - 10MB maximum
+const VERCEL_PAYLOAD_LIMIT = 10 * 1024 * 1024; // 10MB maximum upload limit
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB maximum file size
 
 // Handle OPTIONS requests for CORS preflight
 export async function OPTIONS(request: NextRequest) {
@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { 
             success: false, 
-            message: 'File too large for upload. Please optimize your image to under 8MB and try again.',
+            message: 'File too large for upload. Please optimize your image to under 10MB and try again.',
             error: 'PAYLOAD_TOO_LARGE',
-            maxSize: '8MB'
+            maxSize: '10MB'
           },
           { status: 413, headers: corsHeaders }
         );
@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           success: false, 
-          message: `File size too large. Maximum allowed size is 15MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please optimize your image and try again.`,
+          message: `File size too large. Maximum allowed size is 10MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please optimize your image and try again.`,
           error: 'FILE_TOO_LARGE',
           currentSize: `${(photo.size / 1024 / 1024).toFixed(2)}MB`,
-          maxSize: '15MB'
+          maxSize: '10MB'
         },
         { status: 413, headers: corsHeaders }
       );

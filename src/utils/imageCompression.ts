@@ -28,8 +28,8 @@ export async function compressImage(
   options: CompressionOptions = {}
 ): Promise<CompressionResult> {
   const {
-    maxSizeMB = 8, // Increased from 4MB to 8MB for better quality
-    maxWidthOrHeight = 3840, // Increased to support 4K resolution (3840x2160)
+    maxSizeMB = 10, // Set to 10MB maximum as per requirements
+    maxWidthOrHeight = 3840, // Support 4K resolution (3840x2160)
     quality: targetQuality = 0.85, // Slightly higher quality
     initialQuality = 0.95, // Start with higher quality
     alwaysKeepResolution = false
