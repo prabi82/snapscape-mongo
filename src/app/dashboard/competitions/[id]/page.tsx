@@ -288,22 +288,23 @@ export default function CompetitionDetail() {
       const originalSize = file.size / (1024 * 1024); // Size in MB
       console.log(`Original image size: ${originalSize.toFixed(2)} MB`);
       
-      if (file.size > 10 * 1024 * 1024) {
-        setFileSizeError(`Image size must be less than 10MB (current size: ${originalSize.toFixed(2)} MB)`);
+      if (file.size > 15 * 1024 * 1024) {
+        setFileSizeError(`Image size must be less than 15MB (current size: ${originalSize.toFixed(2)} MB)`);
         setPhotoFile(null);
         return;
       }
       
-      // If file is larger than 4MB, compress it
-      if (file.size > 4 * 1024 * 1024) {
+      // If file is larger than 8MB, compress it (increased threshold for better quality)
+      if (file.size > 8 * 1024 * 1024) {
         try {
           setIsCompressing(true);
-          setCompressionInfo('Compressing image...');
+          setCompressionInfo('Optimizing image for high-quality desktop viewing...');
           
           const compressionResult = await compressImage(file, {
-            maxSizeMB: 4,
-            maxWidthOrHeight: 2048,
-            initialQuality: 0.9
+            maxSizeMB: 8, // Increased to 8MB for better quality
+            maxWidthOrHeight: 3840, // Support up to 4K resolution
+            initialQuality: 0.95, // Start with very high quality
+            alwaysKeepResolution: false // Allow smart resizing only when necessary
           });
           
           setPhotoFile(compressionResult.file);
@@ -343,8 +344,8 @@ export default function CompetitionDetail() {
         throw new Error('Please fill in all fields and select a photo');
       }
       
-      // Final size check (should be under 4MB after compression)
-      const maxSize = 4.5 * 1024 * 1024; // 4.5MB (slightly under Vercel limit)
+      // Final size check (should be under 8MB after optimization)
+      const maxSize = 8.5 * 1024 * 1024; // 8.5MB (allowing for high-quality images)
       if (photoFile.size > maxSize) {
         setFileSizeError('The processed image is still too large. Please try a smaller original image.');
         setIsSubmitting(false);
@@ -699,7 +700,7 @@ export default function CompetitionDetail() {
                             disabled={isCompressing}
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            JPG, PNG or WebP up to 10MB (automatically compressed if needed)
+                            JPG, PNG or WebP up to 15MB (automatically optimized for high-quality desktop viewing)
                           </p>
                           
                           {/* Compression status */}

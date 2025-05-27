@@ -14,9 +14,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Vercel function payload limits
-const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5MB (Vercel limit)
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB (user can upload, but will be compressed on frontend)
+// Updated payload limits for high-quality images
+const VERCEL_PAYLOAD_LIMIT = 8.5 * 1024 * 1024; // 8.5MB (increased for better quality)
+const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB (user can upload, will be optimized on frontend)
 
 // Handle OPTIONS requests for CORS preflight
 export async function OPTIONS(request: NextRequest) {
@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { 
             success: false, 
-            message: 'File too large for upload. Please compress your image to under 4MB and try again.',
+            message: 'File too large for upload. Please optimize your image to under 8MB and try again.',
             error: 'PAYLOAD_TOO_LARGE',
-            maxSize: '4MB'
+            maxSize: '8MB'
           },
           { status: 413, headers: corsHeaders }
         );
@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           success: false, 
-          message: `File size too large. Maximum allowed size is 10MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please compress your image and try again.`,
+          message: `File size too large. Maximum allowed size is 15MB. Your file is ${(photo.size / 1024 / 1024).toFixed(2)}MB. Please optimize your image and try again.`,
           error: 'FILE_TOO_LARGE',
           currentSize: `${(photo.size / 1024 / 1024).toFixed(2)}MB`,
-          maxSize: '10MB'
+          maxSize: '15MB'
         },
         { status: 413, headers: corsHeaders }
       );
@@ -211,14 +211,18 @@ export async function POST(request: NextRequest) {
 
       console.log(`Starting Cloudinary upload - File: ${uniqueFilename}, Size: ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
       
-      // Upload with timeout and enhanced options
+      // Upload with timeout and enhanced options for high quality
       const uploadPromise = uploadToCloudinary(buffer, {
         folder: `snapscape/competitions/${competitionId}`,
         public_id: uniqueFilename,
-        // Add Cloudinary-specific optimizations
-        quality: 'auto:good',
+        // Enhanced Cloudinary settings for high-quality desktop viewing
+        quality: 'auto:best', // Changed from 'auto:good' to 'auto:best' for higher quality
         fetch_format: 'auto',
         flags: 'progressive',
+        // Additional settings for better quality preservation
+        dpr: 'auto', // Automatic device pixel ratio optimization
+        f_auto: true, // Automatic format selection
+        q_auto: 'best', // Best quality automatic optimization
       });
       
       const timeoutPromise = createTimeoutPromise(120000, 'Cloudinary upload'); // 2 minute timeout
@@ -237,10 +241,10 @@ export async function POST(request: NextRequest) {
 
       console.log('Image uploaded successfully:', uploadResult.secure_url);
 
-      // Create optimized thumbnail URL
+      // Create high-quality thumbnail URL for better preview
       const thumbnailUrl = uploadResult.secure_url.replace(
         `/upload/`, 
-        `/upload/c_fill,h_300,w_300,q_auto,f_auto/`
+        `/upload/c_fill,h_400,w_400,q_auto:best,f_auto,dpr_auto/` // Increased size and quality for better thumbnails
       );
 
       // Create submission in database

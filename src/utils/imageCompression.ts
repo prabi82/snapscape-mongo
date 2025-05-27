@@ -28,10 +28,10 @@ export async function compressImage(
   options: CompressionOptions = {}
 ): Promise<CompressionResult> {
   const {
-    maxSizeMB = 4,
-    maxWidthOrHeight = 2048,
-    quality: targetQuality = 0.8,
-    initialQuality = 0.9,
+    maxSizeMB = 8, // Increased from 4MB to 8MB for better quality
+    maxWidthOrHeight = 3840, // Increased to support 4K resolution (3840x2160)
+    quality: targetQuality = 0.85, // Slightly higher quality
+    initialQuality = 0.95, // Start with higher quality
     alwaysKeepResolution = false
   } = options;
 
@@ -66,12 +66,14 @@ export async function compressImage(
         let { width, height } = img;
         let currentQuality = initialQuality;
 
-        // Calculate optimal dimensions
+        // Calculate optimal dimensions - preserve high resolution for desktop viewing
         if (!alwaysKeepResolution && (width > maxWidthOrHeight || height > maxWidthOrHeight)) {
           const ratio = Math.min(maxWidthOrHeight / width, maxWidthOrHeight / height);
           width = Math.round(width * ratio);
           height = Math.round(height * ratio);
-          console.log(`Resizing from ${img.width}x${img.height} to ${width}x${height}`);
+          console.log(`Resizing from ${img.width}x${img.height} to ${width}x${height} for better desktop viewing`);
+        } else {
+          console.log(`Keeping original resolution: ${width}x${height} for optimal quality`);
         }
 
         canvas.width = width;
@@ -113,8 +115,8 @@ export async function compressImage(
             break;
           }
 
-          // Reduce quality for next attempt
-          currentQuality = Math.max(0.1, currentQuality * 0.8);
+          // Reduce quality more gradually to preserve image quality
+          currentQuality = Math.max(0.3, currentQuality * 0.9); // Less aggressive reduction, minimum 30% quality
           attempts++;
         }
 
