@@ -609,7 +609,7 @@ export default function DashboardPage() {
               </div>
               {h.value !== undefined && <span className="font-bold text-xs leading-none">{h.value}</span>}
             </button>
-            <span className="text-xs mt-2 font-medium text-center whitespace-nowrap truncate w-full">{h.label}</span>
+            <span className="text-xs mt-2 font-medium text-center whitespace-nowrap truncate w-full text-gray-700">{h.label}</span>
           </div>
         ))}
       </div>
@@ -1062,7 +1062,7 @@ export default function DashboardPage() {
                                     {activeComp.status.charAt(0).toUpperCase() + activeComp.status.slice(1)}
                                   </span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(displayTimestamp))}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 mb-1">{formatTimeSince(new Date(displayTimestamp))}</p>
                                 <p className="text-sm text-gray-600 mb-1">Theme: {activeComp.theme}</p>
                                 <p className="text-sm text-gray-500 mb-2">
                                   {activeComp.status === 'upcoming' 
@@ -1135,7 +1135,7 @@ export default function DashboardPage() {
                                   <p className="text-sm font-medium text-gray-800">{activity.title}</p>
                                 </div>
                                 <p className="text-xs text-gray-500">{activity.details}</p>
-                                <p className="text-xs text-gray-400 mt-0.5 mb-2">{timeSince}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 mb-2">{timeSince}</p>
                                 
                                 {activity.competitionId && (
                                   <div className="flex justify-end mt-1">
@@ -1240,7 +1240,7 @@ export default function DashboardPage() {
                                   <p className="text-sm font-medium text-gray-800">{activity.title}</p>
                                 </div>
                                 <p className="text-xs text-gray-500">{activity.details}</p>
-                                <p className="text-xs text-gray-400 mt-0.5 mb-2">{timeSince}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 mb-2">{timeSince}</p>
                                 
                                 {activity.competitionId && (
                                   <div className="flex justify-end mt-1">
@@ -1314,7 +1314,7 @@ export default function DashboardPage() {
                               <div className="flex-1">
                                 <p className="text-sm font-medium text-gray-800">{activity.title}</p>
                                 <p className="text-xs text-gray-500">{activity.details}</p>
-                                <p className="text-xs text-gray-400 mt-0.5 mb-1">{timeSince}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 mb-1">{timeSince}</p>
                                 
                                 {activity.photoUrl && (
                                   <div className="mt-2 w-full max-w-xs rounded-md overflow-hidden mb-2">
@@ -1370,7 +1370,7 @@ export default function DashboardPage() {
                             <div className="flex-1">
                               <p className="text-sm font-medium text-gray-800">{activity.title}</p>
                               <p className="text-xs text-gray-500">{activity.details}</p>
-                              <p className="text-xs text-gray-400 mt-0.5">{timeSince}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{timeSince}</p>
                               
                               {activity.photoUrl && (
                                 <div className="mt-2 w-full max-w-xs rounded-md overflow-hidden">
