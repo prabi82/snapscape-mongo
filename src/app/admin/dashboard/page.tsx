@@ -112,7 +112,8 @@ export default function AdminDashboard() {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/users');
+        // Fetch only the latest 10 users, sorted by creation date (newest first)
+        const response = await fetch('/api/users?limit=10&sortBy=createdAt&sortOrder=desc');
         
         if (!response.ok) {
           throw new Error('Failed to fetch users');
@@ -189,14 +190,14 @@ export default function AdminDashboard() {
           <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
             <div>
               <h2 className="text-lg leading-6 font-medium text-gray-900">
-                User Management
+                Latest 10 Registered Users
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Overview of all registered users
+                Overview of the most recently registered users
               </p>
             </div>
             <p className="text-sm text-gray-500">
-              Total Users: {users.length}
+              Total Users: {stats.userCount}
             </p>
           </div>
           
@@ -260,6 +261,16 @@ export default function AdminDashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+          
+          {/* View All Users Link */}
+          <div className="bg-gray-50 px-6 py-3 text-center">
+            <Link 
+              href="/admin/users"
+              className="text-indigo-600 hover:text-indigo-900 font-medium text-sm"
+            >
+              View All Users →
+            </Link>
           </div>
         </div>
 

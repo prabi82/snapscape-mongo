@@ -180,6 +180,19 @@ export default function CompetitionDetail() {
   const [userSubmissions, setUserSubmissions] = useState<Submission[]>([]);
   const [modalImage, setModalImage] = useState<string | null>(null);
 
+  // Edit/Delete functionality state
+  const [editingSubmission, setEditingSubmission] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [editFileSizeError, setEditFileSizeError] = useState('');
+  const [editCompressionInfo, setEditCompressionInfo] = useState('');
+  const [isEditCompressing, setIsEditCompressing] = useState(false);
+
   // Add modal navigation logic
   const currentModalIndex = modalImage ? userSubmissions.findIndex(img => img._id === modalImage) : -1;
   const showNextImage = useCallback(() => {
@@ -213,38 +226,38 @@ export default function CompetitionDetail() {
   }, [modalImage, showNextImage, showPrevImage]);
 
   // Fetch competition and submissions data
-  useEffect(() => {
-    const fetchCompetitionData = async () => {
-      if (!competitionId) return;
+  const fetchCompetitionData = async () => {
+    if (!competitionId) return;
+    
+    try {
+      setLoading(true);
       
-      try {
-        setLoading(true);
-        
-        // Fetch competition details
-        const competitionRes = await fetch(`/api/competitions/${competitionId}`);
-        if (!competitionRes.ok) {
-          throw new Error('Failed to fetch competition details');
-        }
-        const competitionData = await competitionRes.json();
-        setCompetition(competitionData.data);
-        
-        // Fetch submissions for this competition if it's in voting or completed status
-        if (competitionData.data.status === 'voting' || competitionData.data.status === 'completed') {
-          const submissionsRes = await fetch(`/api/photo-submissions?competition=${competitionId}`);
-          if (!submissionsRes.ok) {
-            throw new Error('Failed to fetch submissions');
-          }
-          const submissionsData = await submissionsRes.json();
-          setSubmissions(submissionsData.data || []);
-        }
-      } catch (err: any) {
-        console.error('Error fetching competition data:', err);
-        setError(err.message || 'An error occurred while fetching competition data');
-      } finally {
-        setLoading(false);
+      // Fetch competition details
+      const competitionRes = await fetch(`/api/competitions/${competitionId}`);
+      if (!competitionRes.ok) {
+        throw new Error('Failed to fetch competition details');
       }
-    };
+      const competitionData = await competitionRes.json();
+      setCompetition(competitionData.data);
+      
+      // Fetch submissions for this competition if it's in voting or completed status
+      if (competitionData.data.status === 'voting' || competitionData.data.status === 'completed') {
+        const submissionsRes = await fetch(`/api/photo-submissions?competition=${competitionId}`);
+        if (!submissionsRes.ok) {
+          throw new Error('Failed to fetch submissions');
+        }
+        const submissionsData = await submissionsRes.json();
+        setSubmissions(submissionsData.data || []);
+      }
+    } catch (err: any) {
+      console.error('Error fetching competition data:', err);
+      setError(err.message || 'An error occurred while fetching competition data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (status === 'authenticated' && competitionId) {
       fetchCompetitionData();
     }
@@ -514,8 +527,16 @@ export default function CompetitionDetail() {
             const refreshData = await refreshRes.json();
             setCompetition(refreshData.data);
           }
+          
+          // Also refresh user submissions to show the newly uploaded image
+          console.log('Refreshing user submissions');
+          const userSubmissionsRes = await fetch(`/api/user/submissions?competition=${competitionId}&limit=100`);
+          if (userSubmissionsRes.ok) {
+            const userSubmissionsData = await userSubmissionsRes.json();
+            setUserSubmissions(userSubmissionsData.data || []);
+          }
         } catch (refreshError) {
-          console.error('Error refreshing competition data:', refreshError);
+          console.error('Error refreshing data:', refreshError);
           // Don't throw here, as the submission was successful
         }
       } catch (fetchError: unknown) {
@@ -586,7 +607,151 @@ export default function CompetitionDetail() {
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'MMMM d, yyyy');
+    return format(new Date(dateString), 'MMM dd, yyyy');
+  };
+
+  // Handle editing submission
+  const handleEditSubmission = (submission: Submission) => {
+    setEditingSubmission(submission._id);
+    setEditTitle(submission.title);
+    setEditDescription(submission.description || '');
+    setEditError('');
+    setEditSuccess('');
+    setEditPhotoFile(null);
+    setEditFileSizeError('');
+    setEditCompressionInfo('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSubmission(null);
+    setEditTitle('');
+    setEditDescription('');
+    setEditError('');
+    setEditSuccess('');
+    setEditPhotoFile(null);
+    setEditFileSizeError('');
+    setEditCompressionInfo('');
+  };
+
+  const handleUpdateSubmission = async (submissionId: string) => {
+    if (!editTitle.trim()) {
+      setEditError('Title is required');
+      return;
+    }
+
+    if (editTitle.length > 100) {
+      setEditError('Title cannot be more than 100 characters');
+      return;
+    }
+
+    if (editDescription.length > 500) {
+      setEditError('Description cannot be more than 500 characters');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      setEditError('');
+
+      let response;
+
+      if (editPhotoFile) {
+        // Update with new image using FormData
+        const formData = new FormData();
+        formData.append('title', editTitle.trim());
+        formData.append('description', editDescription.trim());
+        formData.append('photo', editPhotoFile);
+
+        response = await fetch(`/api/photo-submissions/${submissionId}`, {
+          method: 'PUT',
+          body: formData,
+        });
+      } else {
+        // Update text only using JSON
+        response = await fetch(`/api/photo-submissions/${submissionId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: editTitle.trim(),
+            description: editDescription.trim(),
+          }),
+        });
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update submission');
+      }
+
+      setEditSuccess('Submission updated successfully!');
+      
+      // Update the submission in the local state
+      setUserSubmissions(prev => 
+        prev.map(sub => 
+          sub._id === submissionId 
+            ? { 
+                ...sub, 
+                title: editTitle.trim(), 
+                description: editDescription.trim(),
+                ...(data.data.imageUrl && { imageUrl: data.data.imageUrl })
+              }
+            : sub
+        )
+      );
+
+      // Close edit form after a short delay
+      setTimeout(() => {
+        handleCancelEdit();
+      }, 1500);
+
+    } catch (error: any) {
+      console.error('Error updating submission:', error);
+      setEditError(error.message || 'Failed to update submission');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteSubmission = async (submissionId: string) => {
+    if (!confirm('Are you sure you want to delete this submission? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setIsDeleting(submissionId);
+
+      const response = await fetch(`/api/photo-submissions/${submissionId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to delete submission');
+      }
+
+      // Remove the submission from local state
+      setUserSubmissions(prev => prev.filter(sub => sub._id !== submissionId));
+      
+      // Close modal if this submission was being viewed
+      if (modalImage === submissionId) {
+        setModalImage(null);
+      }
+
+      // Refresh competition data to update submission count
+      await fetchCompetitionData();
+
+      alert('Submission deleted successfully!');
+
+    } catch (error: any) {
+      console.error('Error deleting submission:', error);
+      alert(error.message || 'Failed to delete submission');
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   // Function to toggle expanded sections
@@ -595,6 +760,70 @@ export default function CompetitionDetail() {
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  // Handle edit photo file change with compression
+  const handleEditPhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditFileSizeError('');
+    setEditCompressionInfo('');
+    setIsEditCompressing(false);
+    const file = e.target.files?.[0] || null;
+    
+    if (file) {
+      // Validate file type
+      if (!isValidImageType(file)) {
+        setEditFileSizeError('Please upload a valid image file (JPG, PNG or WebP)');
+        setEditPhotoFile(null);
+        return;
+      }
+      
+      // Check original file size (10MB limit)
+      const originalSize = file.size / (1024 * 1024); // Size in MB
+      
+      if (file.size > 10 * 1024 * 1024) {
+        setEditFileSizeError(`Image size must be less than 10MB (current size: ${originalSize.toFixed(2)} MB)`);
+        setEditPhotoFile(null);
+        return;
+      }
+      
+      // If file is larger than 3MB, compress it for optimization
+      if (file.size > 3 * 1024 * 1024) {
+        try {
+          setIsEditCompressing(true);
+          if (showCompressionInfo) {
+            setEditCompressionInfo('Optimizing image for high-quality desktop viewing...');
+          }
+          
+          const compressionResult = await compressImage(file, {
+            maxSizeMB: 10,
+            maxWidthOrHeight: 3840,
+            initialQuality: 0.95,
+            alwaysKeepResolution: false
+          });
+          
+          setEditPhotoFile(compressionResult.file);
+          if (showCompressionInfo) {
+            setEditCompressionInfo(
+              `Image compressed: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${Math.round(compressionResult.compressionRatio * 100)}% of original)`
+            );
+          }
+        } catch (error) {
+          console.error('Error compressing image:', error);
+          setEditFileSizeError('Failed to compress image. Please try a smaller file or compress it manually.');
+          setEditPhotoFile(null);
+        } finally {
+          setIsEditCompressing(false);
+        }
+      } else {
+        // For files 3MB and under, use them as-is
+        setEditPhotoFile(file);
+        if (showCompressionInfo) {
+          setEditCompressionInfo(`Image ready: ${formatFileSize(file.size)} (no compression needed)`);
+        }
+      }
+    } else {
+      setEditPhotoFile(null);
+    }
   };
 
   if (loading) {
@@ -950,22 +1179,193 @@ export default function CompetitionDetail() {
       {userSubmissions.length > 0 && (
         <div className="mt-12 px-6">
           <h2 className="text-lg font-bold text-[#1a4d5c] mb-3">My Submitted Images for this Competition</h2>
+          
+          {/* Edit form */}
+          {editingSubmission && (
+            <div className="mb-6 p-4 bg-[#fffbe6] border border-[#e0c36a] rounded-lg">
+              <h3 className="font-bold text-[#1a4d5c] mb-3">Edit Submission</h3>
+              
+              {editError && (
+                <div className="bg-red-50 border-l-4 border-red-400 p-2 mb-3 rounded-md">
+                  <p className="text-red-700 text-sm">{editError}</p>
+                </div>
+              )}
+              
+              {editSuccess && (
+                <div className="bg-green-50 border-l-4 border-green-400 p-2 mb-3 rounded-md">
+                  <p className="text-green-700 text-sm">{editSuccess}</p>
+                </div>
+              )}
+              
+              {editFileSizeError && (
+                <div className="bg-red-50 border-l-4 border-red-400 p-2 mb-3 rounded-md">
+                  <p className="text-red-700 text-sm">{editFileSizeError}</p>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left column - Text fields */}
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="editTitle" className="block text-sm font-medium text-[#1a4d5c] mb-1">
+                      Title *
+                    </label>
+                    <input
+                      type="text"
+                      id="editTitle"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="block w-full px-3 py-2 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-sm"
+                      placeholder="Enter photo title"
+                      maxLength={100}
+                      disabled={isUpdating || isEditCompressing}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">{editTitle.length}/100 characters</p>
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="editDescription" className="block text-sm font-medium text-[#1a4d5c] mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      id="editDescription"
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      rows={3}
+                      className="block w-full px-3 py-2 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-sm"
+                      placeholder="Describe your photo (optional)"
+                      maxLength={500}
+                      disabled={isUpdating || isEditCompressing}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">{editDescription.length}/500 characters</p>
+                  </div>
+                </div>
+                
+                {/* Right column - Image upload */}
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="editPhotoFile" className="block text-sm font-medium text-[#1a4d5c] mb-1">
+                      Replace Image (Optional)
+                    </label>
+                    <input
+                      type="file"
+                      id="editPhotoFile"
+                      accept="image/*"
+                      onChange={handleEditPhotoFileChange}
+                      className="block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border border-[#e0c36a] rounded-lg"
+                      disabled={isUpdating || isEditCompressing}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      JPG, PNG or WebP up to 10MB
+                    </p>
+                    
+                    {/* Compression status */}
+                    {showCompressionInfo && isEditCompressing && (
+                      <div className="mt-2 flex items-center text-sm text-[#2699a6]">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#2699a6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Compressing image...
+                      </div>
+                    )}
+                    
+                    {/* Compression info */}
+                    {showCompressionInfo && editCompressionInfo && !isEditCompressing && (
+                      <div className="mt-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md p-2">
+                        ✓ {editCompressionInfo}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {editPhotoFile && (
+                    <div className="text-sm text-[#1a4d5c] bg-blue-50 border border-blue-200 rounded-md p-2">
+                      <strong>New image selected:</strong> {editPhotoFile.name}
+                      <br />
+                      <span className="text-xs text-gray-600">
+                        Size: {(editPhotoFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-4">
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="inline-flex items-center px-4 py-2 border-2 border-[#e0c36a] shadow-sm text-sm font-semibold rounded-lg text-[#1a4d5c] bg-[#fffbe6] hover:bg-[#e6f0f3]"
+                  disabled={isUpdating || isEditCompressing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateSubmission(editingSubmission)}
+                  disabled={isUpdating || isEditCompressing || !editTitle.trim()}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUpdating ? 'Updating...' : isEditCompressing ? 'Processing...' : 'Update Submission'}
+                </button>
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-3 gap-0">
             {userSubmissions.map((img) => (
               <div
                 key={img._id}
-                className="relative w-full aspect-[4/3] group overflow-hidden cursor-pointer"
-                onClick={() => setModalImage(img._id)}
+                className="relative w-full aspect-[4/3] group overflow-hidden"
               >
                 <img
                   src={img.imageUrl}
                   alt={img.title}
-                  className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-110"
+                  className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-110 cursor-pointer"
                   loading="lazy"
+                  onClick={() => setModalImage(img._id)}
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center text-white p-4">
                   <div className="font-bold text-base mb-1 truncate w-full text-center">{img.title}</div>
-                  <div className="text-xs w-full text-center">Uploaded: {img.createdAt ? new Date(img.createdAt).toLocaleDateString() : ''}</div>
+                  <div className="text-xs w-full text-center mb-3">Uploaded: {img.createdAt ? new Date(img.createdAt).toLocaleDateString() : ''}</div>
+                  
+                  {/* Always show VIEW button */}
+                  <div className="flex flex-col space-y-2 w-full" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setModalImage(img._id)}
+                      className="w-full px-3 py-2 bg-[#2699a6] hover:bg-[#1a4d5c] text-white text-sm rounded-md transition-colors font-medium"
+                    >
+                      VIEW
+                    </button>
+                    
+                    {/* Edit/Delete buttons - only show when competition is active */}
+                    {competition?.status === 'active' && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEditSubmission(img)}
+                          className="flex-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors"
+                          disabled={isDeleting === img._id}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSubmission(img._id)}
+                          className="flex-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-md transition-colors"
+                          disabled={isDeleting === img._id}
+                        >
+                          {isDeleting === img._id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Show status message when competition is not active */}
+                  {competition?.status !== 'active' && (
+                    <div className="text-xs text-gray-300 text-center mt-2">
+                      {competition?.status === 'voting' ? 'Voting in progress - cannot edit' : 
+                       competition?.status === 'completed' ? 'Competition completed' : 
+                       'Competition not active'}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -997,7 +1397,39 @@ export default function CompetitionDetail() {
                 <div className="font-bold text-2xl text-white mb-2 text-center md:text-left">{currentImg.title}</div>
                 <div className="text-xs text-gray-200 mb-4 text-center md:text-left">Uploaded: {currentImg.createdAt ? new Date(currentImg.createdAt).toLocaleDateString() : ''}</div>
                 {currentImg.description && (
-                  <div className="text-sm text-gray-100 mt-2 text-center md:text-left">{currentImg.description}</div>
+                  <div className="text-sm text-gray-100 mt-2 mb-4 text-center md:text-left">{currentImg.description}</div>
+                )}
+                
+                {/* Edit/Delete buttons in modal - only show when competition is active */}
+                {competition?.status === 'active' && (
+                  <div className="flex flex-col space-y-2 mt-4">
+                    <button
+                      onClick={() => {
+                        setModalImage(null);
+                        handleEditSubmission(currentImg);
+                      }}
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md transition-colors"
+                      disabled={isDeleting === currentImg._id}
+                    >
+                      Edit Submission
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSubmission(currentImg._id)}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-md transition-colors"
+                      disabled={isDeleting === currentImg._id}
+                    >
+                      {isDeleting === currentImg._id ? 'Deleting...' : 'Delete Submission'}
+                    </button>
+                  </div>
+                )}
+                
+                {/* Show status message when competition is not active */}
+                {competition?.status !== 'active' && (
+                  <div className="text-xs text-gray-300 text-center md:text-left mt-4 p-2 bg-black/50 rounded">
+                    {competition?.status === 'voting' ? 'Voting in progress - submissions cannot be edited' : 
+                     competition?.status === 'completed' ? 'Competition completed - submissions are final' : 
+                     'Competition not active - submissions cannot be edited'}
+                  </div>
                 )}
               </div>
             </div>

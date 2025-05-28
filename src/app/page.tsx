@@ -24,6 +24,7 @@ function HomeWithSearchParams() {
   const [resendMessage, setResendMessage] = useState('');
   const [sessionMessage, setSessionMessage] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     // Fetch available providers
@@ -190,6 +191,38 @@ function HomeWithSearchParams() {
           <p className="text-[#1a4d5c] mb-6">Login using your email/phone</p>
         </div>
         
+        {/* Google Login Button - Moved to top */}
+        <div className="w-full mb-6">
+          {Object.values(authProviders).map((provider: any) => {
+            if (provider.id === 'google') {
+              return (
+                <button
+                  key={provider.id}
+                  onClick={() => handleSocialLogin(provider.id)}
+                  className="flex items-center justify-center w-full py-3 px-4 rounded-lg bg-white hover:bg-gray-50 shadow-md border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                  aria-label={`Sign in with ${provider.name}`}
+                  type="button"
+                >
+                  <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span className="text-gray-700 font-medium text-base">Login with Google</span>
+                </button>
+              );
+            }
+            return null;
+          })}
+        </div>
+        
+        <div className="flex items-center w-full mb-6">
+          <div className="flex-grow border-t border-[#e0c36a]"></div>
+          <span className="mx-4 text-[#1a4d5c] font-medium">or</span>
+          <div className="flex-grow border-t border-[#e0c36a]"></div>
+        </div>
+        
         {sessionMessage && (
           <div className="p-3 mb-2 bg-blue-50 border border-blue-300 text-blue-700 rounded w-full text-center text-sm">
             {sessionMessage}
@@ -213,17 +246,36 @@ function HomeWithSearchParams() {
             placeholder="Email/Phone"
             className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-base"
           />
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="block w-full px-4 py-3 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-base"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="block w-full px-4 py-3 pr-12 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c] text-base"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#1a4d5c] hover:text-[#2699a6] transition-colors"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
           
           <div className="flex justify-end w-full">
             <Link href="/auth/reset-password" className="text-sm text-[#e0c36a] hover:underline">
@@ -239,34 +291,7 @@ function HomeWithSearchParams() {
             {isLoading ? 'Signing in...' : 'Login'}
           </button>
         </form>
-        <div className="flex items-center w-full my-6">
-          <div className="flex-grow border-t border-[#e0c36a]"></div>
-          <span className="mx-4 text-[#1a4d5c] font-medium">or</span>
-          <div className="flex-grow border-t border-[#e0c36a]"></div>
-        </div>
-        <div className="flex justify-center gap-6 w-full mb-4">
-          {Object.values(authProviders).map((provider: any) => {
-            if (provider.id === 'credentials' || provider.id === 'facebook' || provider.id === 'apple') return null;
-            
-            if (provider.id === 'google') {
-              return (
-                <button
-                  key={provider.id}
-                  onClick={() => handleSocialLogin(provider.id)}
-                  className="flex items-center justify-center w-12 h-12 rounded-full bg-[#e6f0f3] hover:bg-[#d1e6ed] shadow border border-[#e0c36a] transition"
-                  aria-label={`Sign in with ${provider.name}`}
-                  type="button"
-                >
-                  <svg className="w-7 h-7" viewBox="0 0 24 24">
-                    <path fill="#2699a6" d="M12 11v2.5h6.5c-.3 1.7-2 5-6.5 5-3.9 0-7-3.1-7-7s3.1-7 7-7c2.2 0 3.7.9 4.6 1.7l3.1-3.1C17.7 1.6 15.1 0 12 0 5.4 0 0 5.4 0 12s5.4 12 12 12c6.1 0 11-4.6 11-11 0-.7-.1-1.3-.2-1.9H12z"/>
-                  </svg>
-                </button>
-              );
-            }
-            return null;
-          })}
-        </div>
-        <div className="text-center w-full space-y-2">
+        <div className="text-center w-full space-y-2 mt-4">
           <div>
             <span className="text-[#1a4d5c]">Don't have an account? </span>
             <Link href="/auth/register" className="text-[#e0c36a] font-semibold hover:underline">Signup</Link>

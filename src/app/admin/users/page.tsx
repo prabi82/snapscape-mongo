@@ -13,6 +13,7 @@ interface User {
   image?: string;
   bio?: string;
   isActive: boolean;
+  isVerified: boolean;
   createdAt: string;
   photoCount?: number;
   submissionCount?: number;
@@ -36,6 +37,7 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('createdAt_desc');
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   
   // Fetch users with pagination, filtering, and sorting
   useEffect(() => {
@@ -78,6 +80,21 @@ export default function UserManagement() {
 
     fetchUsers();
   }, [currentPage, roleFilter, searchTerm, sortBy]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.dropdown-container')) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Handle role change
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -323,6 +340,12 @@ export default function UserManagement() {
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
+                  Email Verification
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Joined
                 </th>
                 <th
@@ -396,6 +419,17 @@ export default function UserManagement() {
                         {user.isActive ? 'Active' : 'Inactive'}
                       </button>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.isVerified
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
+                        {user.isVerified ? 'Verified' : 'Unverified'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(user.createdAt)}
                     </td>
@@ -408,53 +442,131 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <Link
-                          href={`/admin/users/${user._id}`}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          View
-                        </Link>
-                        
-                        {/* Status Toggle */}
-                        {session?.user?.email !== user.email && (
+                      <div className="relative inline-block text-left dropdown-container">
+                        <div>
                           <button
-                            onClick={() => toggleUserStatus(user._id, user.isActive)}
-                            className={`${
-                              user.isActive 
-                                ? 'text-red-600 hover:text-red-900' 
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
                             type="button"
+                            className="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                            id={`menu-button-${user._id}`}
+                            aria-expanded={openDropdown === user._id}
+                            aria-haspopup="true"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setOpenDropdown(openDropdown === user._id ? null : user._id);
+                            }}
                           >
-                            {user.isActive ? 'Deactivate' : 'Activate'}
+                            Actions
+                            <svg className="-mr-1 h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                            </svg>
                           </button>
-                        )}
-                        
-                        {/* Role change dropdown */}
-                        {session?.user?.email !== user.email && (
-                          <div className="relative inline-block text-left">
-                            <select
-                              onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                              value={user.role}
-                              className="block w-full text-indigo-600 hover:text-indigo-900 bg-transparent border-0 focus:ring-0 focus:outline-none"
-                              aria-label="Change user role"
+                        </div>
+
+                        <div className={`absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${openDropdown === user._id ? '' : 'hidden'}`} role="menu" aria-orientation="vertical" aria-labelledby={`menu-button-${user._id}`} tabIndex={-1}>
+                          <div className="py-1" role="none">
+                            {/* View User */}
+                            <Link
+                              href={`/admin/users/${user._id}`}
+                              className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100"
+                              role="menuitem"
+                              tabIndex={-1}
+                              onClick={() => setOpenDropdown(null)}
                             >
-                              <option value="" disabled>
-                                Change Role
-                              </option>
-                              <option value="user">Set as User</option>
-                              <option value="admin">Set as Admin</option>
-                            </select>
+                              <div className="flex items-center">
+                                <svg className="mr-3 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                View Details
+                              </div>
+                            </Link>
+
+                            {/* Divider */}
+                            <div className="border-t border-gray-100" role="none"></div>
+
+                            {/* Status Toggle - only if not current user */}
+                            {session?.user?.email !== user.email && (
+                              <button
+                                onClick={() => {
+                                  toggleUserStatus(user._id, user.isActive);
+                                  setOpenDropdown(null);
+                                }}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                                  user.isActive 
+                                    ? 'text-red-700' 
+                                    : 'text-green-700'
+                                }`}
+                                role="menuitem"
+                                tabIndex={-1}
+                              >
+                                <div className="flex items-center">
+                                  {user.isActive ? (
+                                    <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  )}
+                                  {user.isActive ? 'Deactivate User' : 'Activate User'}
+                                </div>
+                              </button>
+                            )}
+
+                            {/* Role Changes - only if not current user */}
+                            {session?.user?.email !== user.email && (
+                              <>
+                                <div className="border-t border-gray-100" role="none"></div>
+                                
+                                {user.role !== 'admin' && (
+                                  <button
+                                    onClick={() => {
+                                      handleRoleChange(user._id, 'admin');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-purple-700 hover:bg-gray-100"
+                                    role="menuitem"
+                                    tabIndex={-1}
+                                  >
+                                    <div className="flex items-center">
+                                      <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                      </svg>
+                                      Make Admin
+                                    </div>
+                                  </button>
+                                )}
+                                
+                                {user.role !== 'user' && (
+                                  <button
+                                    onClick={() => {
+                                      handleRoleChange(user._id, 'user');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-blue-700 hover:bg-gray-100"
+                                    role="menuitem"
+                                    tabIndex={-1}
+                                  >
+                                    <div className="flex items-center">
+                                      <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                      </svg>
+                                      Make User
+                                    </div>
+                                  </button>
+                                )}
+                              </>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
                     No users found
                   </td>
                 </tr>
