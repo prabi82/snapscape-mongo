@@ -10,6 +10,17 @@ import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from
 import 'react-image-crop/dist/ReactCrop.css';
 import RichTextEditor from '@/components/RichTextEditor';
 
+interface ExtendedSession {
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+    role?: string;
+    id?: string;
+  };
+  expires: string;
+}
+
 interface Competition {
   _id: string;
   title: string;
@@ -30,7 +41,7 @@ interface Competition {
 }
 
 export default function EditCompetition() {
-  const { data: session, status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession() as { data: ExtendedSession | null; status: string };
   const params = useParams();
   const router = useRouter();
   const competitionId = params?.id as string;
@@ -50,6 +61,9 @@ export default function EditCompetition() {
     startDate: '',
     endDate: '',
     votingEndDate: '',
+    startTime: '',
+    endTime: '',
+    votingEndTime: '',
     submissionLimit: 5,
     votingCriteria: '',
     submissionFormat: '',
@@ -78,6 +92,54 @@ export default function EditCompetition() {
       return '';
     }
   };
+
+  // Extract time from ISO date string (HH:mm format)
+  const extractTimeFromISO = (dateString: string) => {
+    try {
+      const date = parseISO(dateString);
+      return format(date, "HH:mm");
+    } catch (error) {
+      console.error('Error extracting time:', error);
+      return '';
+    }
+  };
+
+  // Helper function to combine date and time and convert to Oman timezone (GMT+4)
+  const combineDateTimeOman = (dateString: string, timeString: string): string => {
+    if (!dateString) return '';
+    
+    try {
+      // If no time is provided, default to midnight (00:00)
+      const time = timeString || '00:00';
+      
+      // Combine date and time
+      const dateTimeString = `${dateString}T${time}:00`;
+      
+      // Create date object (this will be in local timezone)
+      const localDate = new Date(dateTimeString);
+      
+      // Check if the date is valid
+      if (isNaN(localDate.getTime())) {
+        console.error('Invalid date created:', dateString, timeString);
+        return '';
+      }
+      
+      // Convert to Oman timezone (GMT+4)
+      // We need to adjust for the difference between local timezone and Oman timezone
+      const omanOffset = 4 * 60; // Oman is GMT+4 (240 minutes)
+      const localOffset = localDate.getTimezoneOffset(); // Local timezone offset in minutes (negative for positive timezones)
+      
+      // Calculate the difference and adjust
+      const offsetDifference = omanOffset + localOffset; // Total offset to apply
+      const omanDate = new Date(localDate.getTime() - (offsetDifference * 60 * 1000));
+      
+      console.log(`Date: ${dateString}, Time: ${time}, Local: ${localDate.toISOString()}, Oman: ${omanDate.toISOString()}`);
+      return omanDate.toISOString();
+    } catch (err) {
+      console.error('Error formatting date:', err, dateString, timeString);
+      return '';
+    }
+  };
   
   // Add a function to parse and validate dates
   const parseDateString = (dateString: string) => {
@@ -103,7 +165,7 @@ export default function EditCompetition() {
   // Fetch competition data
   useEffect(() => {
     // Redirect if not admin
-    if (sessionStatus === 'authenticated' && (session?.user as any)?.role !== 'admin') {
+    if (sessionStatus === 'authenticated' && session?.user?.role !== 'admin') {
       router.push('/dashboard');
       return;
     }
@@ -142,6 +204,9 @@ export default function EditCompetition() {
           startDate: formatDateForInput(data.data.startDate),
           endDate: formatDateForInput(data.data.endDate),
           votingEndDate: formatDateForInput(data.data.votingEndDate),
+          startTime: extractTimeFromISO(data.data.startDate),
+          endTime: extractTimeFromISO(data.data.endDate),
+          votingEndTime: extractTimeFromISO(data.data.votingEndDate),
           submissionLimit: data.data.submissionLimit || 5,
           votingCriteria: data.data.votingCriteria || '',
           submissionFormat: data.data.submissionFormat || '',
@@ -406,10 +471,21 @@ export default function EditCompetition() {
 
     const formDataToSubmit = new FormData();
 
-    // Append all non-file fields from formData state
-    Object.entries(formData).forEach(([key, value]) => {
-      // Always append all fields, including status
-      if (key === 'coverImage' || key === 'coverImageUrl') return; // Handled separately
+    // Prepare dates with times in Oman timezone
+    const submissionData = {
+      ...formData,
+      startDate: combineDateTimeOman(formData.startDate, formData.startTime),
+      endDate: combineDateTimeOman(formData.endDate, formData.endTime),
+      votingEndDate: combineDateTimeOman(formData.votingEndDate, formData.votingEndTime)
+    };
+
+    // Append all non-file fields from prepared submission data
+    Object.entries(submissionData).forEach(([key, value]) => {
+      // Skip time fields as they're already combined into date fields
+      if (key === 'startTime' || key === 'endTime' || key === 'votingEndTime') return;
+      // Skip file-related fields
+      if (key === 'coverImage' || key === 'coverImageUrl') return;
+      
       if (typeof value === 'boolean') {
         formDataToSubmit.append(key, value ? 'true' : 'false');
       } else if (value !== null && value !== undefined) {
@@ -514,7 +590,7 @@ export default function EditCompetition() {
   }
   
   // Check if user is admin
-  if (sessionStatus === 'authenticated' && (session?.user as any)?.role !== 'admin') {
+  if (sessionStatus === 'authenticated' && session?.user?.role !== 'admin') {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
@@ -634,13 +710,13 @@ export default function EditCompetition() {
             
             {/* Dates Section */}
             <div className="sm:col-span-6">
-              <h3 className="text-lg font-medium text-gray-900">Important Dates</h3>
+              <h3 className="text-lg font-medium text-gray-900">Important Dates & Times</h3>
               <p className="mt-1 text-sm text-gray-500">
-                All dates and times are in your local timezone.
+                All times are in Oman Standard Time (GMT+4). If no time is specified, it defaults to midnight (12:00 AM).
               </p>
             </div>
             
-            {/* Start Date */}
+            {/* Start Date & Time */}
             <div className="sm:col-span-2">
               <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
                 Start Date <span className="text-red-500">*</span>
@@ -658,7 +734,23 @@ export default function EditCompetition() {
               </div>
             </div>
             
-            {/* End Date */}
+            <div className="sm:col-span-1">
+              <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
+                Start Time (Oman)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="time"
+                  name="startTime"
+                  id="startTime"
+                  value={formData.startTime}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+            
+            {/* End Date & Time */}
             <div className="sm:col-span-2">
               <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
                 Submission End Date <span className="text-red-500">*</span>
@@ -676,7 +768,23 @@ export default function EditCompetition() {
               </div>
             </div>
             
-            {/* Voting End Date */}
+            <div className="sm:col-span-1">
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
+                End Time (Oman)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="time"
+                  name="endTime"
+                  id="endTime"
+                  value={formData.endTime}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+            
+            {/* Voting End Date & Time */}
             <div className="sm:col-span-2">
               <label htmlFor="votingEndDate" className="block text-sm font-medium text-gray-700">
                 Voting End Date <span className="text-red-500">*</span>
@@ -689,6 +797,22 @@ export default function EditCompetition() {
                   value={formData.votingEndDate}
                   onChange={handleChange}
                   required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+            
+            <div className="sm:col-span-1">
+              <label htmlFor="votingEndTime" className="block text-sm font-medium text-gray-700">
+                Voting End Time (Oman)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="time"
+                  name="votingEndTime"
+                  id="votingEndTime"
+                  value={formData.votingEndTime}
+                  onChange={handleChange}
                   className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
                 />
               </div>

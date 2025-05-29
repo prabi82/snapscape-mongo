@@ -25,14 +25,26 @@ function HomeWithSearchParams() {
   const [sessionMessage, setSessionMessage] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isRestrictedBrowser, setIsRestrictedBrowser] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    // Fetch available providers
-    const fetchProviders = async () => {
-      const providers = await getProviders();
+    // Check for restricted user agents
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isInApp = userAgent.includes('instagram') || 
+                   userAgent.includes('fban') || 
+                   userAgent.includes('fbav') || 
+                   userAgent.includes('twitter') || 
+                   userAgent.includes('linkedin') ||
+                   userAgent.includes('wechat') ||
+                   userAgent.includes('line');
+    
+    setIsRestrictedBrowser(isInApp);
+    
+    // Fetch auth providers
+    getProviders().then((providers) => {
       setAuthProviders(providers || {});
-    };
-    fetchProviders();
+    });
     
     // Check if we need to refresh the session
     if (refresh === 'true') {
@@ -234,6 +246,31 @@ function HomeWithSearchParams() {
             {error}
           </div>
         )}
+
+        {successMessage && (
+          <div className="p-3 mb-4 bg-green-100 border border-green-400 text-green-700 rounded w-full text-center text-sm">
+            {successMessage}
+          </div>
+        )}
+
+        {/* Warning for restricted browsers */}
+        {isRestrictedBrowser && (
+          <div className="p-4 mb-4 bg-yellow-50 border border-yellow-400 text-yellow-800 rounded w-full text-sm">
+            <div className="flex items-start">
+              <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <p className="font-medium">Browser Compatibility Notice</p>
+                <p className="mt-1">For the best experience with Google Sign-In, please open this page in your default browser (Chrome, Safari, Firefox) instead of this app's built-in browser.</p>
+                <p className="mt-2 text-xs">
+                  <strong>How to open in browser:</strong> Tap the menu (⋯) and select "Open in Browser" or copy this URL to your browser.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <form className="w-full space-y-4" onSubmit={handleSubmit}>
           <input
             id="email"

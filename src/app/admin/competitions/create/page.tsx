@@ -8,6 +8,17 @@ import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from
 import 'react-image-crop/dist/ReactCrop.css';
 import RichTextEditor from '@/components/RichTextEditor';
 
+interface ExtendedSession {
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+    role?: string;
+    id?: string;
+  };
+  expires: string;
+}
+
 interface CompetitionFormData {
   title: string;
   description: string;
@@ -17,6 +28,9 @@ interface CompetitionFormData {
   startDate: string;
   endDate: string;
   votingEndDate: string;
+  startTime: string;
+  endTime: string;
+  votingEndTime: string;
   submissionLimit: number;
   votingCriteria: string;
   submissionFormat: string;
@@ -25,7 +39,7 @@ interface CompetitionFormData {
 }
 
 export default function CreateCompetition() {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession() as { data: ExtendedSession | null; status: string };
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +55,9 @@ export default function CreateCompetition() {
     startDate: '',
     endDate: '',
     votingEndDate: '',
+    startTime: '',
+    endTime: '',
+    votingEndTime: '',
     submissionLimit: 5,
     votingCriteria: 'composition,creativity,technical',
     submissionFormat: '',
@@ -68,28 +85,39 @@ export default function CreateCompetition() {
     }
   }, [status, session, router]);
 
-  // Helper function to set time to end of day in Muscat time (GMT+4)
-  const setEndOfDayMuscat = (dateString: string): string => {
+  // Helper function to combine date and time and convert to Oman timezone (GMT+4)
+  const combineDateTimeOman = (dateString: string, timeString: string): string => {
     if (!dateString) return '';
     
     try {
-      // When using input type="date", the format is YYYY-MM-DD
-      // Add the end of day time in Muscat time zone
-      const formattedDate = `${dateString}T23:59:59.999Z`;
+      // If no time is provided, default to midnight (00:00)
+      const time = timeString || '00:00';
       
-      // Create a proper date object
-      const date = new Date(formattedDate);
+      // Combine date and time
+      const dateTimeString = `${dateString}T${time}:00`;
+      
+      // Create date object (this will be in local timezone)
+      const localDate = new Date(dateTimeString);
       
       // Check if the date is valid
-      if (isNaN(date.getTime())) {
-        console.error('Invalid date created:', dateString, formattedDate);
+      if (isNaN(localDate.getTime())) {
+        console.error('Invalid date created:', dateString, timeString);
         return '';
       }
       
-      console.log(`Original date: ${dateString}, Formatted date: ${date.toISOString()}`);
-      return date.toISOString();
+      // Convert to Oman timezone (GMT+4)
+      // We need to adjust for the difference between local timezone and Oman timezone
+      const omanOffset = 4 * 60; // Oman is GMT+4 (240 minutes)
+      const localOffset = localDate.getTimezoneOffset(); // Local timezone offset in minutes (negative for positive timezones)
+      
+      // Calculate the difference and adjust
+      const offsetDifference = omanOffset + localOffset; // Total offset to apply
+      const omanDate = new Date(localDate.getTime() - (offsetDifference * 60 * 1000));
+      
+      console.log(`Date: ${dateString}, Time: ${time}, Local: ${localDate.toISOString()}, Oman: ${omanDate.toISOString()}`);
+      return omanDate.toISOString();
     } catch (err) {
-      console.error('Error formatting date:', err, dateString);
+      console.error('Error formatting date:', err, dateString, timeString);
       return '';
     }
   };
@@ -377,9 +405,9 @@ export default function CreateCompetition() {
       // Prepare the form data with end-of-day times
       const submissionData = {
         ...formData,
-        startDate: setEndOfDayMuscat(formData.startDate),
-        endDate: setEndOfDayMuscat(formData.endDate),
-        votingEndDate: setEndOfDayMuscat(formData.votingEndDate)
+        startDate: combineDateTimeOman(formData.startDate, formData.startTime),
+        endDate: combineDateTimeOman(formData.endDate, formData.endTime),
+        votingEndDate: combineDateTimeOman(formData.votingEndDate, formData.votingEndTime)
       };
 
       console.log('Submission data with formatted dates:', submissionData);
@@ -490,6 +518,9 @@ export default function CreateCompetition() {
         startDate: '',
         endDate: '',
         votingEndDate: '',
+        startTime: '',
+        endTime: '',
+        votingEndTime: '',
         submissionLimit: 5,
         votingCriteria: 'composition,creativity,technical',
         submissionFormat: '',
@@ -634,13 +665,13 @@ export default function CreateCompetition() {
 
             {/* Dates Section */}
             <div className="sm:col-span-6">
-              <h3 className="text-lg font-medium text-gray-900">Important Dates</h3>
+              <h3 className="text-lg font-medium text-gray-900">Important Dates & Times</h3>
               <p className="mt-1 text-sm text-gray-500">
-                All dates will be set to end of day (Muscat time).
+                All times are in Oman Standard Time (GMT+4). If no time is specified, it defaults to midnight (12:00 AM).
               </p>
             </div>
 
-            {/* Start Date */}
+            {/* Start Date & Time */}
             <div className="sm:col-span-2">
               <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
                 Start Date <span className="text-red-500">*</span>
@@ -657,8 +688,24 @@ export default function CreateCompetition() {
                 />
               </div>
             </div>
+            
+            <div className="sm:col-span-1">
+              <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
+                Start Time (Oman)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="time"
+                  name="startTime"
+                  id="startTime"
+                  value={formData.startTime}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
 
-            {/* End Date */}
+            {/* End Date & Time */}
             <div className="sm:col-span-2">
               <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
                 Submission End Date <span className="text-red-500">*</span>
@@ -675,8 +722,24 @@ export default function CreateCompetition() {
                 />
               </div>
             </div>
+            
+            <div className="sm:col-span-1">
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
+                End Time (Oman)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="time"
+                  name="endTime"
+                  id="endTime"
+                  value={formData.endTime}
+                  onChange={handleChange}
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
 
-            {/* Voting End Date */}
+            {/* Voting End Date & Time */}
             <div className="sm:col-span-2">
               <label htmlFor="votingEndDate" className="block text-sm font-medium text-gray-700">
                 Voting End Date <span className="text-red-500">*</span>
@@ -689,6 +752,22 @@ export default function CreateCompetition() {
                   value={formData.votingEndDate}
                   onChange={handleChange}
                   required
+                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
+                />
+              </div>
+            </div>
+            
+            <div className="sm:col-span-1">
+              <label htmlFor="votingEndTime" className="block text-sm font-medium text-gray-700">
+                Voting End Time (Oman)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="time"
+                  name="votingEndTime"
+                  id="votingEndTime"
+                  value={formData.votingEndTime}
+                  onChange={handleChange}
                   className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-3"
                 />
               </div>

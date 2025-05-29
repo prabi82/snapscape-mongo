@@ -53,10 +53,19 @@ function AuthErrorContent() {
         break;
       case 'AccessDenied':
         errorTitle = 'Access Denied';
-        errorMessage = 'You do not have permission to access this resource.';
+        errorMessage = 'You cancelled the authentication process or access was denied.';
+        break;
+      case 'Verification':
+        errorTitle = 'Verification Error';
+        errorMessage = 'The verification token has expired or is invalid.';
         break;
       default:
-        // Keep default error title and message
+        // Check for specific Google OAuth errors
+        if (error.includes('disallowed_useragent') || error.includes('403')) {
+          errorTitle = 'Browser Compatibility Issue';
+          errorMessage = 'Google Sign-In is not supported in this browser. Please open SnapScape in your default browser (Chrome, Safari, Firefox) for the best experience.';
+        }
+        break;
     }
   }
 
@@ -83,6 +92,23 @@ function AuthErrorContent() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">{errorTitle}</h2>
           <p className="text-gray-600 mb-6">{errorMessage}</p>
+          
+          {/* Additional help for browser compatibility issues */}
+          {(error?.includes('disallowed_useragent') || error?.includes('403') || errorTitle.includes('Browser Compatibility')) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+              <h3 className="font-semibold text-blue-900 mb-2">How to fix this:</h3>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
+                <li>Copy the URL: <code className="bg-blue-100 px-1 rounded">https://snapscape.app</code></li>
+                <li>Open your default browser (Chrome, Safari, Firefox)</li>
+                <li>Paste the URL and visit the site</li>
+                <li>Try signing in with Google again</li>
+              </ol>
+              <p className="mt-3 text-xs text-blue-700">
+                <strong>Note:</strong> Google restricts sign-in from certain embedded browsers for security reasons.
+              </p>
+            </div>
+          )}
+          
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link
               href="/"

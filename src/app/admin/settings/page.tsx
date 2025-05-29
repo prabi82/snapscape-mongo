@@ -188,9 +188,7 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Application Settings</h1>
-      
+    <div>
       {message.text && (
         <div className={`p-4 mb-6 rounded-md ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
           {message.text}
@@ -247,10 +245,10 @@ export default function AdminSettingsPage() {
                 </div>
                 <div className="ml-3 text-sm">
                   <label htmlFor="enableImageCompressionDisplay" className="font-medium text-gray-700">
-                    Enable Image Compression Display
+                    Show Image Compression Information
                   </label>
                   <p className="text-gray-500">
-                    When enabled, users will see compression status messages when uploading images over 3MB.
+                    When enabled, users will see compression details when uploading images.
                   </p>
                 </div>
               </div>
@@ -279,75 +277,71 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <label htmlFor="debugUsers" className="block text-sm font-medium text-gray-700 mb-2">
-                    Users with Debug Access
-                  </label>
-                  
-                  <div className="flex mb-3">
-                    <select
-                      id="debugUsers"
-                      className="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-md sm:text-sm border-gray-300"
-                      value={newDebugUser}
-                      onChange={(e) => setNewDebugUser(e.target.value)}
-                    >
-                      <option value="">Select a user...</option>
-                      {users.map(user => (
-                        <option key={user._id} value={user._id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={addDebugUser}
-                      disabled={!newDebugUser}
-                      className="ml-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  
-                  {settings.debugModeUsers.length > 0 ? (
-                    <div className="mt-2">
-                      <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
-                        {settings.debugModeUsers.map(userId => {
-                          const user = users.find(u => u._id === userId);
-                          return (
-                            <li key={userId} className="flex items-center justify-between py-2 px-3 text-sm">
-                              <div className="flex-1 truncate">
-                                {user ? `${user.name} (${user.email})` : userId}
+                {settings.debugModeEnabled && (
+                  <div className="ml-7 space-y-4">
+                    <div>
+                      <label htmlFor="debugUsers" className="block text-sm font-medium text-gray-700 mb-2">
+                        Debug Mode Users
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <select
+                          value={newDebugUser}
+                          onChange={(e) => setNewDebugUser(e.target.value)}
+                          className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                        >
+                          <option value="">Select a user...</option>
+                          {users
+                            .filter(user => !settings.debugModeUsers.includes(user._id))
+                            .map(user => (
+                              <option key={user._id} value={user._id}>
+                                {user.name} ({user.email})
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          onClick={addDebugUser}
+                          disabled={!newDebugUser}
+                          className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      
+                      {settings.debugModeUsers.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm text-gray-600">Current debug users:</p>
+                          {settings.debugModeUsers.map(userId => {
+                            const user = users.find(u => u._id === userId);
+                            return (
+                              <div key={userId} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md">
+                                <span className="text-sm">
+                                  {user ? `${user.name} (${user.email})` : `User ID: ${userId}`}
+                                </span>
+                                <button
+                                  onClick={() => removeDebugUser(userId)}
+                                  className="text-red-600 hover:text-red-800 text-sm"
+                                >
+                                  Remove
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => removeDebugUser(userId)}
-                                className="ml-2 text-red-600 hover:text-red-900"
-                              >
-                                Remove
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic mt-2">
-                      No users with debug access. Add users to give them access to debug mode.
-                    </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            </div>
-            
-            <div className="mt-8">
-              <button
-                type="button"
-                onClick={saveSettings}
-                disabled={isSaving}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {isSaving ? 'Saving...' : 'Save Settings'}
-              </button>
+
+              <div className="pt-5">
+                <button
+                  onClick={saveSettings}
+                  disabled={isSaving}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -358,115 +352,90 @@ export default function AdminSettingsPage() {
         <div className="px-4 py-5 sm:px-6">
           <h3 className="text-lg leading-6 font-medium text-gray-900">Database Maintenance</h3>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            Tools to maintain database integrity
+            Clean up orphaned data and maintain database integrity
           </p>
         </div>
         
         <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
-          <div className="mb-8">
-            <h4 className="text-md font-medium text-gray-900 mb-2">Orphaned Submissions Cleanup</h4>
-            <p className="text-sm text-gray-500 mb-3">
-              Remove all photo submissions and photos that belong to competitions which have been deleted.
-              This will update user points and clean up orphaned images.
-            </p>
-            
-            <button
-              onClick={handleCleanupOrphanedSubmissions}
-              disabled={cleanupLoading}
-              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white 
-                ${cleanupLoading ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500`}
-            >
-              {cleanupLoading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <div className="space-y-6">
+            {/* Orphaned Submissions Cleanup */}
+            <div className="border border-yellow-200 rounded-lg p-4 bg-yellow-50">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  Cleaning...
-                </>
-              ) : (
-                'Clean Up Orphaned Submissions'
-              )}
-            </button>
-            
-            {cleanupResult && (
-              <div className="mt-4 p-4 bg-green-50 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <h4 className="text-sm font-medium text-yellow-800">Clean Up Orphaned Photo Submissions</h4>
+                  <p className="mt-1 text-sm text-yellow-700">
+                    This will permanently delete all photo submissions that belong to competitions that no longer exist.
+                  </p>
+                  <div className="mt-3">
+                    <button
+                      onClick={handleCleanupOrphanedSubmissions}
+                      disabled={cleanupLoading}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+                    >
+                      {cleanupLoading ? 'Cleaning...' : 'Clean Up Orphaned Submissions'}
+                    </button>
                   </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">Cleanup successful</h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <ul className="list-disc pl-5 space-y-1">
-                        <li>Photo submissions deleted: {cleanupResult.deleteSummary.photoSubmissions}</li>
-                        <li>Photos deleted: {cleanupResult.deleteSummary.photos}</li>
-                        <li>Ratings deleted: {cleanupResult.deleteSummary.ratings}</li>
-                        <li>Voting points removed: {cleanupResult.deleteSummary.votingPoints}</li>
+                  
+                  {cleanupResult && (
+                    <div className="mt-3 p-3 bg-white rounded border">
+                      <h5 className="text-sm font-medium text-gray-900">Cleanup Results:</h5>
+                      <ul className="mt-1 text-sm text-gray-600">
+                        <li>• Orphaned submissions found: {cleanupResult.orphanedSubmissions?.length || 0}</li>
+                        <li>• Submissions deleted: {cleanupResult.deletedCount || 0}</li>
+                        <li>• Images deleted from Cloudinary: {cleanupResult.cloudinaryDeletions || 0}</li>
+                        {cleanupResult.errors?.length > 0 && (
+                          <li className="text-red-600">• Errors: {cleanupResult.errors.length}</li>
+                        )}
                       </ul>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="border-t border-gray-200 pt-8 mb-5">
-            <h4 className="text-md font-medium text-gray-900 mb-2">Orphaned Ratings Cleanup</h4>
-            <p className="text-sm text-gray-500 mb-3">
-              Remove all user ratings/votes that reference photos which no longer exist.
-              This will fix orphaned voting points that remain after photos are deleted.
-            </p>
-            
-            <button
-              onClick={handleCleanupOrphanedRatings}
-              disabled={ratingCleanupLoading}
-              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white 
-                ${ratingCleanupLoading ? 'bg-gray-400' : 'bg-orange-600 hover:bg-orange-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500`}
-            >
-              {ratingCleanupLoading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            {/* Orphaned Ratings Cleanup */}
+            <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  Cleaning...
-                </>
-              ) : (
-                'Clean Up Orphaned Ratings'
-              )}
-            </button>
-            
-            {ratingCleanupResult && (
-              <div className="mt-4 p-4 bg-green-50 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <h4 className="text-sm font-medium text-blue-800">Clean Up Orphaned Voting Points</h4>
+                  <p className="mt-1 text-sm text-blue-700">
+                    This will permanently delete all voting points that reference photos that no longer exist.
+                  </p>
+                  <div className="mt-3">
+                    <button
+                      onClick={handleCleanupOrphanedRatings}
+                      disabled={ratingCleanupLoading}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      {ratingCleanupLoading ? 'Cleaning...' : 'Clean Up Orphaned Ratings'}
+                    </button>
                   </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">Ratings cleanup successful</h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <p>Removed {ratingCleanupResult.deleteSummary.orphanedRatings} orphaned ratings/voting points</p>
-                      
-                      {ratingCleanupResult.userSummary && ratingCleanupResult.userSummary.length > 0 && (
-                        <>
-                          <p className="mt-2 font-medium">User breakdown:</p>
-                          <ul className="list-disc pl-5 space-y-1 mt-1">
-                            {ratingCleanupResult.userSummary.map((item, index) => (
-                              <li key={index}>User {item.userId}: {item.ratingsRemoved} points removed</li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
+                  
+                  {ratingCleanupResult && (
+                    <div className="mt-3 p-3 bg-white rounded border">
+                      <h5 className="text-sm font-medium text-gray-900">Cleanup Results:</h5>
+                      <ul className="mt-1 text-sm text-gray-600">
+                        <li>• Orphaned ratings found: {ratingCleanupResult.orphanedRatings?.length || 0}</li>
+                        <li>• Ratings deleted: {ratingCleanupResult.deletedCount || 0}</li>
+                        {ratingCleanupResult.errors?.length > 0 && (
+                          <li className="text-red-600">• Errors: {ratingCleanupResult.errors.length}</li>
+                        )}
+                      </ul>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
