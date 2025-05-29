@@ -387,6 +387,10 @@ export default function CompetitionDetail() {
         throw new Error('Please fill in all fields and select a photo');
       }
       
+      if (photoDescription.length > 500) {
+        throw new Error('Description cannot be more than 500 characters');
+      }
+      
       if (!agreedToTerms) {
         throw new Error('Please confirm that you have reviewed and agree to the competition terms');
       }
@@ -945,9 +949,25 @@ export default function CompetitionDetail() {
                             value={photoDescription}
                             onChange={(e) => setPhotoDescription(e.target.value)}
                             rows={3}
-                            className="mt-1 block w-full px-3 py-2 text-[#1a4d5c] bg-white border border-[#e0c36a] rounded-lg shadow-sm focus:ring-2 focus:ring-[#2699a6] focus:border-[#2699a6] text-base resize-vertical"
+                            className={`mt-1 block w-full px-3 py-2 text-[#1a4d5c] bg-white border rounded-lg shadow-sm focus:ring-2 focus:ring-[#2699a6] focus:border-[#2699a6] text-base resize-vertical ${
+                              photoDescription.length > 500 ? 'border-red-500' : 'border-[#e0c36a]'
+                            }`}
+                            maxLength={500}
                             required
                           />
+                          <div className="flex justify-between items-center mt-1">
+                            <p className={`text-xs ${
+                              photoDescription.length > 500 ? 'text-red-500' : 
+                              photoDescription.length > 450 ? 'text-yellow-600' : 'text-gray-500'
+                            }`}>
+                              {photoDescription.length}/500 characters
+                            </p>
+                            {photoDescription.length > 500 && (
+                              <p className="text-xs text-red-500 font-medium">
+                                Description exceeds maximum length
+                              </p>
+                            )}
+                          </div>
                         </div>
                         
                         <div className="mb-3">
@@ -1038,7 +1058,7 @@ export default function CompetitionDetail() {
                           </button>
                           <button
                             type="submit"
-                            disabled={isSubmitting || isCompressing || !agreedToTerms}
+                            disabled={isSubmitting || isCompressing || !agreedToTerms || photoDescription.length > 500}
                             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isSubmitting ? 'Submitting...' : isCompressing ? 'Processing...' : 'Submit Photo'}

@@ -29,7 +29,7 @@ Check for any other hooks that require Suspense boundaries
 
 6. Deploy Using the Script
 Apply to layout.tsx
-.\deploy.ps1
+./deploy.ps1
 The script handles:
 Cleaning previous builds
 Building the application
