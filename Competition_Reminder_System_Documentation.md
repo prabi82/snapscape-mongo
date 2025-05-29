@@ -75,10 +75,9 @@ NEXTAUTH_URL=https://your-domain.com
 NEXT_PUBLIC_APP_URL=https://your-domain.com
 ```
 
-### 2. External Cron Job Setup
+### 2. Vercel Cron Jobs (✅ CONFIGURED)
 
-#### Option A: Vercel Cron Jobs (Recommended)
-Create a `vercel.json` file in your project root:
+The cron jobs are already configured in `vercel.json`:
 
 ```json
 {
@@ -95,27 +94,23 @@ Create a `vercel.json` file in your project root:
 }
 ```
 
-#### Option B: External Cron Service
-Use services like:
+**Schedule**: Daily at 14:00 UTC (6:00 PM Oman time)
+**Status**: ✅ Active and configured
+
+### 3. Alternative External Cron Services (Optional)
+
+If you prefer external cron services, you can use:
 - **EasyCron**: https://www.easycron.com/
 - **Cron-job.org**: https://cron-job.org/
 - **UptimeRobot**: https://uptimerobot.com/
 
-**Schedule**: Daily at 14:00 UTC (6:00 PM Oman time)
-
 **URLs to call**:
 ```
-POST https://your-domain.com/api/cron/competition-reminders?type=day_before
-POST https://your-domain.com/api/cron/competition-reminders?type=last_day
+GET https://snapscape.app/api/cron/competition-reminders?type=day_before
+GET https://snapscape.app/api/cron/competition-reminders?type=last_day
 ```
 
-**Headers** (if using CRON_SECRET_TOKEN):
-```
-Authorization: Bearer your-secret-token-here
-Content-Type: application/json
-```
-
-### 3. Testing
+### 4. Testing
 
 #### Local Testing
 1. Start your development server: `npm run dev`

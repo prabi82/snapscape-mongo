@@ -20,6 +20,16 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/competition-reminders?type=day_before",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/competition-reminders?type=last_day",
+      "schedule": "0 14 * * *"
+    }
+  ],
   "routes": [
     {
       "src": "/(.*)",

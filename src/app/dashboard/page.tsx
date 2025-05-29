@@ -436,8 +436,9 @@ export default function DashboardPage() {
 
   const fetchVotingCompetitions = async () => {
     try {
-      // Fetch competitions the user participated in that are now in voting
-      const res = await fetch('/api/competitions?participated=true&status=voting');
+      // Fetch ALL competitions that are now in voting status (not just participated ones)
+      // All users should be able to vote, regardless of whether they submitted photos
+      const res = await fetch('/api/competitions?status=voting');
       if (!res.ok) return;
       const data = await res.json();
       setVotingCompetitions(data.data || []);
@@ -998,7 +999,7 @@ export default function DashboardPage() {
                               <div className="font-bold text-lg text-[#1a4d5c] mb-1">Voting Open: {votingComp.title}</div>
                               {/* Use item.sortDate for the timestamp */}
                               <p className="text-xs text-gray-400 mt-0.5 mb-1">{formatTimeSince(new Date(item.sortDate))}</p>
-                              <div className="text-sm text-gray-700 mb-2">Voting is now open for a competition you participated in! Cast your vote for your favorite photos.</div>
+                              <div className="text-sm text-gray-700 mb-2">Voting is now open! Cast your vote for your favorite photos in this competition.</div>
                               <Link 
                                 href={`/dashboard/competitions/${votingComp._id}/view-submissions`}
                                 className="inline-block px-4 py-2 rounded-md bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] text-white font-semibold shadow hover:from-[#2699a6] hover:to-[#1a4d5c] transition"
