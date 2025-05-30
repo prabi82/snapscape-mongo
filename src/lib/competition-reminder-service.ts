@@ -1,6 +1,7 @@
 import dbConnect from '@/lib/dbConnect';
 import Competition from '@/models/Competition';
 import User from '@/models/User';
+import ReminderLog from '@/models/ReminderLog';
 import { sendCompetitionReminderEmail } from '@/lib/emailService';
 import { createSystemNotification } from '@/lib/notification-service';
 
@@ -13,12 +14,61 @@ interface CompetitionReminderResult {
   competitionTitle?: string;
 }
 
+// Add a simple in-memory cache to prevent duplicate reminders on the same day
+const reminderCache = new Map<string, Set<string>>();
+
+function getTodayKey() {
+  const today = new Date();
+  return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+}
+
+function getReminderKey(competitionId: string, reminderType: string) {
+  return `${competitionId}-${reminderType}`;
+}
+
+function hasReminderBeenSent(competitionId: string, reminderType: string): boolean {
+  const todayKey = getTodayKey();
+  const reminderKey = getReminderKey(competitionId, reminderType);
+  
+  if (!reminderCache.has(todayKey)) {
+    reminderCache.set(todayKey, new Set());
+  }
+  
+  return reminderCache.get(todayKey)!.has(reminderKey);
+}
+
+function markReminderAsSent(competitionId: string, reminderType: string): void {
+  const todayKey = getTodayKey();
+  const reminderKey = getReminderKey(competitionId, reminderType);
+  
+  if (!reminderCache.has(todayKey)) {
+    reminderCache.set(todayKey, new Set());
+  }
+  
+  reminderCache.get(todayKey)!.add(reminderKey);
+  
+  // Clean up old cache entries (keep only today and yesterday)
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = yesterday.toISOString().split('T')[0];
+  
+  for (const key of Array.from(reminderCache.keys())) {
+    if (key !== todayKey && key !== yesterdayKey) {
+      reminderCache.delete(key);
+    }
+  }
+}
+
 /**
  * Get competitions that need reminders sent
  * @param reminderType - 'day_before' for 1 day before, 'last_day' for same day
+ * @param bypassTimeCheck - If true, skip the 6 PM time window check (for manual triggers)
  * @returns Array of competitions that need reminders
  */
-export async function getCompetitionsNeedingReminders(reminderType: 'day_before' | 'last_day') {
+export async function getCompetitionsNeedingReminders(
+  reminderType: 'day_before' | 'last_day', 
+  bypassTimeCheck: boolean = false
+) {
   await dbConnect();
   
   // Get current time in Oman timezone (GMT+4)
@@ -29,10 +79,14 @@ export async function getCompetitionsNeedingReminders(reminderType: 'day_before'
   const targetHour = 18; // 6 PM
   const currentHour = omanTime.getHours();
   
-  // Only proceed if it's around 6 PM Oman time (allow 1 hour window)
-  if (currentHour < targetHour - 1 || currentHour > targetHour + 1) {
-    console.log(`Current Oman time hour: ${currentHour}, target hour: ${targetHour}. Skipping reminder check.`);
+  // Only proceed if it's around 6 PM Oman time (allow 3 hour window: 3 PM to 9 PM) - unless bypassed
+  if (!bypassTimeCheck && (currentHour < targetHour - 3 || currentHour > targetHour + 3)) {
+    console.log(`Current Oman time hour: ${currentHour}, target hour: ${targetHour}. Skipping reminder check. (Allowed window: ${targetHour - 3}:00 - ${targetHour + 3}:00)`);
     return [];
+  }
+  
+  if (bypassTimeCheck) {
+    console.log(`Time check bypassed. Current Oman time hour: ${currentHour}. Processing reminders manually.`);
   }
   
   let startDate: Date;
@@ -182,9 +236,18 @@ export async function sendCompetitionReminders(
 /**
  * Process all competition reminders for a given type
  * @param reminderType - Type of reminder to process
+ * @param bypassTimeCheck - If true, skip the 6 PM time window check (for manual triggers)
+ * @param userAgent - User agent for logging (if triggered manually)
+ * @param ipAddress - IP address for logging (if available)
  * @returns Summary of all reminders sent
  */
-export async function processAllCompetitionReminders(reminderType: 'day_before' | 'last_day') {
+export async function processAllCompetitionReminders(
+  reminderType: 'day_before' | 'last_day',
+  bypassTimeCheck: boolean = false,
+  userAgent?: string,
+  ipAddress?: string
+) {
+  const startTime = Date.now();
   console.log(`Processing ${reminderType} competition reminders...`);
   
   const summary = {
@@ -196,23 +259,63 @@ export async function processAllCompetitionReminders(reminderType: 'day_before' 
     competitionResults: [] as any[]
   };
   
+  // Determine trigger method
+  const triggerMethod: 'cron' | 'manual' | 'bypass' = bypassTimeCheck ? 'bypass' : 
+                     (userAgent ? 'manual' : 'cron');
+  
   try {
     // Get competitions that need reminders
-    const competitions = await getCompetitionsNeedingReminders(reminderType);
+    const competitions = await getCompetitionsNeedingReminders(reminderType, bypassTimeCheck);
     summary.totalCompetitions = competitions.length;
     
     if (competitions.length === 0) {
+      const executionTime = Date.now() - startTime;
+      const message = `No competitions found needing ${reminderType} reminders at this time.`;
+      
+      // Log the activity even if no competitions found
+      await logReminderActivity(
+        reminderType,
+        triggerMethod,
+        [],
+        { ...summary, message },
+        executionTime,
+        userAgent,
+        ipAddress
+      );
+      
       return {
         ...summary,
-        message: `No competitions found needing ${reminderType} reminders at this time.`
+        message
       };
     }
     
     // Process each competition
     for (const competition of competitions) {
+      const competitionId = (competition._id as any).toString();
+      
+      // Check if reminder was already sent today for this competition
+      if (!bypassTimeCheck && hasReminderBeenSent(competitionId, reminderType)) {
+        console.log(`Skipping ${reminderType} reminder for competition "${competition.title}" - already sent today`);
+        summary.competitionResults.push({
+          competitionId: competitionId,
+          competitionTitle: competition.title,
+          success: true,
+          message: 'Skipped - reminder already sent today',
+          emailsSent: 0,
+          notificationsCreated: 0,
+          errors: []
+        });
+        continue;
+      }
+      
       console.log(`Processing reminders for competition: ${competition.title}`);
       
       const result = await sendCompetitionReminders(competition, reminderType);
+      
+      // Mark reminder as sent if successful
+      if (result.success && result.emailsSent > 0) {
+        markReminderAsSent(competitionId, reminderType);
+      }
       
       summary.totalEmailsSent += result.emailsSent;
       summary.totalNotificationsCreated += result.notificationsCreated;
@@ -231,7 +334,19 @@ export async function processAllCompetitionReminders(reminderType: 'day_before' 
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
+    const executionTime = Date.now() - startTime;
     const message = `Processed ${summary.totalCompetitions} competitions. Sent ${summary.totalEmailsSent} emails and created ${summary.totalNotificationsCreated} notifications.`;
+    
+    // Log the activity
+    await logReminderActivity(
+      reminderType,
+      triggerMethod,
+      summary.competitionResults,
+      summary,
+      executionTime,
+      userAgent,
+      ipAddress
+    );
     
     return {
       ...summary,
@@ -240,12 +355,27 @@ export async function processAllCompetitionReminders(reminderType: 'day_before' 
     
   } catch (error: any) {
     console.error('Error in processAllCompetitionReminders:', error);
-    return {
+    const executionTime = Date.now() - startTime;
+    
+    const errorSummary = {
       ...summary,
       success: false,
       message: `Failed to process competition reminders: ${error.message}`,
       errors: [error.message]
     };
+    
+    // Log the error
+    await logReminderActivity(
+      reminderType,
+      triggerMethod,
+      summary.competitionResults,
+      errorSummary,
+      executionTime,
+      userAgent,
+      ipAddress
+    );
+    
+    return errorSummary;
   }
 }
 
@@ -357,4 +487,74 @@ export async function sendTestCompetitionReminder(
   }
 
   return result;
+}
+
+/**
+ * Log reminder activity to database
+ * @param reminderType - Type of reminder
+ * @param triggerMethod - How the reminder was triggered
+ * @param competitionsProcessed - Array of processed competitions
+ * @param summary - Summary of the operation
+ * @param executionTimeMs - How long the operation took
+ * @param userAgent - User agent if triggered manually
+ * @param ipAddress - IP address if available
+ */
+async function logReminderActivity(
+  reminderType: 'day_before' | 'last_day',
+  triggerMethod: 'cron' | 'manual' | 'bypass',
+  competitionsProcessed: any[],
+  summary: any,
+  executionTimeMs: number,
+  userAgent?: string,
+  ipAddress?: string
+) {
+  try {
+    await dbConnect();
+    
+    // Get current Oman time for logging
+    const now = new Date();
+    const omanTime = new Date(now.getTime() + (4 * 60 * 60 * 1000));
+    const omanTimeString = omanTime.toLocaleString('en-US', {
+      timeZone: 'Asia/Muscat',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    
+    const logEntry = new ReminderLog({
+      triggerType: reminderType,
+      triggerMethod: triggerMethod,
+      triggerTime: now,
+      omanTime: omanTimeString,
+      competitionsFound: summary.totalCompetitions,
+      competitionsProcessed: competitionsProcessed.map(comp => ({
+        competitionId: comp.competitionId,
+        competitionTitle: comp.competitionTitle,
+        emailsSent: comp.emailsSent || 0,
+        notificationsCreated: comp.notificationsCreated || 0,
+        success: comp.success,
+        errors: comp.errors || [],
+        skipped: comp.message?.includes('already sent') || comp.message?.includes('Skipped'),
+        skipReason: comp.message?.includes('already sent') ? 'Already sent today' : 
+                   comp.message?.includes('Skipped') ? comp.message : undefined,
+      })),
+      totalEmailsSent: summary.totalEmailsSent,
+      totalNotificationsCreated: summary.totalNotificationsCreated,
+      overallSuccess: summary.success,
+      executionTimeMs: executionTimeMs,
+      errors: summary.errors || [],
+      userAgent: userAgent,
+      ipAddress: ipAddress,
+    });
+    
+    await logEntry.save();
+    console.log(`Reminder activity logged: ${reminderType} - ${triggerMethod} - ${summary.totalCompetitions} competitions`);
+    
+  } catch (error: any) {
+    console.error('Failed to log reminder activity:', error);
+    // Don't throw error as logging failure shouldn't break the main functionality
+  }
 } 

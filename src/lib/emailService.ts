@@ -84,23 +84,82 @@ export const sendVerificationEmail = async (email: string, name: string, token: 
   const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
   
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0c36a; border-radius: 8px; background-color: #f5f5f5;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/logo.png" alt="SnapScape Logo" style="width: 150px;">
-      </div>
-      <h2 style="color: #1a4d5c; text-align: center; margin-bottom: 20px;">Verify Your Email Address</h2>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">Hello ${name},</p>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">Thank you for registering with SnapScape! To complete your registration and get started, please verify your email address by clicking the button below:</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-image: linear-gradient(to right, #1a4d5c, #2699a6); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: 2px solid #e0c36a;">Verify Email Address</a>
-      </div>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">If you didn't register for SnapScape, please ignore this email.</p>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">If the button doesn't work, you can also copy and paste the following link into your browser:</p>
-      <p style="background-color: #e6f0f3; padding: 10px; border-radius: 4px; word-break: break-all;">${verificationUrl}</p>
-      <div style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
-        <p>&copy; ${new Date().getFullYear()} SnapScape. All rights reserved.</p>
-      </div>
-    </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Verify Your SnapScape Account</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5;">
+        <tr>
+          <td align="center" style="padding: 20px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border: 2px solid #e0c36a; border-radius: 8px;">
+              
+              <!-- Logo -->
+              <tr>
+                <td align="center" style="padding: 20px;">
+                  <img src="${baseUrl}/logo.png" alt="SnapScape Logo" width="150" style="display: block; max-width: 150px; height: auto;">
+                </td>
+              </tr>
+              
+              <!-- Title -->
+              <tr>
+                <td align="center" style="padding: 0 20px 20px 20px;">
+                  <h2 style="margin: 0; color: #1a4d5c; font-size: 24px; font-weight: bold;">Verify Your Email Address</h2>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding: 0 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">Hello ${name},</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">Thank you for registering with SnapScape! To complete your registration and get started, please verify your email address by clicking the button below:</p>
+                </td>
+              </tr>
+              
+              <!-- Button -->
+              <tr>
+                <td align="center" style="padding: 30px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="background-color: #1a4d5c; border-radius: 8px; border: 2px solid #e0c36a;">
+                        <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; color: #ffffff; text-decoration: none; font-weight: bold;">Verify Email Address</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Additional info -->
+              <tr>
+                <td style="padding: 0 20px 20px 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">If you didn't register for SnapScape, please ignore this email.</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">If the button doesn't work, you can also copy and paste the following link into your browser:</p>
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #e6f0f3; border-radius: 4px;">
+                    <tr>
+                      <td style="padding: 10px; word-break: break-all; color: #333333; font-size: 14px;">
+                        ${verificationUrl}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td align="center" style="padding: 20px; border-top: 1px solid #dddddd;">
+                  <p style="color: #666666; font-size: 14px; margin: 0;">&copy; ${new Date().getFullYear()} SnapScape. All rights reserved.</p>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
   `;
   
   return await sendEmail({
@@ -117,24 +176,83 @@ export const sendPasswordResetEmail = async (email: string, name: string, token:
   const resetUrl = `${baseUrl}/auth/reset-password/confirm?token=${token}`;
   
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0c36a; border-radius: 8px; background-color: #f5f5f5;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/logo.png" alt="SnapScape Logo" style="width: 150px;">
-      </div>
-      <h2 style="color: #1a4d5c; text-align: center; margin-bottom: 20px;">Reset Your Password</h2>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">Hello ${name},</p>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">We received a request to reset your password for your SnapScape account. Click the button below to create a new password:</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-image: linear-gradient(to right, #1a4d5c, #2699a6); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: 2px solid #e0c36a;">Reset Password</a>
-      </div>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">This link will expire in 1 hour for security reasons.</p>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">If the button doesn't work, you can also copy and paste the following link into your browser:</p>
-      <p style="background-color: #e6f0f3; padding: 10px; border-radius: 4px; word-break: break-all;">${resetUrl}</p>
-      <div style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
-        <p>&copy; ${new Date().getFullYear()} SnapScape. All rights reserved.</p>
-      </div>
-    </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Reset Your SnapScape Password</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5;">
+        <tr>
+          <td align="center" style="padding: 20px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border: 2px solid #e0c36a; border-radius: 8px;">
+              
+              <!-- Logo -->
+              <tr>
+                <td align="center" style="padding: 20px;">
+                  <img src="${baseUrl}/logo.png" alt="SnapScape Logo" width="150" style="display: block; max-width: 150px; height: auto;">
+                </td>
+              </tr>
+              
+              <!-- Title -->
+              <tr>
+                <td align="center" style="padding: 0 20px 20px 20px;">
+                  <h2 style="margin: 0; color: #1a4d5c; font-size: 24px; font-weight: bold;">Reset Your Password</h2>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding: 0 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">Hello ${name},</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">We received a request to reset your password for your SnapScape account. Click the button below to create a new password:</p>
+                </td>
+              </tr>
+              
+              <!-- Button -->
+              <tr>
+                <td align="center" style="padding: 30px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="background-color: #1a4d5c; border-radius: 8px; border: 2px solid #e0c36a;">
+                        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; color: #ffffff; text-decoration: none; font-weight: bold;">Reset Password</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Additional info -->
+              <tr>
+                <td style="padding: 0 20px 20px 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">This link will expire in 1 hour for security reasons.</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">If the button doesn't work, you can also copy and paste the following link into your browser:</p>
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #e6f0f3; border-radius: 4px;">
+                    <tr>
+                      <td style="padding: 10px; word-break: break-all; color: #333333; font-size: 14px;">
+                        ${resetUrl}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td align="center" style="padding: 20px; border-top: 1px solid #dddddd;">
+                  <p style="color: #666666; font-size: 14px; margin: 0;">&copy; ${new Date().getFullYear()} SnapScape. All rights reserved.</p>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
   `;
   
   return await sendEmail({
@@ -180,61 +298,150 @@ export const sendCompetitionReminderEmail = async (
     ? "This is your final chance to submit your photos before the competition closes!"
     : "Don't miss out! You have one more day to submit your amazing photos.";
 
+  // Outlook-compatible HTML using tables and inline styles
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0c36a; border-radius: 8px; background-color: #f5f5f5;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/logo.png" alt="SnapScape Logo" style="width: 150px;">
-      </div>
-      
-      <div style="background: linear-gradient(135deg, #1a4d5c 0%, #2699a6 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-        <h1 style="margin: 0; font-size: 24px; font-weight: bold;">${urgencyText}</h1>
-      </div>
-      
-      <h2 style="color: #1a4d5c; text-align: center; margin-bottom: 20px;">"${competitionTitle}"</h2>
-      
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">Hello ${name},</p>
-      
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">${messageText}</p>
-      
-      <div style="background-color: #fffbe6; border: 2px solid #e0c36a; border-radius: 8px; padding: 15px; margin: 20px 0;">
-        <p style="color: #1a4d5c; font-size: 18px; font-weight: bold; margin: 0; text-align: center;">
-          📅 Competition ends: ${formattedEndDate}
-        </p>
-        <p style="color: #666; font-size: 14px; margin: 5px 0 0 0; text-align: center;">
-          (Oman Time - GMT+4)
-        </p>
-      </div>
-      
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${competitionUrl}" style="display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #1a4d5c 0%, #2699a6 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: 2px solid #e0c36a; font-size: 16px;">
-          📸 Submit Your Photos Now
-        </a>
-      </div>
-      
-      <div style="background-color: #e6f0f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
-        <h3 style="color: #1a4d5c; margin: 0 0 10px 0;">Quick Submission Tips:</h3>
-        <ul style="color: #333; margin: 0; padding-left: 20px;">
-          <li>Ensure your photos meet the competition requirements</li>
-          <li>Add compelling titles and descriptions</li>
-          <li>Check image quality and resolution</li>
-          <li>Submit early to avoid last-minute technical issues</li>
-        </ul>
-      </div>
-      
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">
-        Good luck with your submissions! We can't wait to see your creative work.
-      </p>
-      
-      <p style="color: #333; font-size: 16px; line-height: 1.5;">
-        Best regards,<br>
-        The SnapScape Team
-      </p>
-      
-      <div style="margin-top: 30px; text-align: center; color: #666; font-size: 14px; border-top: 1px solid #ddd; padding-top: 20px;">
-        <p>If you no longer wish to receive competition reminders, you can update your preferences in your account settings.</p>
-        <p>&copy; ${new Date().getFullYear()} SnapScape. All rights reserved.</p>
-      </div>
-    </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>SnapScape Competition Reminder</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5;">
+        <tr>
+          <td align="center" style="padding: 20px;">
+            <!-- Main container -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border: 2px solid #e0c36a; border-radius: 8px;">
+              
+              <!-- Logo section -->
+              <tr>
+                <td align="center" style="padding: 20px;">
+                  <img src="${baseUrl}/logo.png" alt="SnapScape Logo" width="150" style="display: block; max-width: 150px; height: auto;">
+                </td>
+              </tr>
+              
+              <!-- Header section with gradient background -->
+              <tr>
+                <td style="padding: 0 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #1a4d5c; border-radius: 8px;">
+                    <tr>
+                      <td align="center" style="padding: 20px; color: #ffffff;">
+                        <h1 style="margin: 0; font-size: 24px; font-weight: bold; color: #ffffff;">${urgencyText}</h1>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Competition title -->
+              <tr>
+                <td align="center" style="padding: 20px;">
+                  <h2 style="margin: 0; color: #1a4d5c; font-size: 22px; font-weight: bold;">"${competitionTitle}"</h2>
+                </td>
+              </tr>
+              
+              <!-- Main content -->
+              <tr>
+                <td style="padding: 0 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">Hello ${name},</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">${messageText}</p>
+                </td>
+              </tr>
+              
+              <!-- Competition end date box -->
+              <tr>
+                <td style="padding: 0 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fffbe6; border: 2px solid #e0c36a; border-radius: 8px;">
+                    <tr>
+                      <td align="center" style="padding: 15px;">
+                        <p style="color: #1a4d5c; font-size: 18px; font-weight: bold; margin: 0;">
+                          📅 Competition ends: ${formattedEndDate}
+                        </p>
+                        <p style="color: #666666; font-size: 14px; margin: 5px 0 0 0;">
+                          (Oman Time - GMT+4)
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Submit button -->
+              <tr>
+                <td align="center" style="padding: 30px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="background-color: #1a4d5c; border-radius: 8px; border: 2px solid #e0c36a;">
+                        <a href="${competitionUrl}" style="display: inline-block; padding: 15px 30px; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 16px;">
+                          📸 Submit Your Photos Now
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Tips section -->
+              <tr>
+                <td style="padding: 0 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #e6f0f3; border-radius: 8px;">
+                    <tr>
+                      <td style="padding: 15px;">
+                        <h3 style="color: #1a4d5c; margin: 0 0 10px 0; font-size: 16px;">Quick Submission Tips:</h3>
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                          <tr>
+                            <td style="color: #333333; font-size: 14px; line-height: 1.5;">
+                              • Ensure your photos meet the competition requirements<br>
+                              • Add compelling titles and descriptions<br>
+                              • Check image quality and resolution<br>
+                              • Submit early to avoid last-minute technical issues
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Closing message -->
+              <tr>
+                <td style="padding: 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">
+                    Good luck with your submissions! We can't wait to see your creative work.
+                  </p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0;">
+                    Best regards,<br>
+                    The SnapScape Team
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 20px; border-top: 1px solid #dddddd;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td align="center">
+                        <p style="color: #666666; font-size: 14px; margin: 0 0 10px 0;">
+                          If you no longer wish to receive competition reminders, you can update your preferences in your account settings.
+                        </p>
+                        <p style="color: #666666; font-size: 14px; margin: 0;">
+                          &copy; ${new Date().getFullYear()} SnapScape. All rights reserved.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
   `;
   
   return await sendEmail({

@@ -73,6 +73,13 @@ export async function GET(req: NextRequest) {
     const reminderType = url.searchParams.get('type') as 'day_before' | 'last_day';
     const testEmail = url.searchParams.get('testEmail');
     const competitionId = url.searchParams.get('competitionId');
+    const bypassTimeCheck = url.searchParams.get('bypass') === 'true';
+    
+    // Extract user agent and IP for logging
+    const userAgent = req.headers.get('user-agent') || undefined;
+    const ipAddress = req.headers.get('x-forwarded-for') || 
+                     req.headers.get('x-real-ip') || 
+                     undefined;
     
     if (!reminderType || !['day_before', 'last_day'].includes(reminderType)) {
       return NextResponse.json(
@@ -124,9 +131,9 @@ export async function GET(req: NextRequest) {
       });
     }
     
-    console.log(`Manual trigger: Processing ${reminderType} competition reminders...`);
+    console.log(`Manual trigger: Processing ${reminderType} competition reminders...${bypassTimeCheck ? ' (bypassing time check)' : ''}`);
     
-    const result = await processAllCompetitionReminders(reminderType);
+    const result = await processAllCompetitionReminders(reminderType, bypassTimeCheck, userAgent, ipAddress);
     
     return NextResponse.json({
       success: result.success,

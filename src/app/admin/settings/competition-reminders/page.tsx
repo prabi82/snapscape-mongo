@@ -43,11 +43,20 @@ export default function CompetitionRemindersPage() {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [selectedCompetition, setSelectedCompetition] = useState<string>('');
   const [loadingCompetitions, setLoadingCompetitions] = useState(false);
+  const [reminderLogs, setReminderLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsPagination, setLogsPagination] = useState<any>(null);
+  const [logsFilter, setLogsFilter] = useState({
+    triggerType: '',
+    triggerMethod: ''
+  });
 
   // Fetch competitions on component mount
   useEffect(() => {
     if (session?.user?.role === 'admin') {
       fetchCompetitions();
+      fetchReminderLogs();
     }
   }, [session]);
 
@@ -65,6 +74,43 @@ export default function CompetitionRemindersPage() {
       console.error('Error fetching competitions:', error);
     } finally {
       setLoadingCompetitions(false);
+    }
+  };
+
+  const fetchReminderLogs = async (page = 1) => {
+    setLogsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10'
+      });
+      
+      if (logsFilter.triggerType) {
+        params.append('triggerType', logsFilter.triggerType);
+      }
+      if (logsFilter.triggerMethod) {
+        params.append('triggerMethod', logsFilter.triggerMethod);
+      }
+      
+      const response = await fetch(`/api/admin/reminder-logs?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        setReminderLogs(data.data.logs || []);
+        setLogsPagination(data.data.pagination);
+        setLogsPage(page);
+      } else {
+        console.error('Failed to fetch reminder logs - API not available yet');
+        // For now, show a message that logs will be available after the first reminder is sent
+        setReminderLogs([]);
+        setLogsPagination(null);
+      }
+    } catch (error) {
+      console.error('Error fetching reminder logs:', error);
+      // For now, show a message that logs will be available after the first reminder is sent
+      setReminderLogs([]);
+      setLogsPagination(null);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -87,12 +133,17 @@ export default function CompetitionRemindersPage() {
     return null;
   }
 
-  const triggerReminders = async (type: 'day_before' | 'last_day', isTest: boolean = false) => {
+  const triggerReminders = async (type: 'day_before' | 'last_day', isTest: boolean = false, bypassTimeCheck: boolean = false) => {
     setIsLoading(true);
     setResult(null);
 
     try {
       let url = `/api/cron/competition-reminders?type=${type}`;
+      
+      // Add bypass parameter if needed
+      if (bypassTimeCheck) {
+        url += `&bypass=true`;
+      }
       
       // Add test email parameter if this is a test
       if (isTest && testEmail.trim()) {
@@ -252,6 +303,34 @@ export default function CompetitionRemindersPage() {
             </div>
           </div>
 
+          {/* Emergency Bypass Section */}
+          <div className="border border-orange-200 bg-orange-50 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-orange-800 mb-3">
+              ⚡ Emergency Bypass (Ignore Time Window)
+            </h3>
+            <p className="text-orange-700 mb-4">
+              <strong>EMERGENCY USE:</strong> These buttons bypass the 6 PM time window check and will send reminders immediately to ALL users, regardless of current time. Use only if automated reminders failed!
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => triggerReminders('day_before', false, true)}
+                disabled={isLoading}
+                className="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Processing...' : 'BYPASS: Send Day Before Reminders'}
+              </button>
+              
+              <button
+                onClick={() => triggerReminders('last_day', false, true)}
+                disabled={isLoading}
+                className="bg-orange-800 text-white px-4 py-2 rounded-md hover:bg-orange-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Processing...' : 'BYPASS: Send Last Day Reminders'}
+              </button>
+            </div>
+          </div>
+
           {/* Results Section */}
           {result && (
             <div className={`border rounded-lg p-6 ${
@@ -342,6 +421,222 @@ export default function CompetitionRemindersPage() {
                 <li>Optional: Add Bearer token authentication with <code className="bg-blue-100 px-1 rounded">CRON_SECRET_TOKEN</code> environment variable</li>
               </ol>
             </div>
+          </div>
+
+          {/* Reminder Logs Section */}
+          <div className="border border-gray-200 bg-gray-50 rounded-lg p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                📊 Reminder Activity Logs
+              </h3>
+              <button
+                onClick={() => fetchReminderLogs(1)}
+                disabled={logsLoading}
+                className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700 disabled:opacity-50"
+              >
+                {logsLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+            
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reminder Type
+                </label>
+                <select
+                  value={logsFilter.triggerType}
+                  onChange={(e) => {
+                    setLogsFilter(prev => ({ ...prev, triggerType: e.target.value }));
+                    fetchReminderLogs(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="">All Types</option>
+                  <option value="day_before">Day Before</option>
+                  <option value="last_day">Last Day</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trigger Method
+                </label>
+                <select
+                  value={logsFilter.triggerMethod}
+                  onChange={(e) => {
+                    setLogsFilter(prev => ({ ...prev, triggerMethod: e.target.value }));
+                    fetchReminderLogs(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="">All Methods</option>
+                  <option value="cron">Automated (Cron)</option>
+                  <option value="manual">Manual</option>
+                  <option value="bypass">Emergency Bypass</option>
+                </select>
+              </div>
+              
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setLogsFilter({ triggerType: '', triggerMethod: '' });
+                    fetchReminderLogs(1);
+                  }}
+                  className="bg-gray-500 text-white px-3 py-2 rounded text-sm hover:bg-gray-600"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            </div>
+
+            {/* Logs Display */}
+            {logsLoading ? (
+              <div className="text-center py-8">
+                <div className="text-gray-600">Loading reminder logs...</div>
+              </div>
+            ) : reminderLogs.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-gray-600 mb-2">📊 Reminder Logs Coming Soon!</div>
+                <div className="text-sm text-gray-500 space-y-2">
+                  <p>
+                    <strong>Comprehensive logging is now active!</strong> All reminder activities will be tracked here.
+                  </p>
+                  <p>
+                    Logs will appear after the next reminder is triggered, showing:
+                  </p>
+                  <ul className="text-left inline-block mt-2 space-y-1">
+                    <li>• When cron jobs run (automated at 6 PM Oman time)</li>
+                    <li>• Which competitions were processed</li>
+                    <li>• How many emails and notifications were sent</li>
+                    <li>• Execution time and success/failure status</li>
+                    <li>• Detailed error information if any issues occur</li>
+                  </ul>
+                  <p className="mt-3">
+                    <strong>Next automated run:</strong> Today at 6 PM Oman time (14:00 UTC)
+                  </p>
+                  <p>
+                    <strong>To see logs immediately:</strong> Use the "Emergency Bypass" buttons above to trigger reminders manually.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reminderLogs.map((log, index) => (
+                  <div key={log._id || index} className="bg-white border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            log.triggerType === 'day_before' 
+                              ? 'bg-yellow-100 text-yellow-800' 
+                              : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            {log.triggerType === 'day_before' ? 'Day Before' : 'Last Day'}
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            log.triggerMethod === 'cron' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : log.triggerMethod === 'manual'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {log.triggerMethod === 'cron' ? 'Automated' : 
+                             log.triggerMethod === 'manual' ? 'Manual' : 'Emergency'}
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            log.overallSuccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {log.overallSuccess ? 'Success' : 'Failed'}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {log.omanTime} • {log.executionTimeMs}ms
+                        </div>
+                      </div>
+                      <div className="text-right text-sm">
+                        <div className="font-medium text-gray-900">
+                          {log.competitionsFound} competition(s)
+                        </div>
+                        <div className="text-gray-600">
+                          {log.totalEmailsSent} emails • {log.totalNotificationsCreated} notifications
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Competition Details */}
+                    {log.competitionsProcessed && log.competitionsProcessed.length > 0 && (
+                      <div className="border-t pt-3">
+                        <h4 className="text-sm font-medium text-gray-900 mb-2">Competitions Processed:</h4>
+                        <div className="space-y-2">
+                          {log.competitionsProcessed.map((comp: any, compIndex: number) => (
+                            <div key={compIndex} className="bg-gray-50 rounded p-2 text-sm">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="font-medium text-gray-900">{comp.competitionTitle}</div>
+                                  {comp.skipped && (
+                                    <div className="text-yellow-600 text-xs mt-1">
+                                      Skipped: {comp.skipReason}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-gray-600">
+                                    📧 {comp.emailsSent} • 🔔 {comp.notificationsCreated}
+                                  </div>
+                                  {comp.errors && comp.errors.length > 0 && (
+                                    <div className="text-red-600 text-xs">
+                                      {comp.errors.length} error(s)
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Errors */}
+                    {log.errors && log.errors.length > 0 && (
+                      <div className="border-t pt-3 mt-3">
+                        <h4 className="text-sm font-medium text-red-900 mb-2">Errors:</h4>
+                        <div className="bg-red-50 rounded p-2">
+                          {log.errors.map((error: string, errorIndex: number) => (
+                            <div key={errorIndex} className="text-sm text-red-700">
+                              • {error}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {/* Pagination */}
+                {logsPagination && logsPagination.totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 mt-6">
+                    <button
+                      onClick={() => fetchReminderLogs(logsPage - 1)}
+                      disabled={!logsPagination.hasPrevPage || logsLoading}
+                      className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      Page {logsPagination.currentPage} of {logsPagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() => fetchReminderLogs(logsPage + 1)}
+                      disabled={!logsPagination.hasNextPage || logsLoading}
+                      className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

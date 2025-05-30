@@ -10,6 +10,20 @@ import React from 'react';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { compressImage, isValidImageType, formatFileSize } from '@/utils/imageCompression';
 
+// Define extended session type to include role and id properties
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+}
+
+interface ExtendedSession {
+  user?: ExtendedUser;
+  expires: string;
+}
+
 interface Competition {
   _id: string;
   title: string;
@@ -30,6 +44,7 @@ interface Competition {
   canSubmitMore: boolean;
   coverImage?: string;
   submissionCount: number;
+  hideOtherSubmissions: boolean;
 }
 
 interface Submission {
@@ -142,7 +157,7 @@ function ExpandableSection({ title, content, defaultContent, maxLines = 3, isExp
 }
 
 export default function CompetitionDetail() {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession() as { data: ExtendedSession | null, status: string };
   const params = useParams();
   const competitionId = params?.id as string;
   const router = useRouter();
@@ -1094,14 +1109,20 @@ export default function CompetitionDetail() {
             
             {/* View All Submissions button */}
             {competition.submissionCount > 0 && (
-              <Link 
-                href={`/dashboard/competitions/${competition._id}/view-submissions`}
-                className="block w-full"
-              >
-                <button className="mt-2 w-full px-3 py-2 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg text-[#1a4d5c] text-sm font-semibold hover:bg-[#e6f0f3]">
-                  View All Submissions ({competition.submissionCount})
-                </button>
-              </Link>
+              // Only show the button if:
+              // 1. Competition is not in active status, OR
+              // 2. Competition is in active status but hideOtherSubmissions is disabled, OR  
+              // 3. User is an admin (admins can always view all submissions)
+              !(competition.status === 'active' && competition.hideOtherSubmissions && session?.user?.role !== 'admin') && (
+                <Link 
+                  href={`/dashboard/competitions/${competition._id}/view-submissions`}
+                  className="block w-full"
+                >
+                  <button className="mt-2 w-full px-3 py-2 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg text-[#1a4d5c] text-sm font-semibold hover:bg-[#e6f0f3]">
+                    View All Submissions ({competition.submissionCount})
+                  </button>
+                </Link>
+              )
             )}
           </div>
           {/* Right: Details */}
