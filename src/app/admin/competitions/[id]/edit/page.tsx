@@ -38,6 +38,7 @@ interface Competition {
   status: string;
   coverImage?: string;
   hideOtherSubmissions?: boolean;
+  manualStatusOverride?: boolean;
 }
 
 export default function EditCompetition() {
@@ -69,7 +70,8 @@ export default function EditCompetition() {
     submissionFormat: '',
     copyrightNotice: '',
     status: 'upcoming',
-    hideOtherSubmissions: false
+    hideOtherSubmissions: false,
+    manualStatusOverride: false
   });
 
   const [coverImage, setCoverImage] = useState<File | null>(null);
@@ -212,7 +214,8 @@ export default function EditCompetition() {
           submissionFormat: data.data.submissionFormat || '',
           copyrightNotice: data.data.copyrightNotice || 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
           status: data.data.status,
-          hideOtherSubmissions: data.data.hideOtherSubmissions || false
+          hideOtherSubmissions: data.data.hideOtherSubmissions || false,
+          manualStatusOverride: data.data.manualStatusOverride || false
         });
       } catch (error: any) {
         console.error('Error fetching competition:', error);
@@ -891,6 +894,40 @@ export default function EditCompetition() {
                   <option value="voting">Voting</option>
                   <option value="completed">Completed</option>
                 </select>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                need the competition status to be updated automatically based on the competition dates provided
+              </p>
+            </div>
+            
+            {/* Manual Status Override */}
+            <div className="sm:col-span-4">
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="manualStatusOverride"
+                    name="manualStatusOverride"
+                    type="checkbox"
+                    checked={!!formData.manualStatusOverride}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        manualStatusOverride: e.target.checked
+                      }));
+                    }}
+                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="manualStatusOverride" className="font-medium text-gray-700">
+                    Manual Status Override
+                    {formData.manualStatusOverride ? ' (Enabled)' : ' (Disabled)'}
+                  </label>
+                  <p className="text-gray-500">
+                    When enabled, the competition status will NOT be automatically updated based on dates. 
+                    Use this if you need to manually control the status transitions.
+                  </p>
+                </div>
               </div>
             </div>
             

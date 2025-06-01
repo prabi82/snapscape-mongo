@@ -45,6 +45,7 @@ interface Submission {
   ratingCount: number;
   ratings?: Rating[];
   user: User;
+  globalRank?: number;
 }
 
 interface Competition {
@@ -52,6 +53,13 @@ interface Competition {
   title: string;
   theme: string;
   status: string;
+}
+
+interface PaginationInfo {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
 }
 
 export default function CompetitionRatings() {
@@ -65,6 +73,13 @@ export default function CompetitionRatings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    total: 0,
+    page: 1,
+    limit: 20,
+    pages: 0
+  });
 
   // Security check
   useEffect(() => {
@@ -89,16 +104,16 @@ export default function CompetitionRatings() {
         const competitionData = await competitionRes.json();
         setCompetition(competitionData.data);
 
-        // Fetch submissions with ratings
-        const submissionsRes = await fetch(`/api/photo-submissions?competition=${competitionId}&status=approved`);
-        if (!submissionsRes.ok) {
+        // First, fetch ALL submissions to calculate global rankings
+        const allSubmissionsRes = await fetch(`/api/photo-submissions?competition=${competitionId}&status=approved&limit=1000`);
+        if (!allSubmissionsRes.ok) {
           throw new Error('Failed to fetch submissions');
         }
-        const submissionsData = await submissionsRes.json();
+        const allSubmissionsData = await allSubmissionsRes.json();
         
         // Get detailed ratings for each submission
-        const submissionsWithRatings = await Promise.all(
-          submissionsData.data.map(async (submission: Submission) => {
+        const allSubmissionsWithRatings = await Promise.all(
+          allSubmissionsData.data.map(async (submission: Submission) => {
             const ratingsRes = await fetch(`/api/ratings?photo=${submission._id}&detailed=true`);
             if (ratingsRes.ok) {
               const ratingsData = await ratingsRes.json();
@@ -108,7 +123,35 @@ export default function CompetitionRatings() {
           })
         );
 
-        setSubmissions(submissionsWithRatings);
+        // Sort all submissions by rating for global ranking
+        const globalSortedSubmissions = [...allSubmissionsWithRatings].sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return (b.ratingCount || 0) - (a.ratingCount || 0);
+        });
+
+        // Calculate global rankings and add rank property
+        const submissionsWithGlobalRanks = globalSortedSubmissions.map((submission, index) => ({
+          ...submission,
+          globalRank: index + 1
+        }));
+
+        // Apply pagination on the frontend
+        const startIndex = (currentPage - 1) * 20;
+        const endIndex = startIndex + 20;
+        const paginatedSubmissions = submissionsWithGlobalRanks.slice(startIndex, endIndex);
+
+        setSubmissions(paginatedSubmissions);
+        
+        // Update pagination info
+        setPagination({
+          total: allSubmissionsWithRatings.length,
+          page: currentPage,
+          limit: 20,
+          pages: Math.ceil(allSubmissionsWithRatings.length / 20)
+        });
+
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError(err.message || 'An error occurred while fetching data');
@@ -120,7 +163,7 @@ export default function CompetitionRatings() {
     if (session?.user?.role === 'admin') {
       fetchData();
     }
-  }, [competitionId, session]);
+  }, [competitionId, session, currentPage]);
 
   // Toggle expanded submission view
   const toggleExpand = (submissionId: string) => {
@@ -129,6 +172,34 @@ export default function CompetitionRatings() {
     } else {
       setExpandedSubmission(submissionId);
     }
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setExpandedSubmission(null); // Close any expanded submissions when changing pages
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const totalPages = pagination.pages;
+    const current = currentPage;
+    
+    // Always show first page
+    if (totalPages > 0) pages.push(1);
+    
+    // Show pages around current page
+    for (let i = Math.max(2, current - 2); i <= Math.min(totalPages - 1, current + 2); i++) {
+      if (!pages.includes(i)) pages.push(i);
+    }
+    
+    // Always show last page if more than 1 page
+    if (totalPages > 1 && !pages.includes(totalPages)) {
+      pages.push(totalPages);
+    }
+    
+    return pages.sort((a, b) => a - b);
   };
 
   if (loading) {
@@ -179,29 +250,11 @@ export default function CompetitionRatings() {
   const isVoting = competition.status === 'voting';
   const showVotingBanner = isVoting && session?.user?.role === 'admin';
 
-  // Sort submissions by averageRating (desc), then ratingCount (desc)
-  const sortedSubmissions = [...submissions].sort((a, b) => {
-    if (b.averageRating !== a.averageRating) {
-      return b.averageRating - a.averageRating;
-    }
-    return (b.ratingCount || 0) - (a.ratingCount || 0);
-  });
-
-  // Badge assignment logic for ties
-  let goldRating: number | null = null;
-  let silverRating: number | null = null;
-  let bronzeRating: number | null = null;
-  
-  sortedSubmissions.forEach(sub => {
-    if (goldRating === null && sub.averageRating > 0) goldRating = sub.averageRating;
-    else if (silverRating === null && goldRating !== null && sub.averageRating < goldRating && sub.averageRating > 0) silverRating = sub.averageRating;
-    else if (bronzeRating === null && silverRating !== null && sub.averageRating < silverRating && sub.averageRating > 0) bronzeRating = sub.averageRating;
-  });
-
-  function getBadge(rating: number) {
-    if (goldRating !== null && rating === goldRating) return { label: '1st', color: 'bg-yellow-400', text: 'Gold' };
-    if (silverRating !== null && rating === silverRating) return { label: '2nd', color: 'bg-gray-300', text: 'Silver' };
-    if (bronzeRating !== null && rating === bronzeRating) return { label: '3rd', color: 'bg-orange-400', text: 'Bronze' };
+  // Badge assignment logic based on global ranks
+  function getBadge(globalRank: number | undefined) {
+    if (globalRank === 1) return { label: '1st', color: 'bg-yellow-400', text: 'Gold' };
+    if (globalRank === 2) return { label: '2nd', color: 'bg-gray-300', text: 'Silver' };
+    if (globalRank === 3) return { label: '3rd', color: 'bg-orange-400', text: 'Bronze' };
     return null;
   }
 
@@ -234,7 +287,7 @@ export default function CompetitionRatings() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">{competition.title} - Ratings</h1>
         <p className="text-sm text-gray-500 mt-1">Theme: {competition.theme}</p>
-        <div className="mt-2">
+        <div className="mt-2 flex items-center justify-between">
           <span
             className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium 
               ${competition.status === 'completed' ? 'bg-gray-800 text-white' :
@@ -245,11 +298,16 @@ export default function CompetitionRatings() {
           >
             {competition.status.charAt(0).toUpperCase() + competition.status.slice(1)}
           </span>
+          {pagination.total > 0 && (
+            <p className="text-sm text-gray-500">
+              Showing {((currentPage - 1) * pagination.limit) + 1} to {Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total} submissions
+            </p>
+          )}
         </div>
       </div>
 
       {/* Submissions list with ratings */}
-      {sortedSubmissions.length === 0 ? (
+      {submissions.length === 0 ? (
         <div className="bg-white shadow rounded-lg p-6 text-center">
           <p className="text-gray-500">No submissions available for this competition.</p>
         </div>
@@ -262,8 +320,8 @@ export default function CompetitionRatings() {
             </p>
           </div>
           <ul className="divide-y divide-gray-200">
-            {sortedSubmissions.map((submission) => {
-              const badge = getBadge(submission.averageRating);
+            {submissions.map((submission) => {
+              const badge = getBadge(submission.globalRank);
               return (
                 <li key={submission._id} className="px-4 py-5 sm:px-6">
                   <div className="flex flex-col md:flex-row md:items-center">
@@ -388,6 +446,82 @@ export default function CompetitionRatings() {
               );
             })}
           </ul>
+          
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === pagination.pages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      Showing <span className="font-medium">{((currentPage - 1) * pagination.limit) + 1}</span> to{' '}
+                      <span className="font-medium">{Math.min(currentPage * pagination.limit, pagination.total)}</span> of{' '}
+                      <span className="font-medium">{pagination.total}</span> results
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Previous</span>
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                      {getPageNumbers().map((pageNum, index, array) => (
+                        <div key={pageNum}>
+                          {index > 0 && array[index - 1] !== pageNum - 1 && (
+                            <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                              ...
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              currentPage === pageNum
+                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === pagination.pages}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Next</span>
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

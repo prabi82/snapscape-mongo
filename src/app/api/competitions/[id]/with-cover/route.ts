@@ -259,7 +259,7 @@ export async function PUT(
         }
       }
     }
-
+    
     // Log the updated competition to verify cover image is saved
     console.log('Updated competition:', {
       id: updatedCompetition._id,

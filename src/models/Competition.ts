@@ -89,6 +89,17 @@ const competitionSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  // Manual status override flag
+  manualStatusOverride: {
+    type: Boolean,
+    default: false,
+    description: 'If true, status will not be automatically updated based on dates'
+  },
+  // Track when status was last automatically updated
+  lastAutoStatusUpdate: {
+    type: Date,
+    description: 'Timestamp of last automatic status update'
+  },
   createdAt: {
     type: Date,
     default: Date.now,

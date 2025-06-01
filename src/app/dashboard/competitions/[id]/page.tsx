@@ -1114,14 +1114,14 @@ export default function CompetitionDetail() {
               // 2. Competition is in active status but hideOtherSubmissions is disabled, OR  
               // 3. User is an admin (admins can always view all submissions)
               !(competition.status === 'active' && competition.hideOtherSubmissions && session?.user?.role !== 'admin') && (
-                <Link 
-                  href={`/dashboard/competitions/${competition._id}/view-submissions`}
-                  className="block w-full"
-                >
-                  <button className="mt-2 w-full px-3 py-2 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg text-[#1a4d5c] text-sm font-semibold hover:bg-[#e6f0f3]">
-                    View All Submissions ({competition.submissionCount})
-                  </button>
-                </Link>
+              <Link 
+                href={`/dashboard/competitions/${competition._id}/view-submissions`}
+                className="block w-full"
+              >
+                <button className="mt-2 w-full px-3 py-2 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg text-[#1a4d5c] text-sm font-semibold hover:bg-[#e6f0f3]">
+                  View All Submissions ({competition.submissionCount})
+                </button>
+              </Link>
               )
             )}
           </div>
