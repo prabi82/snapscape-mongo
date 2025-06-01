@@ -70,7 +70,7 @@ const getCompetitionName = async (competitionId: string): Promise<string> => {
 
 export async function GET(
   req: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -87,15 +87,48 @@ export async function GET(
     await dbConnect();
     
     // Get user ID from URL parameter - fix for sync params access warning
-    const { id: userId } = context.params;
+    const { id: userId } = await context.params;
+    
+    // Get user details for debugging
+    const User = (await import('@/models/User')).default;
+    const user = await User.findById(userId).select('email name');
+    console.log(`[DEBUG-USER] Processing stats for user: ${user?.email} (${user?.name}) - ID: ${userId}`);
     
     // Get total submissions count
     const totalSubmissions = await PhotoSubmission.countDocuments({ user: userId });
+    console.log(`[DEBUG-SUBMISSIONS-TOTAL] User ${user?.email} has ${totalSubmissions} total submissions`);
     
-    // Get top placements
-    const firstPlace = await Result.countDocuments({ user: userId, position: 1 });
-    const secondPlace = await Result.countDocuments({ user: userId, position: 2 });
-    const thirdPlace = await Result.countDocuments({ user: userId, position: 3 });
+    // Get only completed competitions to calculate points from
+    const completedCompetitions = await Competition.find({ 
+      status: 'completed' 
+    }).select('_id title status').lean();
+    
+    const completedCompetitionIds = completedCompetitions.map(comp => 
+      (comp._id as mongoose.Types.ObjectId).toString()
+    );
+    
+    console.log(`[DEBUG-COMPETITIONS] Found ${completedCompetitions.length} completed competitions:`, 
+      completedCompetitions.map(c => `${c.title} (${c.status})`));
+    console.log(`[DEBUG-COMPETITIONS] Completed competition IDs:`, completedCompetitionIds);
+    
+    // Get top placements only from completed competitions
+    const firstPlace = await Result.countDocuments({ 
+      user: userId, 
+      position: 1,
+      competition: { $in: completedCompetitionIds }
+    });
+    const secondPlace = await Result.countDocuments({ 
+      user: userId, 
+      position: 2,
+      competition: { $in: completedCompetitionIds }
+    });
+    const thirdPlace = await Result.countDocuments({ 
+      user: userId, 
+      position: 3,
+      competition: { $in: completedCompetitionIds }
+    });
+    
+    console.log(`[DEBUG-RESULTS] User ${user?.email} placements in completed competitions: 1st=${firstPlace}, 2nd=${secondPlace}, 3rd=${thirdPlace}`);
     
     // Count submissions by competition
     const submissionsByCompetition = await PhotoSubmission.aggregate([
@@ -107,15 +140,33 @@ export async function GET(
     const uniqueCompetitionsCount = submissionsByCompetition.length;
     
     // Get all user submissions with their ratings to calculate total points
+    // Only include submissions from completed competitions for points calculation
     const userSubmissions = await PhotoSubmission.find({ 
       user: userId,
-      status: 'approved' // Only count approved submissions
+      status: 'approved', // Only count approved submissions
+      competition: { $in: completedCompetitionIds } // Only from completed competitions
     }).lean();
     
-    // Get user results to find ranking positions
+    console.log(`[DEBUG-SUBMISSIONS] Found ${userSubmissions.length} submissions from completed competitions for user ${user?.email}`);
+    console.log(`[DEBUG-SUBMISSIONS] Submission details:`, userSubmissions.map(s => ({
+      title: s.title,
+      competition: s.competition?.toString(),
+      averageRating: s.averageRating,
+      ratingCount: s.ratingCount,
+      status: s.status
+    })));
+    
+    // Get user results to find ranking positions - only from completed competitions
     const userResults = await Result.find({
-      user: userId
+      user: userId,
+      competition: { $in: completedCompetitionIds } // Only from completed competitions
     }).lean();
+    
+    console.log(`[DEBUG-RESULTS] Found ${userResults.length} result records for user ${user?.email} in completed competitions`);
+    console.log(`[DEBUG-RESULTS] Result details:`, userResults.map(r => ({
+      competition: r.competition?.toString(),
+      position: r.position
+    })));
     
     // Get count of unique photos rated by this user (votes cast)
     // Improved query to ensure uniqueness and proper vote counting
@@ -131,7 +182,7 @@ export async function GET(
     const ratingsCount = uniquePhotoIds.size;
     
     // Debug: Log the specific photos that were voted on
-    console.log(`[DEBUG-VOTING-DETAIL] User ${userId} voted on these photos:`, Array.from(uniquePhotoIds));
+    console.log(`[DEBUG-VOTING-DETAIL] User ${user?.email} voted on these photos:`, Array.from(uniquePhotoIds));
     
     // Detect self-votes (users voting on their own photos)
     // First get all photos submitted by this user
@@ -145,7 +196,7 @@ export async function GET(
     );
     
     if (selfVotes.length > 0) {
-      console.log(`[DEBUG-VOTING-WARNING] User ${userId} has ${selfVotes.length} self-votes: `, selfVotes);
+      console.log(`[DEBUG-VOTING-WARNING] User ${user?.email} has ${selfVotes.length} self-votes: `, selfVotes);
     }
     
     // Calculate total points based on the new ranking formula:
@@ -167,40 +218,17 @@ export async function GET(
     };
     
     // DEBUG: Log all ratings for this user to check for issues
-    console.log(`[DEBUG-VOTING] User ${userId} has ${ratingsCount} unique photo votes in the database (1 vote = 1 point)`);
+    console.log(`[DEBUG-VOTING] User ${user?.email} has ${ratingsCount} unique photo votes in the database (1 vote = 1 point)`);
     
-    try {
-      // Get a sample of ratings to verify
-      const sampleRatings = await Rating.find({ user: userId }).limit(5).lean();
-      console.log(`[DEBUG-VOTING] Sample ratings:`, sampleRatings.map(r => ({ 
-        photo: r.photo.toString(),
-        score: r.score, // The rating value (1-5) - each counts as 1 point regardless of value
-        point: 1 // Each rating contributes exactly 1 point
-      })));
-      
-      // Check for duplicate ratings - use aggregation instead of non-existent method
-      try {
-        // Use MongoDB aggregation to check for duplicates
-        const duplicateCheck = await Rating.aggregate([
-          { $match: { user: new mongoose.Types.ObjectId(userId) } },
-          { $group: { 
-              _id: "$photo", 
-              count: { $sum: 1 },
-              ratings: { $push: "$score" }
-            } 
-          },
-          { $match: { count: { $gt: 1 } } } // Only return photos with more than 1 rating
-        ]);
-        
-        console.log(`[DEBUG-VOTING] Duplicate check:`, duplicateCheck);
-      } catch (error) {
-        console.log(`[DEBUG-VOTING] Error during rating validation:`, error);
-      }
-    } catch (error) {
-      console.error(`[DEBUG-VOTING] Error getting sample ratings:`, error);
+    console.log(`[DEBUG-POINTS] Starting calculation for user ${user?.email} with voting points = ${pointsBreakdown.votingPoints}`);
+    
+    // Since we have 0 completed competitions, userSubmissions should be empty
+    // Let's verify this and see if there's any unexpected data
+    if (userSubmissions.length === 0) {
+      console.log(`[DEBUG-POINTS] ✅ CORRECT: No submissions from completed competitions, so no ranking points should be calculated`);
+    } else {
+      console.log(`[DEBUG-POINTS] ❌ ERROR: Found ${userSubmissions.length} submissions from completed competitions when there should be 0!`);
     }
-    
-    console.log(`[DEBUG-POINTS] Starting with voting points = ${pointsBreakdown.votingPoints}`);
     
     // Points from ranking positions (1st, 2nd, 3rd places)
     const rankedSubmissions: string[] = [];
@@ -210,9 +238,15 @@ export async function GET(
     
     // First, fetch all ranking positions for all user photos across competitions
     // This is needed to handle cases where a user has multiple photos at the same rank
+    // Only process completed competitions
     for (const submission of userSubmissions) {
       if (submission.competition) {
         const competitionId = submission.competition.toString();
+        
+        // Skip if this competition is not completed
+        if (!completedCompetitionIds.includes(competitionId)) {
+          continue;
+        }
         
         try {
           // Get all approved submissions for this competition to calculate dense ranks
@@ -321,12 +355,22 @@ export async function GET(
       sub.status === 'approved' // Only count approved submissions
     );
     
+    console.log(`[DEBUG-OTHER-SUBMISSIONS] User ${user?.email} - Found ${otherSubmissions.length} other submissions to process`);
+    console.log(`[DEBUG-OTHER-SUBMISSIONS] Other submissions details:`, otherSubmissions.map(s => ({
+      title: s.title,
+      competition: s.competition?.toString(),
+      averageRating: s.averageRating,
+      ratingCount: s.ratingCount
+    })));
+    
     // Calculate points for these other submissions based on their actual rank
     for (const submission of otherSubmissions) {
       if (!submission.competition) continue;
       
       const competitionId = submission.competition.toString();
       const photoId = (submission._id as mongoose.Types.ObjectId).toString();
+      
+      console.log(`[DEBUG-OTHER-PROCESSING] User ${user?.email} - Processing submission "${submission.title}" from competition ${competitionId}`);
       
       // Get the photo's actual rank in the competition
       const photoRanks = competitionPhotoRanks.get(competitionId);
@@ -363,7 +407,8 @@ export async function GET(
         pointsBreakdown.otherSubmissionsPoints += points;
       }
       
-      console.log(`[DEBUG-POINTS] Photo ${submission.title} has rank ${actualRank}, adding ${points} points to ${category}`);
+      console.log(`[DEBUG-POINTS] User ${user?.email} - Photo "${submission.title}" has rank ${actualRank}, adding ${points} points to ${category}`);
+      console.log(`[DEBUG-POINTS] User ${user?.email} - Calculation: totalRating=${totalRating} (${submission.averageRating} × ${submission.ratingCount}), multiplier=${actualRank <= 3 ? (actualRank === 1 ? 5 : actualRank === 2 ? 3 : 2) : 1}`);
       
       // Add detailed point information
       if (category !== 'otherSubmissionsPoints') {
@@ -397,15 +442,36 @@ export async function GET(
     
     // Add 1 point for each vote cast by the user (use the possibly corrected votingPoints value)
     totalPoints += pointsBreakdown.votingPoints;
+    console.log(`[DEBUG-FINAL-CALC] User ${user?.email} - Added voting points: ${pointsBreakdown.votingPoints}, running total: ${totalPoints}`);
     
     // Add points from all the different categories
     totalPoints += pointsBreakdown.firstPlacePoints;
+    console.log(`[DEBUG-FINAL-CALC] User ${user?.email} - Added 1st place points: ${pointsBreakdown.firstPlacePoints}, running total: ${totalPoints}`);
+    
     totalPoints += pointsBreakdown.secondPlacePoints;
+    console.log(`[DEBUG-FINAL-CALC] User ${user?.email} - Added 2nd place points: ${pointsBreakdown.secondPlacePoints}, running total: ${totalPoints}`);
+    
     totalPoints += pointsBreakdown.thirdPlacePoints;
+    console.log(`[DEBUG-FINAL-CALC] User ${user?.email} - Added 3rd place points: ${pointsBreakdown.thirdPlacePoints}, running total: ${totalPoints}`);
+    
     totalPoints += pointsBreakdown.otherSubmissionsPoints;
+    console.log(`[DEBUG-FINAL-CALC] User ${user?.email} - Added other submissions points: ${pointsBreakdown.otherSubmissionsPoints}, running total: ${totalPoints}`);
     
     // Round to the nearest integer for display
     totalPoints = Math.round(totalPoints);
+    console.log(`[DEBUG-FINAL-CALC] User ${user?.email} - Final total points after rounding: ${totalPoints}`);
+    
+    // Log the complete breakdown for debugging
+    console.log(`[DEBUG-BREAKDOWN] User ${user?.email} complete points breakdown:`, {
+      votingPoints: pointsBreakdown.votingPoints,
+      firstPlacePoints: pointsBreakdown.firstPlacePoints,
+      secondPlacePoints: pointsBreakdown.secondPlacePoints,
+      thirdPlacePoints: pointsBreakdown.thirdPlacePoints,
+      otherSubmissionsPoints: pointsBreakdown.otherSubmissionsPoints,
+      totalCalculated: totalPoints,
+      detailsCount: pointsBreakdown.details.length,
+      otherSubmissionsCount: pointsBreakdown.otherSubmissions.length
+    });
     
     const stats = {
       totalSubmissions,

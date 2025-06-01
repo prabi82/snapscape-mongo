@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Competition from '@/models/Competition';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { sendCompetitionStatusChangeNotifications, logStatusChangeNotification } from '@/lib/competition-status-notification-service';
 
 export async function PUT(
   request: NextRequest,
@@ -11,7 +12,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as any;
     const { id } = params;
     
     // Log debugging information
@@ -25,7 +26,7 @@ export async function PUT(
       );
     }
     
-    // Check if user is admin
+    // Check if user is admin - use type assertion for role
     if (session.user.role !== 'admin') {
       return NextResponse.json(
         { success: false, message: 'Only administrators can update competitions' },
@@ -45,9 +46,10 @@ export async function PUT(
     // Parse form data
     const formData = await request.formData();
     
-    // Extract competition data
+    // Extract competition data - fix FormData iteration
     const updateData: any = {};
-    for (const [key, value] of formData.entries()) {
+    const entries = Array.from(formData.entries());
+    for (const [key, value] of entries) {
       if (key !== 'coverImage') {
         updateData[key] = value;
       }
@@ -198,10 +200,71 @@ export async function PUT(
     // Fetch the updated competition
     const updatedCompetition = await Competition.findById(id);
     
+    // Check for status changes and send notifications
+    const oldStatus = existingCompetition.status;
+    const newStatus = updatedCompetition.status;
+    
+    console.log(`Competition status check: ${oldStatus} → ${newStatus}`);
+    
+    // Trigger notifications for specific status changes
+    if (oldStatus !== newStatus) {
+      console.log(`Status change detected for competition "${updatedCompetition.title}": ${oldStatus} → ${newStatus}`);
+      
+      // Handle Active → Voting transition
+      if (oldStatus === 'active' && newStatus === 'voting') {
+        console.log('Triggering voting phase notifications...');
+        try {
+          const notificationResult = await sendCompetitionStatusChangeNotifications(
+            updatedCompetition._id.toString(),
+            updatedCompetition.title,
+            'voting',
+            updatedCompetition.votingEndDate?.toISOString()
+          );
+          
+          // Log the notification activity
+          await logStatusChangeNotification(
+            updatedCompetition._id.toString(),
+            updatedCompetition.title,
+            'voting',
+            notificationResult
+          );
+          
+          console.log(`Voting notifications sent: ${notificationResult.emailsSent} emails, ${notificationResult.notificationsCreated} notifications`);
+        } catch (notificationError: any) {
+          console.error('Error sending voting phase notifications:', notificationError);
+        }
+      }
+      
+      // Handle Voting → Completed transition
+      else if (oldStatus === 'voting' && newStatus === 'completed') {
+        console.log('Triggering completion notifications...');
+        try {
+          const notificationResult = await sendCompetitionStatusChangeNotifications(
+            updatedCompetition._id.toString(),
+            updatedCompetition.title,
+            'completed'
+          );
+          
+          // Log the notification activity
+          await logStatusChangeNotification(
+            updatedCompetition._id.toString(),
+            updatedCompetition.title,
+            'completed',
+            notificationResult
+          );
+          
+          console.log(`Completion notifications sent: ${notificationResult.emailsSent} emails, ${notificationResult.notificationsCreated} notifications`);
+        } catch (notificationError: any) {
+          console.error('Error sending completion notifications:', notificationError);
+        }
+      }
+    }
+
     // Log the updated competition to verify cover image is saved
     console.log('Updated competition:', {
       id: updatedCompetition._id,
       title: updatedCompetition.title,
+      status: updatedCompetition.status,
       hasCoverImage: !!updatedCompetition.coverImage,
       coverImage: updatedCompetition.coverImage,
       hideOtherSubmissions: updatedCompetition.hideOtherSubmissions

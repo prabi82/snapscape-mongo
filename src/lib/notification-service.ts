@@ -209,6 +209,41 @@ export async function notifyCompetitionResults(
 }
 
 /**
+ * Creates a notification for competition status change
+ */
+export async function notifyCompetitionStatusChange(
+  userId: string,
+  competitionId: string,
+  competitionTitle: string,
+  newStatus: 'voting' | 'completed'
+): Promise<any> {
+  let title: string;
+  let message: string;
+  let relatedLink: string;
+  let type: 'competition' | 'result' = 'competition';
+  
+  if (newStatus === 'voting') {
+    title = '🗳️ Voting Open';
+    message = `Voting is now open for "${competitionTitle}". Cast your vote for your favorite photos!`;
+    relatedLink = `/dashboard/competitions/${competitionId}/view-submissions`;
+  } else {
+    title = '🏆 Results Available';
+    message = `Results for "${competitionTitle}" are now available. Check out the final rankings!`;
+    relatedLink = `/dashboard/competitions/${competitionId}/view-submissions?result=1`;
+    type = 'result';
+  }
+  
+  return createNotification({
+    user: userId,
+    title,
+    message,
+    type,
+    relatedLink,
+    relatedCompetition: competitionId
+  });
+}
+
+/**
  * Creates a notification for a new badge earned
  */
 export async function notifyBadgeEarned(

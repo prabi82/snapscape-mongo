@@ -39,6 +39,16 @@ interface Submission {
   createdAt: string;
 }
 
+interface ExtendedSession {
+  user: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+    role: string;
+  };
+}
+
 export default function UserManagementPage() {
   const { data: session, status } = useSession();
   const [user, setUser] = useState<User | null>(null);
@@ -47,6 +57,10 @@ export default function UserManagementPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionSuccess, setActionSuccess] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
@@ -59,7 +73,7 @@ export default function UserManagementPage() {
     }
 
     // Check if user is admin
-    if (status === 'authenticated' && session?.user?.role !== 'admin') {
+    if (status === 'authenticated' && (session?.user as any)?.role !== 'admin') {
       router.push('/dashboard');
       return;
     }
@@ -86,10 +100,62 @@ export default function UserManagementPage() {
       }
     };
 
-    if (status === 'authenticated' && session?.user?.role === 'admin') {
+    if (status === 'authenticated' && (session?.user as any)?.role === 'admin') {
       fetchUser();
     }
   }, [status, session, router, userId]);
+
+  const resetPassword = async () => {
+    if (!user) return;
+    
+    // Validate passwords
+    if (!newPassword || !confirmPassword) {
+      setPasswordError('Both password fields are required');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters long');
+      return;
+    }
+    
+    try {
+      setActionLoading(true);
+      setPasswordError('');
+      setActionSuccess('');
+      setError('');
+      
+      const response = await fetch(`/api/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          password: newPassword,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to reset password');
+      }
+      
+      setActionSuccess('Password reset successfully');
+      setShowPasswordReset(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      console.error('Error resetting password:', err);
+      setPasswordError(err.message || 'An error occurred while resetting password');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const toggleUserStatus = async () => {
     if (!user) return;
@@ -371,6 +437,77 @@ export default function UserManagementPage() {
               </div>
 
               <div className="pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-medium text-gray-500">Password Management</h4>
+                <div className="mt-2">
+                  {!showPasswordReset ? (
+                    <button
+                      onClick={() => setShowPasswordReset(true)}
+                      className="px-4 py-2 border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md text-sm font-medium"
+                    >
+                      Reset Password
+                    </button>
+                  ) : (
+                    <div className="bg-blue-50 p-4 rounded-md">
+                      <h5 className="text-sm font-medium text-blue-800 mb-3">Reset User Password</h5>
+                      {passwordError && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm mb-3">
+                          {passwordError}
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        <div>
+                          <label htmlFor="newPassword" className="block text-sm font-medium text-blue-700">
+                            New Password
+                          </label>
+                          <input
+                            type="password"
+                            id="newPassword"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter new password (min 8 characters)"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="confirmPassword" className="block text-sm font-medium text-blue-700">
+                            Confirm Password
+                          </label>
+                          <input
+                            type="password"
+                            id="confirmPassword"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Confirm new password"
+                          />
+                        </div>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={resetPassword}
+                            disabled={actionLoading}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {actionLoading ? 'Resetting...' : 'Reset Password'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowPasswordReset(false);
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setPasswordError('');
+                            }}
+                            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
                 <h4 className="text-sm font-medium text-gray-500">Account Status</h4>
                 <div className="mt-2">
                   <button
@@ -404,7 +541,7 @@ export default function UserManagementPage() {
                 </div>
               </div>
 
-              {userId !== session?.user?.id && (
+              {userId !== (session?.user as any)?.id && (
                 <div className="pt-4 border-t border-gray-200">
                   <h4 className="text-sm font-medium text-red-500">Danger Zone</h4>
                   <div className="mt-2">

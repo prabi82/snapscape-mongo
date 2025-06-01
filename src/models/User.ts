@@ -18,6 +18,15 @@ interface IUserDocument extends mongoose.Document {
   verificationExpires: Date | null;
   passwordResetToken: string | null;
   passwordResetExpires: Date | null;
+  notificationPreferences?: {
+    competitionReminders: boolean;
+    votingOpen: boolean;
+    competitionCompleted: boolean;
+    newCompetitions: boolean;
+    achievementNotifications: boolean;
+    weeklyDigest: boolean;
+    marketingEmails: boolean;
+  };
   createdAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
@@ -105,6 +114,37 @@ const userSchema = new mongoose.Schema({
   passwordResetExpires: {
     type: Date,
     default: null,
+  },
+  // Notification preferences
+  notificationPreferences: {
+    competitionReminders: {
+      type: Boolean,
+      default: true,
+    },
+    votingOpen: {
+      type: Boolean,
+      default: true,
+    },
+    competitionCompleted: {
+      type: Boolean,
+      default: true,
+    },
+    newCompetitions: {
+      type: Boolean,
+      default: true,
+    },
+    achievementNotifications: {
+      type: Boolean,
+      default: true,
+    },
+    weeklyDigest: {
+      type: Boolean,
+      default: false,
+    },
+    marketingEmails: {
+      type: Boolean,
+      default: false,
+    },
   },
   createdAt: {
     type: Date,

@@ -196,6 +196,12 @@ export default function ProfilePage() {
       fetchUserImages();
       fetchAchievements();
       fetchUserStats(); // Call new function to fetch stats
+      
+      // Force a second stats refresh after a short delay to ensure we get the latest data
+      setTimeout(() => {
+        console.log('[DEBUG-PROFILE] Force refreshing stats after delay');
+        fetchUserStats();
+      }, 2000);
     }
   }, [typedSession, status, router]);
   
@@ -489,15 +495,26 @@ export default function ProfilePage() {
     setStatsLoading(true);
     setStatsError('');
     try {
-      const response = await fetch(`/api/users/${userId}/stats`);
+      // Add cache-busting parameter to ensure fresh data
+      const response = await fetch(`/api/users/${userId}/stats?_nocache=${Date.now()}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Failed to fetch user stats" }));
         throw new Error(errorData.error || 'Failed to fetch user stats');
       }
       const data = await response.json();
+      
+      // Add debug logging to see what we're getting from the API
+      console.log('[DEBUG-PROFILE-STATS] Raw API response:', data);
+      
       if (data.success) {
+        console.log('[DEBUG-PROFILE-STATS] Setting totalPoints to:', data.data.totalPoints);
+        console.log('[DEBUG-PROFILE-STATS] Points breakdown:', data.data.pointsBreakdown);
+        console.log('[DEBUG-PROFILE-STATS] Raw API data.data:', data.data);
+        
         setTotalSubmissions(data.data.totalSubmissions);
         setTotalPoints(data.data.totalPoints);
+        console.log('[DEBUG-PROFILE-STATS] Set totalPoints state to:', data.data.totalPoints);
+        
         setBadgesEarned(data.data.badgesEarned || 0);
         setCompetitionsEntered(data.data.competitionsEntered || 0);
         setCompetitionsWon(data.data.competitionsWon || 0);
@@ -556,19 +573,8 @@ export default function ProfilePage() {
             otherPoints = Array.from(uniqueOtherSubmissionsMap.values())
               .reduce((total, sub) => total + sub.points, 0);
           }
-          // If we still don't have data, use the estimation approach as fallback
-          else if (data.data.totalSubmissions > 0) {
-            // We can estimate other submissions points if we have the total
-            const rankedSubmissions = (pb.details || []).length;
-            const remainingSubmissions = data.data.totalSubmissions - rankedSubmissions;
-            
-            // This is just an estimate - ideally the server would provide this data
-            if (remainingSubmissions > 0) {
-              // Using a conservative average rating of 3.5 instead of 3.0 for higher accuracy
-              otherPoints = remainingSubmissions * 3.5;
-              console.log(`Estimated points for ${remainingSubmissions} other submissions: ${otherPoints}`);
-            }
-          }
+          // Remove the estimation logic - we should only count points from completed competitions
+          // The backend now correctly filters submissions from completed competitions only
           
           setOtherSubmissionsPoints(otherPoints);
           
@@ -580,6 +586,15 @@ export default function ProfilePage() {
             otherPoints + 
             votingPoints
           );
+          
+          console.log(`[DEBUG-FRONTEND-CALC] Corrected total calculation:`, {
+            recalculatedFirstPlacePoints,
+            recalculatedSecondPlacePoints,
+            recalculatedThirdPlacePoints,
+            otherPoints,
+            votingPoints,
+            correctedTotal
+          });
           
           setCorrectedTotalPoints(correctedTotal);
         }
@@ -1380,6 +1395,14 @@ export default function ProfilePage() {
                   <Link href="/dashboard/edit-profile">
                     <button className="px-4 py-1 bg-[#e6f0f3] text-[#1a4d5c] font-semibold rounded-lg border border-[#e0c36a] hover:bg-[#d1e6ed] transition text-sm">Edit profile</button>
                   </Link>
+                  <Link href="/dashboard/settings">
+                    <button className="px-4 py-1 bg-[#e6f0f3] text-[#1a4d5c] font-semibold rounded-lg border border-[#e0c36a] hover:bg-[#d1e6ed] transition text-sm flex items-center gap-1" title="Settings">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  </Link>
                 </div>
               </div>
               {/* New dynamic stats section */}
@@ -1397,9 +1420,28 @@ export default function ProfilePage() {
                         onClick={() => setShowPointsBreakdown(true)}
                         title="Click for points breakdown"
                       >
-                        {correctedTotalPoints !== null ? correctedTotalPoints : totalPoints !== null ? totalPoints : '-'}
+                        {(() => {
+                          const displayValue = correctedTotalPoints !== null ? correctedTotalPoints : totalPoints !== null ? totalPoints : '-';
+                          console.log('[DEBUG-DISPLAY] Points display values:', {
+                            correctedTotalPoints,
+                            totalPoints,
+                            displayValue
+                          });
+                          return displayValue;
+                        })()}
                       </span> Points
                       <span className="text-xs ml-1 text-green-600">(all submissions counted)</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log('[DEBUG-PROFILE] Manual stats refresh triggered');
+                          fetchUserStats();
+                        }}
+                        className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                        title="Refresh stats"
+                      >
+                        ↻
+                      </button>
                     </span>
                     {/* You can add more stats here if needed */}
                   </>

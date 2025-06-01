@@ -20,6 +20,7 @@ interface Competition {
   title: string;
   status: string;
   endDate: string;
+  votingEndDate?: string;
 }
 
 interface ReminderResult {
@@ -52,6 +53,13 @@ export default function CompetitionRemindersPage() {
     triggerMethod: ''
   });
 
+  // New state for voting notifications
+  const [votingTestEmail, setVotingTestEmail] = useState('');
+  const [selectedVotingCompetition, setSelectedVotingCompetition] = useState<string>('');
+  const [votingNotificationType, setVotingNotificationType] = useState<'voting' | 'completed'>('voting');
+  const [votingResult, setVotingResult] = useState<ReminderResult | null>(null);
+  const [isVotingLoading, setIsVotingLoading] = useState(false);
+
   // Fetch competitions on component mount
   useEffect(() => {
     if (session?.user?.role === 'admin') {
@@ -63,8 +71,8 @@ export default function CompetitionRemindersPage() {
   const fetchCompetitions = async () => {
     setLoadingCompetitions(true);
     try {
-      // Include all relevant statuses for reminder testing
-      const response = await fetch('/api/competitions?status=active,upcoming,voting&limit=50');
+      // Include all relevant statuses for reminder testing and voting notifications
+      const response = await fetch('/api/competitions?status=active,upcoming,voting,completed&limit=50');
       if (response.ok) {
         const data = await response.json();
         console.log('Fetched competitions for reminders:', data.data);
@@ -99,14 +107,12 @@ export default function CompetitionRemindersPage() {
         setLogsPagination(data.data.pagination);
         setLogsPage(page);
       } else {
-        console.error('Failed to fetch reminder logs - API not available yet');
-        // For now, show a message that logs will be available after the first reminder is sent
+        // API endpoint exists but returned an error (likely no logs yet)
         setReminderLogs([]);
         setLogsPagination(null);
       }
     } catch (error) {
-      console.error('Error fetching reminder logs:', error);
-      // For now, show a message that logs will be available after the first reminder is sent
+      // Network error or other issues
       setReminderLogs([]);
       setLogsPagination(null);
     } finally {
@@ -171,6 +177,40 @@ export default function CompetitionRemindersPage() {
     }
   };
 
+  const sendVotingNotifications = async (isTest: boolean = false) => {
+    setIsVotingLoading(true);
+    setVotingResult(null);
+
+    try {
+      const payload: any = {
+        competitionId: selectedVotingCompetition,
+        notificationType: votingNotificationType
+      };
+
+      if (isTest && votingTestEmail.trim()) {
+        payload.testEmail = votingTestEmail.trim();
+      }
+
+      const response = await fetch('/api/admin/send-voting-notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      setVotingResult(data);
+    } catch (error: any) {
+      setVotingResult({
+        success: false,
+        message: `Error: ${error.message}`,
+      });
+    } finally {
+      setIsVotingLoading(false);
+    }
+  };
+
   const isValidEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -180,17 +220,248 @@ export default function CompetitionRemindersPage() {
     <div>
       <div className="bg-white shadow rounded-lg">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Competition Reminder System</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Competition Reminder & Notification System</h2>
           <p className="mt-1 text-sm text-gray-600">
-            Test and manage automated competition reminder emails
+            Test and manage automated competition reminder emails and voting notifications
           </p>
         </div>
 
         <div className="p-6">
+          {/* Voting Notifications Section */}
+          <div className="border border-purple-200 bg-purple-50 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-purple-800 mb-3">
+              🗳️ Voting Notifications
+            </h3>
+            <p className="text-purple-700 mb-4">
+              Send voting open or competition completed notifications to users.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="votingCompetitionSelect" className="block text-sm font-medium text-purple-800 mb-2">
+                  Select Competition *
+                </label>
+                <select
+                  id="votingCompetitionSelect"
+                  value={selectedVotingCompetition}
+                  onChange={(e) => setSelectedVotingCompetition(e.target.value)}
+                  disabled={loadingCompetitions}
+                  className="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="">Select a competition...</option>
+                  {competitions.length > 0 ? (
+                    competitions.map((comp) => (
+                      <option key={comp._id} value={comp._id}>
+                        {comp.title} ({comp.status.toUpperCase()}) - Ends: {new Date(comp.endDate).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                        {comp.votingEndDate && ` | Voting Ends: ${new Date(comp.votingEndDate).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}`}
+                      </option>
+                    ))
+                  ) : (
+                    !loadingCompetitions && (
+                      <option disabled>No competitions found</option>
+                    )
+                  )}
+                </select>
+                {loadingCompetitions && (
+                  <p className="text-purple-600 text-sm mt-1">Loading competitions...</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="notificationType" className="block text-sm font-medium text-purple-800 mb-2">
+                  Notification Type *
+                </label>
+                <select
+                  id="notificationType"
+                  value={votingNotificationType}
+                  onChange={(e) => setVotingNotificationType(e.target.value as 'voting' | 'completed')}
+                  className="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="voting">🗳️ Voting Open (Active → Voting)</option>
+                  <option value="completed">🏆 Competition Completed (Voting → Completed)</option>
+                </select>
+              </div>
+
+              {/* Recipient Selection */}
+              <div className="border border-purple-300 rounded-lg p-4 bg-white">
+                <h4 className="text-sm font-medium text-purple-800 mb-3">📧 Select Recipients</h4>
+                
+                <div className="space-y-3">
+                  {/* Option 1: Send to All Users */}
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="radio"
+                      id="allUsers"
+                      name="recipientType"
+                      value="all"
+                      checked={!votingTestEmail}
+                      onChange={() => setVotingTestEmail('')}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="allUsers" className="block text-sm font-medium text-gray-900">
+                        📢 Send to All Registered Users
+                      </label>
+                      <p className="text-xs text-gray-600">
+                        Send notification to all verified and active users in the application
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Send to Specific User */}
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="radio"
+                      id="specificUser"
+                      name="recipientType"
+                      value="specific"
+                      checked={!!votingTestEmail}
+                      onChange={() => {
+                        if (!votingTestEmail) {
+                          setVotingTestEmail('user@example.com');
+                        }
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="specificUser" className="block text-sm font-medium text-gray-900">
+                        👤 Send to Specific User
+                      </label>
+                      <p className="text-xs text-gray-600 mb-2">
+                        Send notification to a specific user by email address
+                      </p>
+                      
+                      {!!votingTestEmail && (
+                        <div>
+                          <input
+                            type="email"
+                            value={votingTestEmail}
+                            onChange={(e) => setVotingTestEmail(e.target.value)}
+                            placeholder="Enter user email address"
+                            className="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                          />
+                          {votingTestEmail && !isValidEmail(votingTestEmail) && (
+                            <p className="text-red-600 text-xs mt-1">Please enter a valid email address</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => sendVotingNotifications(true)}
+                  disabled={isVotingLoading || !selectedVotingCompetition || (!!votingTestEmail && !isValidEmail(votingTestEmail))}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isVotingLoading ? 'Sending...' : votingTestEmail ? `Send to ${votingTestEmail}` : 'Send to All Users'}
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setVotingTestEmail('');
+                    setSelectedVotingCompetition('');
+                    setVotingResult(null);
+                  }}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                >
+                  Clear Form
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Voting Results Section */}
+          {votingResult && (
+            <div className={`border rounded-lg p-6 mb-8 ${
+              votingResult.success 
+                ? 'border-green-200 bg-green-50' 
+                : 'border-red-200 bg-red-50'
+            }`}>
+              <h3 className={`text-lg font-semibold mb-3 ${
+                votingResult.success ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {votingResult.success ? '✅ Voting Notification Success' : '❌ Voting Notification Error'}
+              </h3>
+              
+              <p className={`mb-4 ${
+                votingResult.success ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {votingResult.message}
+              </p>
+
+              {votingResult.data && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Competitions</div>
+                      <div className="text-2xl font-bold text-blue-600">{votingResult.data.totalCompetitions}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Emails Sent</div>
+                      <div className="text-2xl font-bold text-green-600">{votingResult.data.totalEmailsSent}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Notifications</div>
+                      <div className="text-2xl font-bold text-purple-600">{votingResult.data.totalNotificationsCreated}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Errors</div>
+                      <div className="text-2xl font-bold text-red-600">{votingResult.data.errors.length}</div>
+                    </div>
+                  </div>
+
+                  {votingResult.data.competitionResults && votingResult.data.competitionResults.length > 0 && (
+                    <div className="bg-white p-4 rounded border">
+                      <h4 className="font-medium text-gray-900 mb-2">Competition Details:</h4>
+                      <div className="space-y-2">
+                        {votingResult.data.competitionResults.map((comp: any, index: number) => (
+                          <div key={index} className="text-sm border-l-4 border-purple-200 pl-3">
+                            <div className="font-medium">{comp.competitionTitle}</div>
+                            <div className="text-gray-600">
+                              Emails: {comp.emailsSent}, Notifications: {comp.notificationsCreated}
+                              {comp.errors && comp.errors.length > 0 && (
+                                <span className="text-red-600"> | Errors: {comp.errors.length}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {votingResult.data.errors && votingResult.data.errors.length > 0 && (
+                    <div className="bg-white p-4 rounded border border-red-200">
+                      <h4 className="font-medium text-red-900 mb-2">Errors:</h4>
+                      <ul className="text-sm text-red-700 space-y-1">
+                        {votingResult.data.errors.map((error: string, index: number) => (
+                          <li key={index} className="break-words">• {error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Test Email Section */}
           <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-6 mb-8">
             <h3 className="text-lg font-semibold text-yellow-800 mb-3">
-              🧪 Test Email Functionality
+              🧪 Test Reminder Email Functionality
             </h3>
             <p className="text-yellow-700 mb-4">
               Send test reminder emails to a specific email address without affecting all users.
@@ -333,7 +604,7 @@ export default function CompetitionRemindersPage() {
 
           {/* Results Section */}
           {result && (
-            <div className={`border rounded-lg p-6 ${
+            <div className={`border rounded-lg p-6 mb-8 ${
               result.success 
                 ? 'border-green-200 bg-green-50' 
                 : 'border-red-200 bg-red-50'
@@ -406,7 +677,7 @@ export default function CompetitionRemindersPage() {
           )}
 
           {/* Setup Instructions */}
-          <div className="border border-blue-200 bg-blue-50 rounded-lg p-6">
+          <div className="border border-blue-200 bg-blue-50 rounded-lg p-6 mb-8">
             <h3 className="text-lg font-semibold text-blue-800 mb-3">
               📋 Production Setup Instructions
             </h3>
