@@ -751,46 +751,64 @@ The profile page image modal was using a different ranking calculation method th
 Updated the profile page ranking calculation in `src/app/dashboard/profile/page.tsx` to exactly match the results page logic:
 
 ```typescript
-// Old logic (incorrect)
-const sorted = [...compImages].sort((a, b) => {
-  if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating;
-  return (b.ratingCount || 0) - (a.ratingCount || 0);
-});
+// Old logic (incorrect - overly complex)
+const rankMap = new Map();
+// Complex Map-based ranking with multiple comparisons
+for (let i = 0; i < sorted.length; i++) {
+  // Complex logic with multiple variables and comparisons
+}
 
-// New logic (correct)
-const sorted = [...compImages].sort((a, b) => {
-  const totalRatingA = a.averageRating * (a.ratingCount || 0);
-  const totalRatingB = b.averageRating * (b.ratingCount || 0);
+// New logic (correct - simple dense ranking like results page)
+let actualRank = 0;
+let lastTotalRating = -Infinity;
+
+for (let i = 0; i < sorted.length; i++) {
+  const image = sorted[i];
+  const totalRating = image.averageRating * (image.ratingCount || 0);
   
-  if (totalRatingB !== totalRatingA) {
-    return totalRatingB - totalRatingA;
+  // Increment rank only when total rating changes (dense ranking)
+  if (totalRating !== lastTotalRating) {
+    actualRank++;
   }
+  lastTotalRating = totalRating;
   
-  if (b.averageRating !== a.averageRating) {
-    return b.averageRating - a.averageRating;
+  // If this is our target image, break and use this rank
+  if (image._id === currentModalImage._id) {
+    break;
   }
-  
-  return (b.ratingCount || 0) - (a.ratingCount || 0);
-});
+}
 ```
 
-### 18.4. Technical Changes
-- **Updated Sorting Logic:** Changed from average rating priority to total rating priority
-- **Enhanced Dense Ranking:** Modified ranking calculation to use total rating comparisons
-- **Consistent Tiebreakers:** Applied the same tiebreaker hierarchy as results page
-- **Type Safety:** Added proper TypeScript typing for ranking variables
+### 18.4. Root Cause Analysis
+The initial fix attempted to use a complex Map-based ranking system with multiple comparison criteria, but the results page uses a much simpler dense ranking approach:
 
-### 18.5. Files Modified
+**Results Page (Correct):**
+- Simple counter that increments only when total rating changes
+- Single comparison: `totalRating !== lastTotalRating`
+- Direct, straightforward dense ranking implementation
+
+**Profile Page (Initially Incorrect):**
+- Complex Map-based system with multiple variables
+- Multiple comparisons including total rating, average rating, and rating count
+- Over-engineered solution that produced different ranking results
+
+### 18.5. Technical Details
+- **Simplified Logic:** Replaced complex Map-based ranking with simple counter approach
+- **Exact Matching:** Now uses identical dense ranking logic as results page
+- **Single Comparison:** Only compares total rating for rank determination
+- **Efficient Implementation:** Breaks loop when target image is found
+
+### 18.6. Files Modified
 - `src/app/dashboard/profile/page.tsx` - Updated image modal ranking calculation
 - `ProjectDocumentationDetailed.md` - Added documentation
 
-### 18.6. Impact
+### 18.7. Impact
 - **Consistent Rankings:** Profile page now shows the same ranks as results page
 - **Accurate User Information:** Users see correct ranking information across all pages
 - **Improved Trust:** Eliminates confusion about ranking discrepancies
 - **System Integrity:** Ensures all ranking displays use the same authoritative calculation
 
-### 18.7. Verification
+### 18.8. Verification
 Users can now verify that the rank shown in their profile page image modals exactly matches the rank displayed on the competition results page, providing a consistent and trustworthy user experience.
 
 ## 19. Latest Features Implementation Summary (2024) - Updated

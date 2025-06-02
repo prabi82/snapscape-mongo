@@ -1620,64 +1620,42 @@ export default function ProfilePage() {
                           return (b.ratingCount || 0) - (a.ratingCount || 0);
                         });
                         
-                        // Properly implement dense ranking using total rating comparison
-                        let currentRank = 0;
-                        let prevTotalRating: number | null = null;
-                        let prevAverageRating: number | null = null;
-                        let prevRatingCount: number | null = null;
+                        // Use the same simple dense ranking logic as the results page
                         let actualRank = 0;
+                        let lastTotalRating = -Infinity;
                         
-                        // First pass: create ranking map based on total rating
-                        const rankMap = new Map();
-                        
+                        // Find the rank for our current modal image
                         for (let i = 0; i < sorted.length; i++) {
                           const image = sorted[i];
                           const totalRating = image.averageRating * (image.ratingCount || 0);
-                          const averageRating = image.averageRating;
-                          const ratingCount = image.ratingCount || 0;
                           
-                          // If first item or different total rating from previous item
-                          if (i === 0 || totalRating !== prevTotalRating || averageRating !== prevAverageRating || ratingCount !== prevRatingCount) {
-                            currentRank = rankMap.size + 1;
+                          // Increment rank only when total rating changes (dense ranking)
+                          if (totalRating !== lastTotalRating) {
+                            actualRank++;
                           }
+                          lastTotalRating = totalRating;
                           
-                          // Define the rating key as a combination of total rating, average rating, and count
-                          const ratingKey = `${totalRating}-${averageRating}-${ratingCount}`;
-                          
-                          // If we haven't assigned a rank to this rating combination yet
-                          if (!rankMap.has(ratingKey)) {
-                            rankMap.set(ratingKey, currentRank);
-                          }
-                          
-                          // Store current values for next comparison
-                          prevTotalRating = totalRating;
-                          prevAverageRating = averageRating;
-                          prevRatingCount = ratingCount;
-                          
-                          // If this is our target image, store its rank
+                          // If this is our target image, break and use this rank
                           if (image._id === currentModalImage._id) {
-                            actualRank = currentRank;
+                            break;
                           }
                         }
                         
-                        if (actualRank > 0) {
-                          let badgeIcon: React.ReactNode = null;
-                          if (actualRank === 1) badgeIcon = <span className="mr-1">🥇</span>;
-                          else if (actualRank === 2) badgeIcon = <span className="mr-1">🥈</span>;
-                          else if (actualRank === 3) badgeIcon = <span className="mr-1">🥉</span>;
-                          return (
-                            <span className={`ml-2 inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${
-                              actualRank === 1 ? 'bg-yellow-400' :
-                              actualRank === 2 ? 'bg-gray-300' :
-                              actualRank === 3 ? 'bg-orange-400' :
-                              'bg-gray-700'
-                            }`}>
-                              {badgeIcon}
-                              {actualRank === 1 ? '1st' : actualRank === 2 ? '2nd' : actualRank === 3 ? '3rd' : `${actualRank}th`} Rank
-                            </span>
-                          );
-                        }
-                        return null;
+                        let badgeIcon: React.ReactNode = null;
+                        if (actualRank === 1) badgeIcon = <span className="mr-1">🥇</span>;
+                        else if (actualRank === 2) badgeIcon = <span className="mr-1">🥈</span>;
+                        else if (actualRank === 3) badgeIcon = <span className="mr-1">🥉</span>;
+                        return (
+                          <span className={`ml-2 inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${
+                            actualRank === 1 ? 'bg-yellow-400' :
+                            actualRank === 2 ? 'bg-gray-300' :
+                            actualRank === 3 ? 'bg-orange-400' :
+                            'bg-gray-700'
+                          }`}>
+                            {badgeIcon}
+                            {actualRank === 1 ? '1st' : actualRank === 2 ? '2nd' : actualRank === 3 ? '3rd' : `${actualRank}th`} Rank
+                          </span>
+                        );
                       })()}
                     </div>
                   )}
