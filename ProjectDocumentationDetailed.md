@@ -330,6 +330,36 @@
 *   **Dependencies:** Uses existing `/logo.png` for default featured image
 *   **Deployment Status:** ✅ Implemented and ready for testing
 
+### 2.15. Profile Incomplete Notification System (December 2024)
+*   **Feature:** Automatic notification banner for Google OAuth users with incomplete profile information
+*   **Target Users:** Users who signed up using Google OAuth but haven't provided mobile number and/or country information
+*   **Notification Display:**
+    *   **Location:** Appears at the top of all dashboard pages, right after the main content area starts
+    *   **Design:** Yellow gradient banner with warning icon, informative text, and action buttons
+    *   **Message:** Displays which specific fields are missing (mobile number, country, or both)
+    *   **Actions:** "Complete Profile" button linking to `/dashboard/edit-profile`, dismissible close button
+*   **Technical Implementation:**
+    *   **Component:** `ProfileIncompleteNotification` (`src/components/ProfileIncompleteNotification.tsx`)
+        *   Fetches user profile data via `/api/users/profile` to check completeness
+        *   Only shows for users with `provider: 'google'` and missing mobile/country
+        *   Includes loading states and error handling
+        *   Dismissible functionality (notification hidden until page refresh)
+    *   **Integration:** Added to dashboard layout (`src/app/dashboard/layout.tsx`) for universal coverage
+    *   **Detection Logic:**
+        *   Checks if `mobile` field is empty, null, or whitespace
+        *   Checks if `country` field is empty, null, whitespace, or "Select Country" default value
+        *   Only displays for Google OAuth users (`provider === 'google'`)
+*   **User Experience:**
+    *   **Non-intrusive:** Appears only for applicable users and can be dismissed
+    *   **Helpful:** Clearly indicates which information is needed and provides direct access to edit profile
+    *   **Context-aware:** Links directly to the edit profile page where users can complete their information
+    *   **Visual Design:** Uses consistent SnapScape styling with yellow/orange gradient and appropriate icons
+*   **Benefits:**
+    *   **Profile Completeness:** Encourages Google OAuth users to provide contact information for better platform engagement
+    *   **Communication:** Ensures administrators can reach users for important notifications
+    *   **User Engagement:** Helps users understand the value of complete profiles for enhanced SnapScape experience
+    *   **Data Quality:** Improves overall user data completeness for platform analytics and communication
+
 ## 3. Data Handling and Privacy
 
 *   **Database:** MongoDB. Mongoose models define schemas for `Competition`, `User`, `PhotoSubmission`, `Activity`, `ReminderLog`, etc.

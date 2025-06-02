@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Image from 'next/image';
+import ProfileIncompleteNotification from '@/components/ProfileIncompleteNotification';
 
 // Icons for navigation
 const HomeIcon = () => (
@@ -328,6 +329,7 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="lg:pl-64">
         <main className="py-6">
+          <ProfileIncompleteNotification />
           {children}
         </main>
       </div>
