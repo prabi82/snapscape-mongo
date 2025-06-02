@@ -826,7 +826,7 @@ export default function ProfilePage() {
     setSyncingAchievements(true);
     try {
       // First get all completed competitions the user has participated in
-      const res = await fetch(`/api/competitions?participated=true&status=completed`);
+      const res = await fetch(`/api/competitions?status=completed`);
       if (!res.ok) throw new Error('Failed to fetch competitions');
       const data = await res.json();
       

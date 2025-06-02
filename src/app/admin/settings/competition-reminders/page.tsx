@@ -56,9 +56,15 @@ export default function CompetitionRemindersPage() {
   // New state for voting notifications
   const [votingTestEmail, setVotingTestEmail] = useState('');
   const [selectedVotingCompetition, setSelectedVotingCompetition] = useState<string>('');
-  const [votingNotificationType, setVotingNotificationType] = useState<'voting' | 'completed'>('voting');
+  const [votingNotificationType, setVotingNotificationType] = useState<'voting' | 'completed' | 'new_competition'>('voting');
   const [votingResult, setVotingResult] = useState<ReminderResult | null>(null);
   const [isVotingLoading, setIsVotingLoading] = useState(false);
+
+  // New state for new competition notifications
+  const [newCompTestEmail, setNewCompTestEmail] = useState('');
+  const [selectedNewCompetition, setSelectedNewCompetition] = useState<string>('');
+  const [newCompResult, setNewCompResult] = useState<ReminderResult | null>(null);
+  const [isNewCompLoading, setIsNewCompLoading] = useState(false);
 
   // Fetch competitions on component mount
   useEffect(() => {
@@ -182,16 +188,33 @@ export default function CompetitionRemindersPage() {
     setVotingResult(null);
 
     try {
-      const payload: any = {
-        competitionId: selectedVotingCompetition,
-        notificationType: votingNotificationType
-      };
+      let payload: any = {};
+      let endpoint = '';
 
-      if (isTest && votingTestEmail.trim()) {
-        payload.testEmail = votingTestEmail.trim();
+      if (votingNotificationType === 'new_competition') {
+        // Use the new competition notification endpoint
+        endpoint = '/api/admin/send-new-competition-notifications';
+        payload = {
+          competitionId: selectedVotingCompetition
+        };
+
+        if (isTest && votingTestEmail.trim()) {
+          payload.testEmail = votingTestEmail.trim();
+        }
+      } else {
+        // Use the existing voting notification endpoint
+        endpoint = '/api/admin/send-voting-notifications';
+        payload = {
+          competitionId: selectedVotingCompetition,
+          notificationType: votingNotificationType
+        };
+
+        if (isTest && votingTestEmail.trim()) {
+          payload.testEmail = votingTestEmail.trim();
+        }
       }
 
-      const response = await fetch('/api/admin/send-voting-notifications', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -208,6 +231,39 @@ export default function CompetitionRemindersPage() {
       });
     } finally {
       setIsVotingLoading(false);
+    }
+  };
+
+  const sendNewCompetitionNotifications = async (isTest: boolean = false) => {
+    setIsNewCompLoading(true);
+    setNewCompResult(null);
+
+    try {
+      const payload: any = {
+        competitionId: selectedNewCompetition
+      };
+
+      if (isTest && newCompTestEmail.trim()) {
+        payload.testEmail = newCompTestEmail.trim();
+      }
+
+      const response = await fetch('/api/admin/send-new-competition-notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      setNewCompResult(data);
+    } catch (error: any) {
+      setNewCompResult({
+        success: false,
+        message: `Error: ${error.message}`,
+      });
+    } finally {
+      setIsNewCompLoading(false);
     }
   };
 
@@ -230,10 +286,10 @@ export default function CompetitionRemindersPage() {
           {/* Voting Notifications Section */}
           <div className="border border-purple-200 bg-purple-50 rounded-lg p-6 mb-8">
             <h3 className="text-lg font-semibold text-purple-800 mb-3">
-              🗳️ Voting Notifications
+              📧 Competition Notifications
             </h3>
             <p className="text-purple-700 mb-4">
-              Send voting open or competition completed notifications to users.
+              Send voting open, competition completed, or new competition notifications to users.
             </p>
             
             <div className="space-y-4">
@@ -285,11 +341,12 @@ export default function CompetitionRemindersPage() {
                 <select
                   id="notificationType"
                   value={votingNotificationType}
-                  onChange={(e) => setVotingNotificationType(e.target.value as 'voting' | 'completed')}
+                  onChange={(e) => setVotingNotificationType(e.target.value as 'voting' | 'completed' | 'new_competition')}
                   className="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="voting">🗳️ Voting Open (Active → Voting)</option>
                   <option value="completed">🏆 Competition Completed (Voting → Completed)</option>
+                  <option value="new_competition">🎉 New Competition Created</option>
                 </select>
               </div>
 
@@ -315,6 +372,7 @@ export default function CompetitionRemindersPage() {
                       </label>
                       <p className="text-xs text-gray-600">
                         Send notification to all verified and active users in the application
+                        {votingNotificationType === 'new_competition' && ' who have opted in for new competition notifications'}
                       </p>
                     </div>
                   </div>
@@ -394,7 +452,7 @@ export default function CompetitionRemindersPage() {
               <h3 className={`text-lg font-semibold mb-3 ${
                 votingResult.success ? 'text-green-800' : 'text-red-800'
               }`}>
-                {votingResult.success ? '✅ Voting Notification Success' : '❌ Voting Notification Error'}
+                {votingResult.success ? '✅ Competition Notification Success' : '❌ Competition Notification Error'}
               </h3>
               
               <p className={`mb-4 ${
@@ -448,6 +506,216 @@ export default function CompetitionRemindersPage() {
                       <h4 className="font-medium text-red-900 mb-2">Errors:</h4>
                       <ul className="text-sm text-red-700 space-y-1">
                         {votingResult.data.errors.map((error: string, index: number) => (
+                          <li key={index} className="break-words">• {error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* New Competition Notifications Section */}
+          <div className="border border-blue-200 bg-blue-50 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-blue-800 mb-3">
+              🎉 New Competition Notifications
+            </h3>
+            <p className="text-blue-700 mb-4">
+              Send new competition announcement notifications to users when a competition is created.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="newCompetitionSelect" className="block text-sm font-medium text-blue-800 mb-2">
+                  Select Competition *
+                </label>
+                <select
+                  id="newCompetitionSelect"
+                  value={selectedNewCompetition}
+                  onChange={(e) => setSelectedNewCompetition(e.target.value)}
+                  disabled={loadingCompetitions}
+                  className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select a competition...</option>
+                  {competitions.length > 0 ? (
+                    competitions.map((comp) => (
+                      <option key={comp._id} value={comp._id}>
+                        {comp.title} ({comp.status.toUpperCase()}) - Starts: {new Date(comp.endDate).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </option>
+                    ))
+                  ) : (
+                    !loadingCompetitions && (
+                      <option disabled>No competitions found</option>
+                    )
+                  )}
+                </select>
+                {loadingCompetitions && (
+                  <p className="text-blue-600 text-sm mt-1">Loading competitions...</p>
+                )}
+              </div>
+
+              {/* Recipient Selection */}
+              <div className="border border-blue-300 rounded-lg p-4 bg-white">
+                <h4 className="text-sm font-medium text-blue-800 mb-3">📧 Select Recipients</h4>
+                
+                <div className="space-y-3">
+                  {/* Option 1: Send to All Users */}
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="radio"
+                      id="newCompAllUsers"
+                      name="newCompRecipientType"
+                      value="all"
+                      checked={!newCompTestEmail}
+                      onChange={() => setNewCompTestEmail('')}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="newCompAllUsers" className="block text-sm font-medium text-gray-900">
+                        📢 Send to All Registered Users
+                      </label>
+                      <p className="text-xs text-gray-600">
+                        Send notification to all verified and active users who have opted in for new competition notifications
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Send to Specific User */}
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="radio"
+                      id="newCompSpecificUser"
+                      name="newCompRecipientType"
+                      value="specific"
+                      checked={!!newCompTestEmail}
+                      onChange={() => {
+                        if (!newCompTestEmail) {
+                          setNewCompTestEmail('user@example.com');
+                        }
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="newCompSpecificUser" className="block text-sm font-medium text-gray-900">
+                        👤 Send to Specific User
+                      </label>
+                      <p className="text-xs text-gray-600 mb-2">
+                        Send notification to a specific user by email address
+                      </p>
+                      
+                      {!!newCompTestEmail && (
+                        <div>
+                          <input
+                            type="email"
+                            value={newCompTestEmail}
+                            onChange={(e) => setNewCompTestEmail(e.target.value)}
+                            placeholder="Enter user email address"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          />
+                          {newCompTestEmail && !isValidEmail(newCompTestEmail) && (
+                            <p className="text-red-600 text-xs mt-1">Please enter a valid email address</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => sendNewCompetitionNotifications(true)}
+                  disabled={isNewCompLoading || !selectedNewCompetition || (!!newCompTestEmail && !isValidEmail(newCompTestEmail))}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isNewCompLoading ? 'Sending...' : newCompTestEmail ? `Send to ${newCompTestEmail}` : 'Send to All Users'}
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setNewCompTestEmail('');
+                    setSelectedNewCompetition('');
+                    setNewCompResult(null);
+                  }}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                >
+                  Clear Form
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* New Competition Results Section */}
+          {newCompResult && (
+            <div className={`border rounded-lg p-6 mb-8 ${
+              newCompResult.success 
+                ? 'border-green-200 bg-green-50' 
+                : 'border-red-200 bg-red-50'
+            }`}>
+              <h3 className={`text-lg font-semibold mb-3 ${
+                newCompResult.success ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {newCompResult.success ? '✅ New Competition Notification Success' : '❌ New Competition Notification Error'}
+              </h3>
+              
+              <p className={`mb-4 ${
+                newCompResult.success ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {newCompResult.message}
+              </p>
+
+              {newCompResult.data && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Competitions</div>
+                      <div className="text-2xl font-bold text-blue-600">{newCompResult.data.totalCompetitions}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Emails Sent</div>
+                      <div className="text-2xl font-bold text-green-600">{newCompResult.data.totalEmailsSent}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Notifications</div>
+                      <div className="text-2xl font-bold text-blue-600">{newCompResult.data.totalNotificationsCreated}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <div className="font-medium text-gray-900">Errors</div>
+                      <div className="text-2xl font-bold text-red-600">{newCompResult.data.errors.length}</div>
+                    </div>
+                  </div>
+
+                  {newCompResult.data.competitionResults && newCompResult.data.competitionResults.length > 0 && (
+                    <div className="bg-white p-4 rounded border">
+                      <h4 className="font-medium text-gray-900 mb-2">Competition Details:</h4>
+                      <div className="space-y-2">
+                        {newCompResult.data.competitionResults.map((comp: any, index: number) => (
+                          <div key={index} className="text-sm border-l-4 border-blue-200 pl-3">
+                            <div className="font-medium">{comp.competitionTitle}</div>
+                            <div className="text-gray-600">
+                              Emails: {comp.emailsSent}, Notifications: {comp.notificationsCreated}
+                              {comp.errors && comp.errors.length > 0 && (
+                                <span className="text-red-600"> | Errors: {comp.errors.length}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {newCompResult.data.errors && newCompResult.data.errors.length > 0 && (
+                    <div className="bg-white p-4 rounded border border-red-200">
+                      <h4 className="font-medium text-red-900 mb-2">Errors:</h4>
+                      <ul className="text-sm text-red-700 space-y-1">
+                        {newCompResult.data.errors.map((error: string, index: number) => (
                           <li key={index} className="break-words">• {error}</li>
                         ))}
                       </ul>

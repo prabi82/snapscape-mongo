@@ -692,3 +692,223 @@ export const sendCompetitionStatusChangeEmail = async (
     html,
   });
 };
+
+/**
+ * Send new competition notification email
+ * @param email - User's email address
+ * @param name - User's name
+ * @param competitionTitle - Competition title
+ * @param competitionId - Competition ID
+ * @param competitionDescription - Competition description
+ * @param theme - Competition theme
+ * @param startDate - Competition start date
+ * @param endDate - Competition end date
+ * @returns Promise<boolean> - Success status
+ */
+export const sendNewCompetitionEmail = async (
+  email: string,
+  name: string,
+  competitionTitle: string,
+  competitionId: string,
+  competitionDescription: string,
+  theme: string,
+  startDate: string,
+  endDate: string
+) => {
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+  console.log(`Using base URL for new competition email: ${baseUrl}`);
+  
+  const competitionUrl = `${baseUrl}/dashboard/competitions/${competitionId}`;
+  const dashboardUrl = `${baseUrl}/dashboard`;
+  
+  // Format dates for display
+  const formattedStartDate = new Date(startDate).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Asia/Muscat'
+  });
+  
+  const formattedEndDate = new Date(endDate).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Asia/Muscat'
+  });
+  
+  const subject = `🎉 New Competition: "${competitionTitle}" is now live!`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>New Competition - SnapScape</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f8fa;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td align="center" style="padding: 20px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+              
+              <!-- Header -->
+              <tr>
+                <td align="center" style="padding: 30px 20px; background: linear-gradient(135deg, #1a4d5c 0%, #2699a6 100%); border-radius: 12px 12px 0 0;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">
+                    🎉 New Competition Alert!
+                  </h1>
+                  <p style="color: #e0c36a; margin: 10px 0 0 0; font-size: 16px;">
+                    A fresh photography challenge awaits you
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Main content -->
+              <tr>
+                <td style="padding: 30px 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">Hello ${name},</p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
+                    Exciting news! A brand new photography competition has just been launched on SnapScape. 
+                    Get ready to showcase your creativity and compete with fellow photographers!
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Competition Details Card -->
+              <tr>
+                <td style="padding: 0 20px 20px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f8fffe; border: 2px solid #e0c36a; border-radius: 12px;">
+                    <tr>
+                      <td style="padding: 25px;">
+                        <h2 style="color: #1a4d5c; margin: 0 0 15px 0; font-size: 24px; font-weight: bold;">
+                          "${competitionTitle}"
+                        </h2>
+                        
+                        <div style="margin-bottom: 15px;">
+                          <p style="color: #2699a6; font-weight: bold; margin: 0 0 5px 0; font-size: 14px;">THEME:</p>
+                          <p style="color: #333333; margin: 0; font-size: 16px;">${theme}</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                          <p style="color: #2699a6; font-weight: bold; margin: 0 0 5px 0; font-size: 14px;">DESCRIPTION:</p>
+                          <p style="color: #333333; margin: 0; font-size: 16px; line-height: 1.4;">${competitionDescription}</p>
+                        </div>
+                        
+                        <div style="display: flex; gap: 20px; margin-top: 20px;">
+                          <div style="flex: 1;">
+                            <p style="color: #2699a6; font-weight: bold; margin: 0 0 5px 0; font-size: 14px;">📅 STARTS:</p>
+                            <p style="color: #333333; margin: 0; font-size: 16px;">${formattedStartDate}</p>
+                          </div>
+                          <div style="flex: 1;">
+                            <p style="color: #2699a6; font-weight: bold; margin: 0 0 5px 0; font-size: 14px;">⏰ ENDS:</p>
+                            <p style="color: #333333; margin: 0; font-size: 16px;">${formattedEndDate}</p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Action buttons -->
+              <tr>
+                <td align="center" style="padding: 0 20px 30px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="padding-right: 10px;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                          <tr>
+                            <td style="background-color: #1a4d5c; border-radius: 8px; border: 2px solid #e0c36a;">
+                              <a href="${competitionUrl}" style="display: inline-block; padding: 15px 25px; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 16px;">
+                                🏆 View Competition
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                      <td style="padding-left: 10px;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                          <tr>
+                            <td style="background-color: #2699a6; border-radius: 8px;">
+                              <a href="${dashboardUrl}" style="display: inline-block; padding: 15px 25px; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 16px;">
+                                📸 Go to Dashboard
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Tips section -->
+              <tr>
+                <td style="padding: 0 20px 30px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #e6f0f3; border-radius: 8px;">
+                    <tr>
+                      <td style="padding: 20px;">
+                        <h3 style="color: #1a4d5c; margin: 0 0 15px 0; font-size: 18px;">
+                          💡 Ready to Participate?
+                        </h3>
+                        <ul style="color: #333333; margin: 0; padding-left: 20px; line-height: 1.6;">
+                          <li>Read the competition theme and guidelines carefully</li>
+                          <li>Capture or select your best photos that match the theme</li>
+                          <li>Submit your entries before the deadline</li>
+                          <li>Vote for other participants when voting opens</li>
+                          <li>Check back for results and rankings</li>
+                        </ul>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Closing message -->
+              <tr>
+                <td style="padding: 0 20px 30px 20px;">
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0 0 15px 0;">
+                    Don't miss this opportunity to showcase your photography skills and compete with talented photographers from around the world!
+                  </p>
+                  <p style="color: #333333; font-size: 16px; line-height: 1.5; margin: 0;">
+                    Best of luck,<br>
+                    The SnapScape Team
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 20px; border-top: 1px solid #dddddd;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td align="center">
+                        <p style="color: #666666; font-size: 14px; margin: 0 0 10px 0;">
+                          If you no longer wish to receive new competition notifications, you can update your preferences in your account settings.
+                        </p>
+                        <p style="color: #666666; font-size: 14px; margin: 0;">
+                          &copy; ${new Date().getFullYear()} SnapScape. All rights reserved.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+  
+  return await sendEmail({
+    to: email,
+    subject: subject,
+    html,
+  });
+};

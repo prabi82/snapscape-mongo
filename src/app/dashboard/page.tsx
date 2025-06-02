@@ -376,7 +376,21 @@ export default function DashboardPage() {
           console.log('[DEBUG] Is prabi cdat in Munroe Island fetched data?:', prabiCdatSubmission ? 'YES' : 'NO', prabiCdatSubmission);
         }
         const sorted = (data.data || []).sort((a: Submission, b: Submission) => {
-          if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating;
+          // Calculate total rating for each submission (averageRating × ratingCount)
+          const totalRatingA = a.averageRating * (a.ratingCount || 0);
+          const totalRatingB = b.averageRating * (b.ratingCount || 0);
+          
+          // Sort by total rating first (descending)
+          if (totalRatingB !== totalRatingA) {
+            return totalRatingB - totalRatingA;
+          }
+          
+          // If total ratings are equal, sort by average rating as tiebreaker (descending)
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          
+          // If both total rating and average rating are equal, sort by rating count (descending)
           return (b.ratingCount || 0) - (a.ratingCount || 0);
         });
         setCompletedResults(prev => ({ ...prev, [comp._id]: sorted }));
@@ -449,7 +463,8 @@ export default function DashboardPage() {
 
   const fetchCompletedCompetitions = async () => {
     try {
-      const res = await fetch('/api/competitions?participated=true&status=completed');
+      // Remove the participated=true filter so all users can see all completed competitions
+      const res = await fetch('/api/competitions?status=completed');
       if (!res.ok) return;
       const data = await res.json();
       setCompletedCompetitions(data.data || []);
@@ -906,18 +921,23 @@ export default function DashboardPage() {
                                   <div className="flex flex-wrap gap-4">
                                     {userSubmissions.map((sub) => {
                                       let actualDenseRank = 0;
-                                      let lastAvgRating = -Infinity;
-                                      let lastRatingCount = -Infinity;
+                                      let lastTotalRating = -Infinity;
                                       for (let i = 0; i < allSubmissionsForRank.length; i++) {
                                         const currentResultSub = allSubmissionsForRank[i];
-                                        if (currentResultSub.averageRating !== lastAvgRating || (currentResultSub.ratingCount || 0) !== lastRatingCount) {
+                                        // Calculate total rating for current submission
+                                        const currentTotalRating = currentResultSub.averageRating * (currentResultSub.ratingCount || 0);
+                                        
+                                        // Determine actual dense rank based on total rating
+                                        if (currentTotalRating !== lastTotalRating) {
                                           actualDenseRank++;
                                         }
+                                        
                                         if (currentResultSub._id === sub._id) {
                                           break;
                                         }
-                                        lastAvgRating = currentResultSub.averageRating;
-                                        lastRatingCount = (currentResultSub.ratingCount || 0);
+                                        
+                                        // Update tracking variable for the next iteration
+                                        lastTotalRating = currentTotalRating;
                                       }
 
                                       let badgeIcon: React.ReactNode = null;

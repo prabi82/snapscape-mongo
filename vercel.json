@@ -22,12 +22,12 @@
   },
   "crons": [
     {
-      "path": "/api/cron/competition-reminders?type=day_before",
+      "path": "/api/cron/competition-reminders?type=last_day",
       "schedule": "0 14 * * *"
     },
     {
-      "path": "/api/cron/competition-reminders?type=last_day",
-      "schedule": "0 14 * * *"
+      "path": "/api/cron/update-competition-statuses",
+      "schedule": "0 15 * * *"
     }
   ],
   "routes": [

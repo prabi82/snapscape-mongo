@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/dbConnect';
 import Competition from '@/models/Competition';
 import Photo from '@/models/Photo';
 import PhotoSubmission from '@/models/PhotoSubmission';
+import { sendNewCompetitionNotifications } from '@/lib/new-competition-notification-service';
+
+// Define a proper session type to fix TypeScript errors
+interface ExtendedSession {
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    image?: string;
+    role?: string;
+  };
+}
 
 // GET all competitions
 export async function GET(req: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions as any) as ExtendedSession | null;
     
     if (!session || !session.user) {
       return NextResponse.json(
@@ -43,11 +55,11 @@ export async function GET(req: NextRequest) {
     const participated = searchParams.get('participated');
     let participatedFilter = {};
     
-    if (participated === 'true') {
+    if (participated === 'true' && session.user?.id) {
       // Find competitions where the user has submitted photos
       const userSubmissions = await PhotoSubmission.distinct('competition', { user: session.user.id });
       participatedFilter = { _id: { $in: userSubmissions } };
-    } else if (participated === 'false') {
+    } else if (participated === 'false' && session.user?.id) {
       // Find competitions where the user has not submitted photos
       const userSubmissions = await PhotoSubmission.distinct('competition', { user: session.user.id });
       participatedFilter = { _id: { $nin: userSubmissions } };
@@ -77,16 +89,21 @@ export async function GET(req: NextRequest) {
         // Total count is the sum of both models
         const totalSubmissionCount = photoCount + submissionCount;
         
-        // Check if the user has submitted to this competition
-        const userPhotoSubmission = await Photo.findOne({ 
-          competition: competition._id, 
-          user: session.user.id 
-        });
+        // Check if the user has submitted to this competition (only if user ID exists)
+        let userPhotoSubmission = null;
+        let userSubmission = null;
         
-        const userSubmission = await PhotoSubmission.findOne({ 
-          competition: competition._id, 
-          user: session.user.id 
-        });
+        if (session.user?.id) {
+          userPhotoSubmission = await Photo.findOne({ 
+            competition: competition._id, 
+            user: session.user.id 
+          });
+          
+          userSubmission = await PhotoSubmission.findOne({ 
+            competition: competition._id, 
+            user: session.user.id 
+          });
+        }
         
         return {
           ...competition,
@@ -131,7 +148,7 @@ export async function POST(req: NextRequest) {
   try {
     await dbConnect();
     // Use authOptions to get the proper session with user ID
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions as any) as ExtendedSession | null;
     
     console.log('Session in POST competitions:', session);
 
@@ -183,6 +200,24 @@ export async function POST(req: NextRequest) {
     // Create competition
     const competition = await Competition.create(body);
     console.log('Competition created:', competition);
+    
+    // Send new competition notifications to all users (async, don't wait for completion)
+    try {
+      console.log('Sending new competition notifications...');
+      const notificationResult = await sendNewCompetitionNotifications(
+        competition._id.toString(),
+        competition.title,
+        competition.description,
+        competition.theme,
+        competition.startDate.toISOString(),
+        competition.endDate.toISOString()
+      );
+      
+      console.log('New competition notification result:', notificationResult);
+    } catch (notificationError: any) {
+      // Log the error but don't fail the competition creation
+      console.error('Error sending new competition notifications:', notificationError);
+    }
     
     return NextResponse.json(
       { success: true, data: competition },

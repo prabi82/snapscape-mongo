@@ -224,6 +224,11 @@ export async function PUT(
     if (updateData.hideOtherSubmissions !== undefined) {
       updateData.hideOtherSubmissions = String(updateData.hideOtherSubmissions).toLowerCase() === 'true';
     }
+    if (updateData.manualStatusOverride !== undefined) {
+      // Handle manualStatusOverride boolean field - formidable may parse it as an array
+      const overrideValue = Array.isArray(updateData.manualStatusOverride) ? updateData.manualStatusOverride[0] : updateData.manualStatusOverride;
+      updateData.manualStatusOverride = String(overrideValue).toLowerCase() === 'true';
+    }
     if (updateData.submissionLimit !== undefined) {
       // If submissionLimit is an array (it shouldn't be, but defensive)
       const limitValue = Array.isArray(updateData.submissionLimit) ? updateData.submissionLimit[0] : updateData.submissionLimit;
