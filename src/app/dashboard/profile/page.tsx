@@ -1600,41 +1600,58 @@ export default function ProfilePage() {
                           return null;
                         }
 
-                        // Sort by averageRating desc, then ratingCount desc
+                        // Sort by total rating (averageRating × ratingCount) first, then average rating, then rating count as tiebreakers
                         const sorted = [...compImages].sort((a, b) => {
-                          if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating;
+                          // Calculate total rating for each submission (averageRating × ratingCount)
+                          const totalRatingA = a.averageRating * (a.ratingCount || 0);
+                          const totalRatingB = b.averageRating * (b.ratingCount || 0);
+                          
+                          // Sort by total rating first (descending)
+                          if (totalRatingB !== totalRatingA) {
+                            return totalRatingB - totalRatingA;
+                          }
+                          
+                          // If total ratings are equal, sort by average rating as tiebreaker (descending)
+                          if (b.averageRating !== a.averageRating) {
+                            return b.averageRating - a.averageRating;
+                          }
+                          
+                          // If both total rating and average rating are equal, sort by rating count (descending)
                           return (b.ratingCount || 0) - (a.ratingCount || 0);
                         });
                         
-                        // Properly implement dense ranking
+                        // Properly implement dense ranking using total rating comparison
                         let currentRank = 0;
-                        let prevRating = null;
-                        let prevRatingCount = null;
+                        let prevTotalRating: number | null = null;
+                        let prevAverageRating: number | null = null;
+                        let prevRatingCount: number | null = null;
                         let actualRank = 0;
                         
-                        // First pass: create ranking map
+                        // First pass: create ranking map based on total rating
                         const rankMap = new Map();
                         
                         for (let i = 0; i < sorted.length; i++) {
                           const image = sorted[i];
-                          const rating = image.averageRating;
+                          const totalRating = image.averageRating * (image.ratingCount || 0);
+                          const averageRating = image.averageRating;
                           const ratingCount = image.ratingCount || 0;
                           
-                          // If first item or different rating from previous item
-                          if (i === 0 || rating !== prevRating || ratingCount !== prevRatingCount) {
+                          // If first item or different total rating from previous item
+                          if (i === 0 || totalRating !== prevTotalRating || averageRating !== prevAverageRating || ratingCount !== prevRatingCount) {
                             currentRank = rankMap.size + 1;
                           }
                           
-                          // Define the rating key as a combination of rating and count
-                          const ratingKey = `${rating}-${ratingCount}`;
+                          // Define the rating key as a combination of total rating, average rating, and count
+                          const ratingKey = `${totalRating}-${averageRating}-${ratingCount}`;
                           
-                          // If we haven't assigned a rank to this rating yet
+                          // If we haven't assigned a rank to this rating combination yet
                           if (!rankMap.has(ratingKey)) {
                             rankMap.set(ratingKey, currentRank);
                           }
                           
                           // Store current values for next comparison
-                          prevRating = rating;
+                          prevTotalRating = totalRating;
+                          prevAverageRating = averageRating;
                           prevRatingCount = ratingCount;
                           
                           // If this is our target image, store its rank

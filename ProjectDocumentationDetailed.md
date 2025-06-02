@@ -730,3 +730,67 @@ Maintained proper tiebreaker hierarchy: total rating → average rating → rati
 
 ### 17.7. Impact
 This ensures fair competition results where submissions with higher total community engagement (total rating) are properly ranked higher, regardless of whether they achieved this through many moderate ratings or fewer high ratings.
+
+## 18. Profile Page Ranking Consistency Fix (December 2024)
+
+### 18.1. Issue Identified
+The profile page was showing different rankings for the same photo compared to what appeared on the competition results page. This created inconsistent user experience where users would see one rank in their profile and a different rank on the actual results page.
+
+### 18.2. Root Cause
+The profile page image modal was using a different ranking calculation method than the results page:
+
+**Profile Page (Incorrect):**
+- Sorted by `averageRating` first, then `ratingCount` as tiebreaker
+- This meant submissions with higher average ratings but lower total engagement would be ranked higher
+
+**Results Page (Correct):**
+- Sorted by **total rating** (`averageRating × ratingCount`) first, then `averageRating`, then `ratingCount` as tiebreakers
+- This properly reflects total community engagement and matches the competition's actual ranking system
+
+### 18.3. Solution Implemented
+Updated the profile page ranking calculation in `src/app/dashboard/profile/page.tsx` to exactly match the results page logic:
+
+```typescript
+// Old logic (incorrect)
+const sorted = [...compImages].sort((a, b) => {
+  if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating;
+  return (b.ratingCount || 0) - (a.ratingCount || 0);
+});
+
+// New logic (correct)
+const sorted = [...compImages].sort((a, b) => {
+  const totalRatingA = a.averageRating * (a.ratingCount || 0);
+  const totalRatingB = b.averageRating * (b.ratingCount || 0);
+  
+  if (totalRatingB !== totalRatingA) {
+    return totalRatingB - totalRatingA;
+  }
+  
+  if (b.averageRating !== a.averageRating) {
+    return b.averageRating - a.averageRating;
+  }
+  
+  return (b.ratingCount || 0) - (a.ratingCount || 0);
+});
+```
+
+### 18.4. Technical Changes
+- **Updated Sorting Logic:** Changed from average rating priority to total rating priority
+- **Enhanced Dense Ranking:** Modified ranking calculation to use total rating comparisons
+- **Consistent Tiebreakers:** Applied the same tiebreaker hierarchy as results page
+- **Type Safety:** Added proper TypeScript typing for ranking variables
+
+### 18.5. Files Modified
+- `src/app/dashboard/profile/page.tsx` - Updated image modal ranking calculation
+- `ProjectDocumentationDetailed.md` - Added documentation
+
+### 18.6. Impact
+- **Consistent Rankings:** Profile page now shows the same ranks as results page
+- **Accurate User Information:** Users see correct ranking information across all pages
+- **Improved Trust:** Eliminates confusion about ranking discrepancies
+- **System Integrity:** Ensures all ranking displays use the same authoritative calculation
+
+### 18.7. Verification
+Users can now verify that the rank shown in their profile page image modals exactly matches the rank displayed on the competition results page, providing a consistent and trustworthy user experience.
+
+## 19. Latest Features Implementation Summary (2024) - Updated
