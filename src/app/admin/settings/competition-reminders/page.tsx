@@ -222,9 +222,23 @@ export default function CompetitionRemindersPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON responses (like error pages)
+        const textResponse = await response.text();
+        data = {
+          success: false,
+          message: `Server error: ${response.status} ${response.statusText}. Response: ${textResponse.substring(0, 200)}...`
+        };
+      }
+
       setVotingResult(data);
     } catch (error: any) {
+      console.error('Error sending voting notifications:', error);
       setVotingResult({
         success: false,
         message: `Error: ${error.message}`,
@@ -255,9 +269,23 @@ export default function CompetitionRemindersPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON responses (like error pages)
+        const textResponse = await response.text();
+        data = {
+          success: false,
+          message: `Server error: ${response.status} ${response.statusText}. Response: ${textResponse.substring(0, 200)}...`
+        };
+      }
+
       setNewCompResult(data);
     } catch (error: any) {
+      console.error('Error sending new competition notifications:', error);
       setNewCompResult({
         success: false,
         message: `Error: ${error.message}`,
