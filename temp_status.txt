@@ -1,0 +1,27 @@
+M  ProjectDocumentationDetailed.md
+ M deploy.bat
+M  src/app/admin/analytics/page.tsx
+M  src/app/admin/competitions/[id]/edit/page.tsx
+M  src/app/admin/competitions/create/page.tsx
+M  src/app/admin/dashboard/page.tsx
+A  src/app/admin/debug/notification-fix/page.tsx
+M  src/app/admin/settings/page.tsx
+M  src/app/admin/users/[id]/page.tsx
+M  src/app/admin/users/page.tsx
+A  src/app/api/analytics/route.ts
+M  src/app/api/competitions/[id]/route.ts
+M  src/app/api/competitions/with-cover/route.ts
+A  src/app/api/debug/fix-notification-preferences/route.ts
+A  src/app/api/debug/user-notification-status/route.ts
+M  src/app/api/notifications/[id]/route.ts
+A  src/app/api/ratings/[id]/route.ts
+M  src/app/api/settings/route.ts
+M  src/app/dashboard/page.tsx
+A  src/app/judge/layout.tsx
+A  src/app/judge/page.tsx
+M  src/lib/auth.ts
+M  src/lib/notification-service.ts
+M  src/middleware.ts
+M  src/models/Competition.ts
+M  src/models/User.ts
+?? temp_status.txt

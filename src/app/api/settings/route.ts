@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
 
     // Return only the settings that should be public
     const publicSettings = {
-      enableImageCompressionDisplay: settings.enableImageCompressionDisplay
+      enableImageCompressionDisplay: settings.enableImageCompressionDisplay,
+      allowNotificationDeletion: settings.allowNotificationDeletion
     };
 
     return NextResponse.json({

@@ -12,6 +12,7 @@ import fs from 'fs';
 import { PassThrough } from 'stream';
 import mongoose from 'mongoose';
 import { Session } from 'next-auth';
+import { notifyJudgesOfAssignment } from '@/lib/notification-service';
 
 // Add a custom interface for the session user with role
 interface ExtendedUser {
@@ -249,8 +250,23 @@ export async function PUT(
     //  updateData.votingCriteria = Array.isArray(fields.votingCriteria) ? fields.votingCriteria[0] : fields.votingCriteria;
     // }
 
+    // Handle judges array
+    const judges: string[] = [];
+    let judgeIndex = 0;
+    while (fields[`judges[${judgeIndex}]`]) {
+      judges.push(Array.isArray(fields[`judges[${judgeIndex}]`]) ? fields[`judges[${judgeIndex}]`][0] : fields[`judges[${judgeIndex}]`]);
+      judgeIndex++;
+    }
+    if (judges.length > 0 || judgeIndex === 0) {
+      // If judges were provided or no judges found (empty array), update the field
+      updateData.judges = judges;
+    }
+
     // Log updateData for debugging
     console.log('Updating competition with data:', updateData);
+
+    // Store the previous judges list for comparison
+    const previousJudges = competition.judges || [];
 
     // Handle cover image upload
     if (files.coverImage) {
@@ -300,6 +316,30 @@ export async function PUT(
       );
     }
     const updatedCompetition = await Competition.findById(id);
+
+    // Notify newly assigned judges
+    if (updateData.judges !== undefined) {
+      try {
+        const newJudges = updateData.judges || [];
+        const previousJudgeIds = previousJudges.map(judge => judge.toString());
+        const newJudgeIds = newJudges.filter(judgeId => !previousJudgeIds.includes(judgeId));
+        
+        if (newJudgeIds.length > 0) {
+          console.log(`API: Notifying ${newJudgeIds.length} newly assigned judges`);
+          await notifyJudgesOfAssignment(
+            newJudgeIds,
+            updatedCompetition._id.toString(),
+            updatedCompetition.title,
+            updatedCompetition.status
+          );
+          console.log('API: Judge assignment notifications sent successfully');
+        }
+      } catch (notificationError: any) {
+        console.error('API: Error sending judge assignment notifications:', notificationError);
+        // Don't fail the competition update if notifications fail
+      }
+    }
+
     return NextResponse.json({ success: true, data: updatedCompetition });
   } catch (error: any) {
     console.error('Error updating competition:', error);

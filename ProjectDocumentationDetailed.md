@@ -1,18 +1,184 @@
-# SnapScape Project Documentation (Detailed for AI Training)
+# SnapScape - Comprehensive Project Documentation
 
-## 1. Project Overview
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Architecture](#architecture)
+3. [Database Schema](#database-schema)
+4. [API Endpoints](#api-endpoints)
+5. [User Roles and Authentication](#user-roles-and-authentication)
+6. [Feature Implementation Details](#feature-implementation-details)
+7. [Deployment](#deployment)
+8. [Security](#security)
+9. [Performance Optimization](#performance-optimization)
+10. [Development Guidelines](#development-guidelines)
+11. [Troubleshooting](#troubleshooting)
 
-**SnapScape** is a dynamic, full-stack web application built with Next.js (App Router) and TypeScript, designed as an engaging platform for online photo competitions. It enables users to discover competitions, submit their photographic work, participate in community voting, and achieve recognition through a system of badges and rankings. The platform features distinct user roles (general user and administrator), with administrators managing the lifecycle of competitions. The primary goal is to create a seamless, intuitive, and fair environment for photographers to showcase their talent and engage with a community.
+## Project Overview
 
-**Core Technologies:**
-*   **Frontend:** Next.js (React), TypeScript, Tailwind CSS
-*   **Backend:** Next.js API Routes, Node.js
-*   **Database:** MongoDB with Mongoose ODM
-*   **Authentication:** NextAuth.js (Google OAuth and Credentials providers)
-*   **File Handling:** `formidable` for multipart/form-data, `react-image-crop` for client-side image cropping.
-*   **Date/Time:** `date-fns` and custom helpers.
-*   **Notifications:** Email notifications via custom email service, in-app notifications
-*   **Automation:** Cron job system for automatic competition status updates and reminders
+SnapScape is a comprehensive photography competition platform built with Next.js, TypeScript, and MongoDB. It provides a complete ecosystem for managing photography competitions, user submissions, judging, and community engagement.
+
+### Key Features
+- Photography competition management
+- User submission and portfolio management
+- Multi-role authentication (Admin, Judge, User)
+- Real-time voting and rating system
+- Achievement and badge system
+- Comprehensive notification system
+- Admin dashboard with analytics
+- Responsive design for all devices
+
+### Technology Stack
+- **Frontend**: Next.js 15, React, TypeScript, TailwindCSS
+- **Backend**: Next.js API Routes, Node.js
+- **Database**: MongoDB with Mongoose ODM
+- **Authentication**: NextAuth.js with multiple providers
+- **Image Storage**: Cloudinary
+- **Deployment**: Vercel
+
+## Architecture
+
+### Application Structure
+```
+src/
+├── app/                    # Next.js 13+ app directory
+│   ├── admin/             # Admin dashboard pages
+│   ├── api/               # API routes
+│   ├── dashboard/         # User dashboard
+│   ├── judge/             # Judge-specific pages
+│   └── competitions/      # Competition pages
+├── components/            # Reusable components
+├── lib/                  # Utilities and configurations
+├── models/               # MongoDB schemas
+└── utils/                # Helper functions
+```
+
+### Database Design
+The application uses MongoDB with the following main collections:
+- Users
+- Competitions
+- PhotoSubmissions
+- Ratings
+- Notifications
+- Results
+- Badges
+- UserBadges
+
+### Authentication Flow
+1. Multiple authentication providers (Google OAuth, credentials)
+2. Role-based access control (admin, judge, user)
+3. Session management with NextAuth.js
+4. Protected routes with middleware
+
+## Database Schema
+
+### User Model
+```typescript
+interface User {
+  _id: ObjectId;
+  name: string;
+  email: string;
+  password?: string;        // For credential auth
+  image?: string;
+  provider: 'google' | 'credentials';
+  role: 'admin' | 'judge' | 'user';
+  isVerified: boolean;
+  isActive: boolean;
+  bio?: string;
+  mobile?: string;
+  country?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Competition Model
+```typescript
+interface Competition {
+  _id: ObjectId;
+  title: string;
+  description: string;
+  theme: string;
+  rules: string;
+  prizes: string;
+  startDate: Date;
+  endDate: Date;
+  votingEndDate: Date;
+  status: 'upcoming' | 'active' | 'voting' | 'completed';
+  submissionLimit: number;
+  votingCriteria: string[];
+  coverImage?: string;
+  judges: ObjectId[];       // References to User
+  submissionFormat: string;
+  copyrightNotice: string;
+  hideOtherSubmissions: boolean;
+  manualStatusOverride: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### PhotoSubmission Model
+```typescript
+interface PhotoSubmission {
+  _id: ObjectId;
+  title: string;
+  description?: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  user: ObjectId;           // Reference to User
+  competition: ObjectId;    // Reference to Competition
+  status: 'pending' | 'approved' | 'rejected';
+  averageRating: number;
+  ratingCount: number;
+  totalRating: number;
+  rejectionReason?: string;
+  tags: string[];
+  exifData?: object;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Rating Model
+```typescript
+interface Rating {
+  _id: ObjectId;
+  user: ObjectId;           // Reference to User (rater)
+  photo: ObjectId;          // Reference to PhotoSubmission
+  competition: ObjectId;    // Reference to Competition
+  score: number;            // 1-5 rating
+  createdAt: Date;
+}
+```
+
+### Notification Model
+```typescript
+interface Notification {
+  _id: ObjectId;
+  user: ObjectId;           // Reference to User
+  type: 'competition' | 'submission' | 'badge' | 'general';
+  title: string;
+  message: string;
+  read: boolean;
+  relatedCompetition?: ObjectId;
+  relatedSubmission?: ObjectId;
+  relatedBadge?: ObjectId;
+  relatedPhoto?: ObjectId;
+  photoModel?: 'Photo' | 'PhotoSubmission';
+  directThumbnailUrl?: string;
+  createdAt: Date;
+}
+```
+
+### Result Model
+```typescript
+interface Result {
+  _id: ObjectId;
+  competition: ObjectId;    // Reference to Competition
+  photo: ObjectId;          // Reference to PhotoSubmission
+  createdAt: Date;
+}
+```
 
 ## 2. Core Functionalities (Detailed)
 
@@ -23,12 +189,44 @@
     *   Credentials: Standard email/password login.
 *   **Session Management:** Handled by NextAuth.js, providing session data client-side (`useSession`) and server-side (`getServerSession`).
 *   **Role-Based Access Control (RBAC):**
-    *   User model includes a `role` field (e.g., `user`, `admin`).
+    *   User model includes a `role` field with three possible values: `user`, `admin`, and `judge`.
     *   Admin-only sections (e.g., `/admin/*`) are protected by checking `session.user.role === 'admin'`.
-    *   API endpoints for sensitive operations (e.g., competition creation/update/deletion) also verify admin privileges.
+    *   Judge sections (e.g., `/judge/*`) are accessible to users with `session.user.role === 'judge'` or admin users.
+    *   API endpoints for sensitive operations (e.g., competition creation/update/deletion) verify admin privileges.
+    *   **Judge Role Features (December 2024):**
+        *   **Judge Dashboard (`/judge`):** Dedicated interface for judges to view competitions and evaluate submissions
+        *   **Competition Statistics:** Overview of total, active, and completed competitions with submission counts
+        *   **Judge Actions:** Quick access to view competitions, judge submissions in voting phase, and browse all submissions
+        *   **Access Control:** Judges can access regular user features plus specialized judging functionality
+        *   **Role Assignment:** Admins can assign judge role through user management interface (`/admin/users/[id]` and `/admin/users`)
+        *   **Routing Logic:** Automatic redirection to judge dashboard (`/judge`) when judges access root dashboard (`/dashboard`)
+        *   **Visual Distinction:** Judge role displayed with blue color scheme (blue-100 background, blue-800 text) in admin interfaces
+        *   **Middleware Protection:** Judge routes protected via middleware, only accessible to users with judge or admin role
+        *   **Token Management:** JWT token verification for judge role similar to admin role verification
+        *   **User Interface Updates:**
+            *   Added judge role filter option in admin user management page
+            *   Added "Set as Judge" button in individual user management page
+            *   Added "Make Judge" option in user dropdown menus
+            *   Updated role display colors across dashboard, user lists, and admin interfaces
+    *   **Role Assignment Interface:**
+        *   **Admin User Management (`/admin/users`):** Filter users by role including judge, view judge users with blue badges
+        *   **Individual User Management (`/admin/users/[id]`):** Set user role to judge using dedicated button
+        *   **Role Change API:** Existing user role update API (`/api/users/[id]`) supports judge role assignment
 
 ### 2.2. Competition Lifecycle Management (Admin Focus)
 *   **Creation (`/admin/competitions/create`):**
+    *   **Judge Assignment**: Admins can assign multiple judges from the available judge-type users to each competition
+        *   **Judge Selection Interface**: Grid-based selection with judge profiles (name, email, avatar)
+        *   **Multi-Select**: Support for assigning multiple judges to a single competition
+        *   **Optional Assignment**: Judge assignment is not mandatory for competition creation
+        *   **Visual Feedback**: Selected judges are highlighted with checkmarks and shown in a summary panel
+        *   **Real-time Updates**: Judge list fetched dynamically from users with 'judge' role
+        *   **Automatic Notifications**: When judges are assigned to a competition, they automatically receive notifications in their dashboard feed
+            *   **Notification Type**: "Judge Assignment" notifications appear in judge dashboard with competition-specific context
+            *   **Smart Messaging**: Notification message varies based on competition status (active, voting, upcoming)
+            *   **Direct Links**: Notifications include direct links to competition details or judging interface
+            *   **Real-time Delivery**: Notifications appear immediately in judge dashboard after assignment
+    *   **Form Fields**: Title, description, theme, rules, prizes, dates/times, submission limits, voting criteria, etc.
     *   Admins can define: Title, Theme, Description, Rules, Prizes, Start Date, Submission End Date, Voting End Date, Submission Limit per User, Voting Criteria (comma-separated string, e.g., "composition,creativity,technical"), Cover Image.
     *   **Cover Image Cropping:** Uses `react-image-crop`. Admins upload an image, a crop UI appears (defaulting to a 4/3 aspect ratio), and crop parameters (`cropX`, `cropY`, `cropWidth`, `cropHeight`) are sent to the backend.
     *   **Status:** Competitions are typically created with an "upcoming" status.
@@ -135,6 +333,15 @@
         *   Unsubscribe information and preference management
     *   **In-app Notifications:** Creates system notifications alongside email notifications
     *   **Comprehensive Reporting:** Detailed success/failure tracking with error logging
+*   **Debug Tools (`/admin/settings`):**
+    *   **Notification Preferences Debug Tool (`/admin/debug/notification-fix`):**
+        *   **Diagnose:** Analyzes user notification preferences in the database
+        *   **Problem Detection:** Identifies users missing notification preferences (common issue for users created before the feature was added)
+        *   **Safe Fix:** Updates users with missing preferences to default values without affecting users who explicitly opted out
+        *   **Real-time Analysis:** Shows counts of users with different preference states
+        *   **Verification:** Displays before/after statistics to confirm the fix worked
+        *   **Use Case:** Resolves issues where new competition notifications are sent to fewer users than expected
+        *   **Security:** Admin-only access with proper authentication checks
 
 ### 2.8. Automatic Competition Status Management
 *   **Competition Status Management (`/admin/settings/competition-status`):**
@@ -359,6 +566,57 @@
     *   **Communication:** Ensures administrators can reach users for important notifications
     *   **User Engagement:** Helps users understand the value of complete profiles for enhanced SnapScape experience
     *   **Data Quality:** Improves overall user data completeness for platform analytics and communication
+
+### 2.16. Analytics Dashboard (December 2024)
+*   **Feature:** Comprehensive analytics dashboard for administrators to monitor platform performance and user engagement
+*   **Access:** Available at `/admin/analytics` for admin users only
+*   **Key Metrics Displayed:**
+    *   **User Statistics:**
+        *   Total registered users
+        *   New users in selected time period
+        *   Active users (users who created or updated profiles)
+        *   Growth rate percentage compared to previous period
+    *   **Photo Statistics:**
+        *   Total photo submissions across all competitions
+        *   New photo submissions in selected time period
+        *   Average photos per user
+        *   Top photo categories based on competition themes
+    *   **Competition Statistics:**
+        *   Total competitions created
+        *   Active, upcoming, and completed competition counts
+        *   Average participation rate (photos per competition)
+    *   **Engagement Statistics:**
+        *   Total ratings/votes cast
+        *   Average rating score across all submissions
+*   **Time Range Filtering:**
+    *   Selectable time periods: Last 7 days, 30 days, 90 days, or 1 year
+    *   Dynamic data updates when time range is changed
+    *   Loading states during data refresh
+*   **Visual Charts:**
+    *   **Monthly Active Users:** Bar chart showing user activity over the last 12 months
+    *   **Monthly Photo Uploads:** Bar chart displaying photo submission trends
+    *   Interactive hover tooltips showing exact values
+    *   Responsive design adapting to different screen sizes
+*   **Category Analysis:**
+    *   Top 5 photo categories ranked by submission count
+    *   Visual progress bars showing relative popularity
+    *   Based on competition themes aggregated across all competitions
+*   **Competition Performance Metrics:**
+    *   Detailed breakdown of competition statuses
+    *   Average participation rates to identify engagement trends
+    *   Total competition count for platform growth tracking
+*   **Technical Implementation:**
+    *   **API Endpoint:** `/api/analytics` with time range query parameters
+    *   **Database Aggregation:** MongoDB aggregation pipelines for efficient data processing
+    *   **Real-time Data:** Fetches live data from User, PhotoSubmission, Competition, and Rating collections
+    *   **Admin Authentication:** Secure access with session validation and role checking
+    *   **Error Handling:** Comprehensive error states with retry functionality
+*   **Benefits:**
+    *   **Platform Insights:** Administrators can track user growth and engagement trends
+    *   **Content Analysis:** Understanding popular photo categories and competition themes
+    *   **Performance Monitoring:** Identifying successful competitions and participation patterns
+    *   **Data-Driven Decisions:** Supporting strategic decisions with concrete metrics
+    *   **Growth Tracking:** Monitoring platform expansion and user acquisition over time
 
 ## 3. Data Handling and Privacy
 
@@ -638,6 +896,84 @@
 *   **In-app Integration:** Creates both email and in-app notifications simultaneously
 *   **Error Handling:** Comprehensive error tracking and reporting for failed notifications
 
+### 15.8. Judge Dashboard (`/judge`)
+*   **Authentication & Role Check**: Automatically redirects non-judge users to regular dashboard
+*   **Unified Design**: Matches the main user dashboard design with SnapScape branding and color scheme
+*   **Judge-Specific Features**:
+    *   **Circular Statistics**: Similar layout to user dashboard with judge-specific metrics
+        *   **Competitions**: Total competitions available for judging
+        *   **Active to Judge**: Competitions currently in voting phase requiring judge input
+        *   **Completed**: Number of completed judging sessions
+        *   **Photos Reviewed**: Total photos reviewed across all competitions
+        *   **Avg Rating**: Average rating given across all judgments
+    *   **Feed & Competitions Tabs**: Toggle between activity feed and competition list
+    *   **Real-time Activity Feed**: 
+        *   **Judge Assignment Notifications**: Real-time notifications when assigned to new competitions
+            *   **Visual Indicators**: Purple checkmark icon for judge assignments
+            *   **Competition Context**: Shows competition title and current status
+            *   **Action Links**: Direct links to view competition or start judging
+            *   **Status-aware Messaging**: Different messages for active, voting, or upcoming competitions
+        *   **Notification Integration**: Fetches real activities from `/api/users/activities` endpoint
+        *   **Activity Types**: Judge assignments, photo approvals, competition updates, and other system notifications
+        *   **Time-based Sorting**: Most recent activities appear first with relative timestamps
+        *   **Notification Deletion**: Delete buttons for notifications when enabled by admin settings
+            *   **Admin Control**: Only shows delete buttons when `allowNotificationDeletion` setting is enabled
+            *   **Database Integration**: Actually deletes notifications from database via `/api/notifications/[id]` DELETE endpoint
+            *   **Smart Filtering**: Only deletable items (notifications, submissions, badges, wins, results) can be deleted
+            *   **UI Feedback**: Immediate removal from feed upon successful deletion
+*   **React Key Error Fix (January 2025)**:
+    *   **Issue**: React warning about invalid keys in feedItems array causing console errors
+    *   **Root Cause**: Potential duplicate IDs and missing null checks in feedItems data
+    *   **Solution Implemented**:
+        *   **Unique ID Generation**: Added index to activity IDs to ensure uniqueness (`activity-${activity._id}-${index}`)
+        *   **Duplicate Removal**: Added filter to remove any potential duplicate feedItems based on ID
+        *   **Null Safety**: Added comprehensive null checks and filters to prevent rendering of invalid data
+        *   **Error Handling**: Added fallback empty arrays on API errors to prevent rendering issues
+        *   **Data Validation**: Added safety filters before mapping to ensure all required properties exist
+        *   **Improved Sorting**: Enhanced data combination and sorting logic for feed items
+    *   **Technical Details**:
+        *   Fixed feedItems being set twice (competition items + activities)
+        *   Added proper TypeScript type assertions for feedItem types
+        *   Added default values for missing properties (title, theme, status, etc.)
+        *   Enhanced error boundaries for data fetching failures
+    *   **Files Modified**: `src/app/judge/page.tsx`
+    *   **Impact**: Eliminated React console errors and improved judge dashboard stability
+
+### 15.9. Dashboard Notification Deletion Feature (January 2025)
+*   **Feature**: Comprehensive notification deletion functionality in dashboard feed
+*   **Admin Control**: 
+    *   **Settings Management**: Admin can enable/disable notification deletion via `/admin/settings`
+    *   **Setting Field**: `allowNotificationDeletion` boolean controls feature availability
+    *   **API Integration**: `/api/settings` endpoint returns setting to frontend
+*   **User Experience**:
+    *   **Visual Integration**: Delete buttons appear as red circular X icons in top-right corner of feed items
+    *   **Conditional Display**: Only shows when admin has enabled the setting
+    *   **Smart Targeting**: Delete buttons only appear on deletable items (notifications, submissions, badges, wins, results)
+    *   **Immediate Feedback**: Items disappear from feed immediately upon successful deletion
+*   **Technical Implementation**:
+    *   **Database Deletion**: Uses existing `/api/notifications/[id]` DELETE endpoint
+    *   **State Management**: Updates both activities and feedItems state after deletion
+    *   **Error Handling**: Falls back to local hiding if database deletion fails
+    *   **API Integration**: Fetches admin settings on component mount
+*   **Supported Items**:
+    *   **Notifications**: Judge assignments, photo approvals, system messages
+    *   **Activities**: Photo submissions, badge awards, competition wins, results
+    *   **Non-deletable**: Competition cards (active, voting, completed) - these only hide locally
+*   **Judge Dashboard Integration**:
+    *   **Feature Parity**: Judge dashboard includes same deletion functionality
+    *   **Role-appropriate**: Judges can delete their own notifications when feature is enabled
+    *   **Consistent UI**: Same delete button design and behavior as user dashboard
+*   **Files Modified**:
+    *   `src/app/dashboard/page.tsx` - Main dashboard deletion functionality
+    *   `src/app/judge/page.tsx` - Judge dashboard deletion functionality
+    *   `src/app/api/settings/route.ts` - Updated to include allowNotificationDeletion setting
+    *   `ProjectDocumentationDetailed.md` - Documentation updates
+*   **Benefits**:
+    *   **User Control**: Users can manage their notification feed
+    *   **Clean Interface**: Reduces feed clutter by removing unwanted notifications
+    *   **Admin Oversight**: Administrators maintain control over feature availability
+    *   **Consistent Experience**: Same functionality across user and judge dashboards
+
 ## 16. Detailed Summary of Development Journey & Key Decisions
 
 This section outlines the evolution of the project based on our problem-solving interactions, which is crucial for understanding the context.
@@ -812,3 +1148,81 @@ The initial fix attempted to use a complex Map-based ranking system with multipl
 Users can now verify that the rank shown in their profile page image modals exactly matches the rank displayed on the competition results page, providing a consistent and trustworthy user experience.
 
 ## 19. Latest Features Implementation Summary (2024) - Updated
+
+### 19.1. Judge Dashboard (`/judge`)
+*   **Authentication & Role Check**: Automatically redirects non-judge users to regular dashboard
+*   **Unified Design**: Matches the main user dashboard design with SnapScape branding and color scheme
+*   **Judge-Specific Features**:
+    *   **Circular Statistics**: Similar layout to user dashboard with judge-specific metrics
+        *   **Competitions**: Total competitions available for judging
+        *   **Active to Judge**: Competitions currently in voting phase requiring judge input
+        *   **Completed**: Number of completed judging sessions
+        *   **Photos Reviewed**: Total photos reviewed across all competitions
+        *   **Avg Rating**: Average rating given across all judgments
+    *   **Feed & Competitions Tabs**: Toggle between activity feed and competition list
+    *   **Real-time Activity Feed**: 
+        *   **Judge Assignment Notifications**: Real-time notifications when assigned to new competitions
+            *   **Visual Indicators**: Purple checkmark icon for judge assignments
+            *   **Competition Context**: Shows competition title and current status
+            *   **Action Links**: Direct links to view competition or start judging
+            *   **Status-aware Messaging**: Different messages for active, voting, or upcoming competitions
+        *   **Notification Integration**: Fetches real activities from `/api/users/activities` endpoint
+        *   **Activity Types**: Judge assignments, photo approvals, competition updates, and other system notifications
+        *   **Time-based Sorting**: Most recent activities appear first with relative timestamps
+        *   **Notification Deletion**: Delete buttons for notifications when enabled by admin settings
+            *   **Admin Control**: Only shows delete buttons when `allowNotificationDeletion` setting is enabled
+            *   **Database Integration**: Actually deletes notifications from database via `/api/notifications/[id]` DELETE endpoint
+            *   **Smart Filtering**: Only deletable items (notifications, submissions, badges, wins, results) can be deleted
+            *   **UI Feedback**: Immediate removal from feed upon successful deletion
+*   **React Key Error Fix (January 2025)**:
+    *   **Issue**: React warning about invalid keys in feedItems array causing console errors
+    *   **Root Cause**: Potential duplicate IDs and missing null checks in feedItems data
+    *   **Solution Implemented**:
+        *   **Unique ID Generation**: Added index to activity IDs to ensure uniqueness (`activity-${activity._id}-${index}`)
+        *   **Duplicate Removal**: Added filter to remove any potential duplicate feedItems based on ID
+        *   **Null Safety**: Added comprehensive null checks and filters to prevent rendering of invalid data
+        *   **Error Handling**: Added fallback empty arrays on API errors to prevent rendering issues
+        *   **Data Validation**: Added safety filters before mapping to ensure all required properties exist
+        *   **Improved Sorting**: Enhanced data combination and sorting logic for feed items
+    *   **Technical Details**:
+        *   Fixed feedItems being set twice (competition items + activities)
+        *   Added proper TypeScript type assertions for feedItem types
+        *   Added default values for missing properties (title, theme, status, etc.)
+        *   Enhanced error boundaries for data fetching failures
+    *   **Files Modified**: `src/app/judge/page.tsx`
+    *   **Impact**: Eliminated React console errors and improved judge dashboard stability
+
+### 19.2. Dashboard Notification Deletion Feature (January 2025)
+*   **Feature**: Comprehensive notification deletion functionality in dashboard feed
+*   **Admin Control**: 
+    *   **Settings Management**: Admin can enable/disable notification deletion via `/admin/settings`
+    *   **Setting Field**: `allowNotificationDeletion` boolean controls feature availability
+    *   **API Integration**: `/api/settings` endpoint returns setting to frontend
+*   **User Experience**:
+    *   **Visual Integration**: Delete buttons appear as red circular X icons in top-right corner of feed items
+    *   **Conditional Display**: Only shows when admin has enabled the setting
+    *   **Smart Targeting**: Delete buttons only appear on deletable items (notifications, submissions, badges, wins, results)
+    *   **Immediate Feedback**: Items disappear from feed immediately upon successful deletion
+*   **Technical Implementation**:
+    *   **Database Deletion**: Uses existing `/api/notifications/[id]` DELETE endpoint
+    *   **State Management**: Updates both activities and feedItems state after deletion
+    *   **Error Handling**: Falls back to local hiding if database deletion fails
+    *   **API Integration**: Fetches admin settings on component mount
+*   **Supported Items**:
+    *   **Notifications**: Judge assignments, photo approvals, system messages
+    *   **Activities**: Photo submissions, badge awards, competition wins, results
+    *   **Non-deletable**: Competition cards (active, voting, completed) - these only hide locally
+*   **Judge Dashboard Integration**:
+    *   **Feature Parity**: Judge dashboard includes same deletion functionality
+    *   **Role-appropriate**: Judges can delete their own notifications when feature is enabled
+    *   **Consistent UI**: Same delete button design and behavior as user dashboard
+*   **Files Modified**:
+    *   `src/app/dashboard/page.tsx` - Main dashboard deletion functionality
+    *   `src/app/judge/page.tsx` - Judge dashboard deletion functionality
+    *   `src/app/api/settings/route.ts` - Updated to include allowNotificationDeletion setting
+    *   `ProjectDocumentationDetailed.md` - Documentation updates
+*   **Benefits**:
+    *   **User Control**: Users can manage their notification feed
+    *   **Clean Interface**: Reduces feed clutter by removing unwanted notifications
+    *   **Admin Oversight**: Administrators maintain control over feature availability
+    *   **Consistent Experience**: Same functionality across user and judge dashboards

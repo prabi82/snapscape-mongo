@@ -284,6 +284,7 @@ export default function UserManagement() {
               <option value="all">All Roles</option>
               <option value="user">User</option>
               <option value="admin">Admin</option>
+              <option value="judge">Judge</option>
             </select>
           </div>
 
@@ -399,6 +400,8 @@ export default function UserManagement() {
                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           user.role === 'admin'
                             ? 'bg-purple-100 text-purple-800'
+                            : user.role === 'judge'
+                            ? 'bg-blue-100 text-blue-800'
                             : 'bg-green-100 text-green-800'
                         }`}
                       >
@@ -538,13 +541,32 @@ export default function UserManagement() {
                                   </button>
                                 )}
                                 
+                                {user.role !== 'judge' && (
+                                  <button
+                                    onClick={() => {
+                                      handleRoleChange(user._id, 'judge');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-blue-700 hover:bg-gray-100"
+                                    role="menuitem"
+                                    tabIndex={-1}
+                                  >
+                                    <div className="flex items-center">
+                                      <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                                      </svg>
+                                      Make Judge
+                                    </div>
+                                  </button>
+                                )}
+                                
                                 {user.role !== 'user' && (
                                   <button
                                     onClick={() => {
                                       handleRoleChange(user._id, 'user');
                                       setOpenDropdown(null);
                                     }}
-                                    className="w-full text-left px-4 py-2 text-sm text-blue-700 hover:bg-gray-100"
+                                    className="w-full text-left px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
                                     role="menuitem"
                                     tabIndex={-1}
                                   >

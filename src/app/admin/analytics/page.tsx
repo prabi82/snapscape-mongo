@@ -27,8 +27,6 @@ interface AnalyticsData {
   engagementStats: {
     totalRatings: number;
     avgRatingScore: number;
-    totalComments: number;
-    avgCommentsPerPhoto: number;
   };
   monthlyActiveUsers: Array<{ month: string; count: number }>;
   photoUploadsOverTime: Array<{ month: string; count: number }>;
@@ -47,89 +45,35 @@ export default function AnalyticsDashboard() {
       try {
         setLoading(true);
         
-        // This would be a real API call in production
-        // For now, we'll simulate the data
-        const simulatedData: AnalyticsData = {
-          userStats: {
-            total: 1245,
-            newThisMonth: 87,
-            activeThisMonth: 642,
-            growthRate: 5.2,
-          },
-          photoStats: {
-            total: 4278,
-            newThisMonth: 356,
-            avgPerUser: 3.4,
-            topCategories: [
-              { name: 'Nature', count: 1245 },
-              { name: 'Portrait', count: 982 },
-              { name: 'Street', count: 876 },
-              { name: 'Architecture', count: 654 },
-              { name: 'Abstract', count: 521 },
-            ],
-          },
-          competitionStats: {
-            total: 24,
-            active: 3,
-            upcoming: 2,
-            completed: 19,
-            avgParticipation: 32.5,
-          },
-          engagementStats: {
-            totalRatings: 12450,
-            avgRatingScore: 4.2,
-            totalComments: 3245,
-            avgCommentsPerPhoto: 0.8,
-          },
-          monthlyActiveUsers: [
-            { month: 'Jan', count: 420 },
-            { month: 'Feb', count: 445 },
-            { month: 'Mar', count: 470 },
-            { month: 'Apr', count: 490 },
-            { month: 'May', count: 520 },
-            { month: 'Jun', count: 550 },
-            { month: 'Jul', count: 590 },
-            { month: 'Aug', count: 610 },
-            { month: 'Sep', count: 635 },
-            { month: 'Oct', count: 642 },
-            { month: 'Nov', count: 660 },
-            { month: 'Dec', count: 690 },
-          ],
-          photoUploadsOverTime: [
-            { month: 'Jan', count: 220 },
-            { month: 'Feb', count: 240 },
-            { month: 'Mar', count: 270 },
-            { month: 'Apr', count: 310 },
-            { month: 'May', count: 350 },
-            { month: 'Jun', count: 320 },
-            { month: 'Jul', count: 340 },
-            { month: 'Aug', count: 380 },
-            { month: 'Sep', count: 350 },
-            { month: 'Oct', count: 356 },
-            { month: 'Nov', count: 390 },
-            { month: 'Dec', count: 410 },
-          ],
-        };
+        // Fetch real data from the API
+        const response = await fetch(`/api/analytics?timeRange=${timeRange}`);
         
-        // In real implementation, we would fetch from API:
-        // const response = await fetch(`/api/analytics?timeRange=${timeRange}`);
-        // if (!response.ok) {
-        //   throw new Error('Failed to fetch analytics data');
-        // }
-        // const data = await response.json();
-        // setAnalyticsData(data);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch analytics data');
+        }
         
-        setAnalyticsData(simulatedData);
+        const data = await response.json();
+        setAnalyticsData(data);
+        setError('');
+        
+        // Debug logging
+        console.log('Analytics data received:', data);
+        console.log('Monthly active users:', data.monthlyActiveUsers);
+        console.log('Photo uploads over time:', data.photoUploadsOverTime);
       } catch (err: any) {
         console.error('Error fetching analytics:', err);
         setError(err.message || 'An error occurred while fetching analytics data');
+        setAnalyticsData(null);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAnalytics();
-  }, [timeRange]);
+    if (session?.user) {
+      fetchAnalytics();
+    }
+  }, [timeRange, session]);
 
   if (loading && !analyticsData) {
     return (
@@ -139,11 +83,30 @@ export default function AnalyticsDashboard() {
     );
   }
 
-  if (!analyticsData) {
+  if (error) {
     return (
       <div className="bg-red-50 border-l-4 border-red-400 p-4">
-        <p className="text-red-700">
-          {error || 'Unable to load analytics data. Please try again later.'}
+        <div className="flex">
+          <div className="ml-3">
+            <p className="text-red-700 font-medium">Unable to load analytics data</p>
+            <p className="text-red-600 text-sm mt-1">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-3 text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analyticsData) {
+    return (
+      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <p className="text-yellow-700">
+          No analytics data available. Please try refreshing the page.
         </p>
       </div>
     );
@@ -163,6 +126,7 @@ export default function AnalyticsDashboard() {
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
             className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            disabled={loading}
           >
             <option value="7days">Last 7 Days</option>
             <option value="30days">Last 30 Days</option>
@@ -171,6 +135,18 @@ export default function AnalyticsDashboard() {
           </select>
         </div>
       </div>
+
+      {/* Loading overlay for time range changes */}
+      {loading && analyticsData && (
+        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded-lg shadow-lg">
+            <div className="flex items-center">
+              <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3"></div>
+              <span>Updating analytics...</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -195,7 +171,7 @@ export default function AnalyticsDashboard() {
               <span className="font-medium text-indigo-600">
                 New: {analyticsData.userStats.newThisMonth}
               </span>
-              <span className={`font-medium ${analyticsData.userStats.growthRate > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`font-medium ${analyticsData.userStats.growthRate > 0 ? 'text-green-600' : analyticsData.userStats.growthRate < 0 ? 'text-red-600' : 'text-gray-600'}`}>
                 {analyticsData.userStats.growthRate > 0 ? '+' : ''}{analyticsData.userStats.growthRate}%
               </span>
             </div>
@@ -280,9 +256,6 @@ export default function AnalyticsDashboard() {
               <span className="font-medium text-purple-600">
                 Avg Rating: {analyticsData.engagementStats.avgRatingScore}/5
               </span>
-              <span className="font-medium text-gray-600">
-                {analyticsData.engagementStats.totalComments} comments
-              </span>
             </div>
           </div>
         </div>
@@ -294,24 +267,47 @@ export default function AnalyticsDashboard() {
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Monthly Active Users</h2>
           <div className="h-64 w-full">
-            <div className="relative h-full w-full">
-              {/* This would be a real chart in production */}
-              <div className="absolute bottom-0 left-0 right-0 h-56 flex items-end">
-                {analyticsData.monthlyActiveUsers.map((item, i) => (
-                  <div key={i} className="flex-1 mx-1">
-                    <div 
-                      className="bg-indigo-500 hover:bg-indigo-600 rounded-t transition-all duration-300"
-                      style={{ 
-                        height: `${(item.count / Math.max(...analyticsData.monthlyActiveUsers.map(d => d.count))) * 100}%`,
-                        minHeight: '5px'
-                      }}
-                      title={`${item.month}: ${item.count} users`}
-                    ></div>
-                    <div className="text-xs text-center mt-1 text-gray-600">{item.month}</div>
-                  </div>
-                ))}
+            {analyticsData.monthlyActiveUsers.every(item => item.count === 0) ? (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <p className="mt-2 text-sm">No user activity data available for this time period</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="relative h-full w-full">
+                <div className="absolute bottom-0 left-0 right-0 h-56 flex items-end">
+                  {analyticsData.monthlyActiveUsers.map((item, i) => {
+                    const maxCount = Math.max(...analyticsData.monthlyActiveUsers.map(d => d.count));
+                    // Calculate height as percentage of available chart space (subtract space for labels)
+                    const chartHeight = 200; // Available height for bars (leaving space for month labels)
+                    const heightPercentage = maxCount > 0 ? (item.count / maxCount) : 0;
+                    const barHeight = Math.max(heightPercentage * chartHeight, item.count > 0 ? 4 : 1);
+                    
+                    return (
+                      <div key={i} className="flex-1 mx-1">
+                        <div 
+                          className={`${item.count > 0 ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-gray-200'} rounded-t transition-all duration-300 cursor-pointer`}
+                          style={{ 
+                            height: `${barHeight}px`,
+                          }}
+                          title={`${item.month}: ${item.count} users`}
+                        ></div>
+                        <div className="text-xs text-center mt-1 text-gray-600">{item.month}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Y-axis labels */}
+                <div className="absolute left-0 top-0 h-56 flex flex-col justify-between text-xs text-gray-500 pr-2">
+                  <span>{Math.max(...analyticsData.monthlyActiveUsers.map(d => d.count))}</span>
+                  <span>{Math.round(Math.max(...analyticsData.monthlyActiveUsers.map(d => d.count)) / 2)}</span>
+                  <span>0</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -319,24 +315,47 @@ export default function AnalyticsDashboard() {
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Monthly Photo Uploads</h2>
           <div className="h-64 w-full">
-            <div className="relative h-full w-full">
-              {/* This would be a real chart in production */}
-              <div className="absolute bottom-0 left-0 right-0 h-56 flex items-end">
-                {analyticsData.photoUploadsOverTime.map((item, i) => (
-                  <div key={i} className="flex-1 mx-1">
-                    <div 
-                      className="bg-green-500 hover:bg-green-600 rounded-t transition-all duration-300"
-                      style={{ 
-                        height: `${(item.count / Math.max(...analyticsData.photoUploadsOverTime.map(d => d.count))) * 100}%`,
-                        minHeight: '5px'
-                      }}
-                      title={`${item.month}: ${item.count} photos`}
-                    ></div>
-                    <div className="text-xs text-center mt-1 text-gray-600">{item.month}</div>
-                  </div>
-                ))}
+            {analyticsData.photoUploadsOverTime.every(item => item.count === 0) ? (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="mt-2 text-sm">No photo upload data available for this time period</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="relative h-full w-full">
+                <div className="absolute bottom-0 left-0 right-0 h-56 flex items-end">
+                  {analyticsData.photoUploadsOverTime.map((item, i) => {
+                    const maxCount = Math.max(...analyticsData.photoUploadsOverTime.map(d => d.count));
+                    // Calculate height as percentage of available chart space (subtract space for labels)
+                    const chartHeight = 200; // Available height for bars (leaving space for month labels)
+                    const heightPercentage = maxCount > 0 ? (item.count / maxCount) : 0;
+                    const barHeight = Math.max(heightPercentage * chartHeight, item.count > 0 ? 4 : 1);
+                    
+                    return (
+                      <div key={i} className="flex-1 mx-1">
+                        <div 
+                          className={`${item.count > 0 ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-200'} rounded-t transition-all duration-300 cursor-pointer`}
+                          style={{ 
+                            height: `${barHeight}px`,
+                          }}
+                          title={`${item.month}: ${item.count} photos`}
+                        ></div>
+                        <div className="text-xs text-center mt-1 text-gray-600">{item.month}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Y-axis labels */}
+                <div className="absolute left-0 top-0 h-56 flex flex-col justify-between text-xs text-gray-500 pr-2">
+                  <span>{Math.max(...analyticsData.photoUploadsOverTime.map(d => d.count))}</span>
+                  <span>{Math.round(Math.max(...analyticsData.photoUploadsOverTime.map(d => d.count)) / 2)}</span>
+                  <span>0</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -363,7 +382,9 @@ export default function AnalyticsDashboard() {
                       <div 
                         className="bg-indigo-600 h-2.5 rounded-full" 
                         style={{ 
-                          width: `${(category.count / analyticsData.photoStats.topCategories[0].count) * 100}%`,
+                          width: analyticsData.photoStats.topCategories[0].count > 0 ? 
+                            `${(category.count / analyticsData.photoStats.topCategories[0].count) * 100}%` : 
+                            '0%',
                         }}
                       ></div>
                     </div>

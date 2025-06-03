@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Competition from '@/models/Competition';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { notifyJudgesOfAssignment } from '@/lib/notification-service';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -56,6 +57,17 @@ export async function POST(request: NextRequest) {
       createdBy: session.user.id,
     };
     
+    // Handle judges array
+    const judges: string[] = [];
+    let judgeIndex = 0;
+    while (formData.get(`judges[${judgeIndex}]`)) {
+      judges.push(formData.get(`judges[${judgeIndex}]`) as string);
+      judgeIndex++;
+    }
+    if (judges.length > 0) {
+      competitionData.judges = judges;
+    }
+
     // Validate required fields
     const requiredFields = ['title', 'description', 'theme', 'startDate', 'endDate', 'votingEndDate'];
     for (const field of requiredFields) {
@@ -126,6 +138,23 @@ export async function POST(request: NextRequest) {
     console.log(`API: Creating competition in database... (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
     const competition = await Competition.create(competitionData);
     console.log(`API: Competition created successfully (${((Date.now() - startTime) / 1000).toFixed(2)}s elapsed)`);
+
+    // Notify judges of assignment if judges were assigned
+    if (competition.judges && competition.judges.length > 0) {
+      try {
+        console.log(`API: Notifying ${competition.judges.length} judges of assignment`);
+        await notifyJudgesOfAssignment(
+          competition.judges,
+          competition._id.toString(),
+          competition.title,
+          competition.status
+        );
+        console.log('API: Judge assignment notifications sent successfully');
+      } catch (notificationError: any) {
+        console.error('API: Error sending judge assignment notifications:', notificationError);
+        // Don't fail the competition creation if notifications fail
+      }
+    }
 
     return NextResponse.json({
       success: true,

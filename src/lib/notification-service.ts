@@ -334,4 +334,60 @@ export async function notifyAdminsOfPhotoSubmission(
     console.error('Error creating admin notifications for photo submission:', error);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Creates notifications for judges when they are assigned to a competition
+ */
+export async function notifyJudgesOfAssignment(
+  judgeIds: string[],
+  competitionId: string,
+  competitionTitle: string,
+  competitionStatus: string
+): Promise<any> {
+  try {
+    await dbConnect();
+    
+    if (!judgeIds || judgeIds.length === 0) {
+      console.log('No judges to notify about assignment');
+      return { success: true, count: 0, message: 'No judges provided' };
+    }
+    
+    console.log(`Creating assignment notifications for ${judgeIds.length} judges for competition: ${competitionTitle}`);
+    
+    // Create notifications for all assigned judges
+    const notificationPromises = judgeIds.map(judgeId => {
+      let message = `You have been assigned as a judge for the competition "${competitionTitle}".`;
+      let relatedLink = `/competitions/${competitionId}`;
+      
+      // Customize message and link based on competition status
+      if (competitionStatus === 'voting') {
+        message += ' The competition is currently in voting phase and ready for judging.';
+        relatedLink = `/competitions/${competitionId}/view-submissions`;
+      } else if (competitionStatus === 'active') {
+        message += ' The competition is currently accepting submissions.';
+      } else if (competitionStatus === 'upcoming') {
+        message += ' The competition will start soon.';
+      }
+      
+      return createNotification({
+        user: judgeId,
+        title: 'Judge Assignment',
+        message,
+        type: 'competition',
+        relatedLink,
+        relatedCompetition: competitionId
+      });
+    });
+    
+    // Wait for all notifications to be created
+    const results = await Promise.all(notificationPromises);
+    
+    console.log(`Created ${results.length} judge assignment notifications`);
+    
+    return { success: true, count: results.length };
+  } catch (error: any) {
+    console.error('Error creating judge assignment notifications:', error);
+    return { success: false, error: error.message };
+  }
 } 

@@ -170,6 +170,32 @@ export const authOptions = {
         } catch (error) {
           console.error('Error refreshing admin token:', error);
         }
+      } else if (token.role === 'judge') {
+        // For existing tokens, verify judge status on each request
+        debugLog('Refreshing judge token data', { userId: token.id });
+        
+        try {
+          await dbConnect();
+          const judgeUser = await User.findById(token.id);
+          
+          if (judgeUser && judgeUser.role === 'judge') {
+            // Ensure role is correctly set in token
+            token.role = 'judge';
+            
+            // Update image in token if it's changed in the database
+            if (judgeUser.image) {
+              token.image = judgeUser.image;
+            }
+            
+            debugLog('Judge role confirmed');
+          } else {
+            // User is no longer judge
+            token.role = 'user';
+            debugLog('User no longer has judge role, downgraded token');
+          }
+        } catch (error) {
+          console.error('Error refreshing judge token:', error);
+        }
       }
       
       return token;

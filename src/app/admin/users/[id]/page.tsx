@@ -353,7 +353,11 @@ export default function UserManagementPage() {
                 <dt className="text-sm font-medium text-gray-500">Role</dt>
                 <dd className="mt-1 sm:mt-0 sm:col-span-2">
                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                    user.role === 'admin' 
+                      ? 'bg-purple-100 text-purple-800' 
+                      : user.role === 'judge'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-green-100 text-green-800'
                   }`}>
                     {user.role}
                   </span>
@@ -432,6 +436,17 @@ export default function UserManagementPage() {
                     }`}
                   >
                     Set as Admin
+                  </button>
+                  <button
+                    onClick={() => changeUserRole('judge')}
+                    disabled={user.role === 'judge' || actionLoading}
+                    className={`px-4 py-2 border rounded-md text-sm font-medium ${
+                      user.role === 'judge'
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                        : 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                    }`}
+                  >
+                    Set as Judge
                   </button>
                 </div>
               </div>

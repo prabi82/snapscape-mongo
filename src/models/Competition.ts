@@ -89,6 +89,11 @@ const competitionSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  // Assigned judges for this competition
+  judges: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
   // Manual status override flag
   manualStatusOverride: {
     type: Boolean,

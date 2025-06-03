@@ -474,19 +474,185 @@ export default function DashboardPage() {
   };
 
   // Add function to hide a feed item
-  const hideFeedItem = (itemId: string) => {
+  const hideFeedItem = async (itemId: string) => {
+    console.log('\n=== DASHBOARD DELETE ITEM START ===');
+    console.log('[DASHBOARD] Step 1: Delete request initiated:', {
+      itemId,
+      allowNotificationDeletion: appSettings.allowNotificationDeletion,
+      settingsCheck: !!appSettings.allowNotificationDeletion
+    });
+    
     // Only allow deletion if the setting is enabled
     if (!appSettings.allowNotificationDeletion) {
-      console.log('Notification deletion is disabled by administrator');
+      console.log('[DASHBOARD] Step 1: BLOCKED - Notification deletion disabled by administrator');
+      alert('Notification deletion is disabled by administrator');
       return;
     }
     
-    // Update the set of hidden feed items
-    setHiddenFeedItems(prev => {
-      const newSet = new Set(prev);
-      newSet.add(itemId);
-      return newSet;
-    });
+    try {
+      console.log('[DASHBOARD] Step 2: Finding activity to delete...');
+      
+      // Extract the original activity ID from the feed item ID if needed
+      let originalActivityId = itemId;
+      
+      // For activities that come from the activities API, the ID format is different
+      // Check if this is a combined feed item that has activity data
+      const feedItem = feedItems.find(item => item.id === itemId);
+      console.log('[DASHBOARD] Step 2a: Feed item analysis:', {
+        itemId,
+        feedItemFound: !!feedItem,
+        feedItemType: feedItem?.type,
+        isActivity: feedItem?.type === 'activity'
+      });
+      
+      if (feedItem && feedItem.type === 'activity') {
+        // For activity items, get the original activity ID from the data
+        originalActivityId = feedItem.data._id;
+        console.log('[DASHBOARD] Step 2b: Activity ID extraction:', {
+          originalFeedItemId: itemId,
+          extractedActivityId: originalActivityId,
+          activityData: feedItem.data
+        });
+      }
+      
+      // Check if this is an activity/notification that should be deleted from database
+      const activityToDelete = activities.find(activity => activity._id === originalActivityId);
+      console.log('[DASHBOARD] Step 2c: Activity search result:', {
+        found: !!activityToDelete,
+        activityId: activityToDelete?._id,
+        activityType: activityToDelete?.type,
+        activityTitle: activityToDelete?.title,
+        totalActivities: activities.length,
+        searchedForId: originalActivityId,
+        allActivityIds: activities.map(a => a._id)
+      });
+      
+      if (activityToDelete && (activityToDelete.type === 'notification' || activityToDelete.type === 'submission' || activityToDelete.type === 'badge' || activityToDelete.type === 'win' || activityToDelete.type === 'result' || activityToDelete.type === 'rating')) {
+        console.log('[DASHBOARD] Step 3: Processing deletable activity...');
+        
+        // Extract the real notification ID from the prefixed activity ID
+        let actualNotificationId = activityToDelete._id;
+        
+        console.log('[DASHBOARD] Step 4: Processing notification ID...');
+        console.log('[DASHBOARD] Step 4: Original ID:', actualNotificationId);
+        
+        // If the ID has a prefix (like "notification_", "submission_", etc.), extract the real ID
+        if (actualNotificationId.includes('_')) {
+          const parts = actualNotificationId.split('_');
+          if (parts.length >= 2) {
+            actualNotificationId = parts.slice(1).join('_'); // Handle cases where there might be multiple underscores
+          }
+          console.log('[DASHBOARD] Step 4: Extracted ID from prefix:', {
+            originalId: activityToDelete._id,
+            extractedId: actualNotificationId,
+            parts: parts
+          });
+        } else {
+          console.log('[DASHBOARD] Step 4: No prefix found, using original ID');
+        }
+        
+        console.log('[DASHBOARD] Step 5: Making API call...');
+        
+        // Determine the correct API endpoint based on activity type
+        let apiEndpoint: string;
+        if (activityToDelete.type === 'rating') {
+          apiEndpoint = `/api/ratings/${actualNotificationId}`;
+          console.log('[DASHBOARD] Step 5: Using ratings API for rating activity');
+        } else {
+          apiEndpoint = `/api/notifications/${actualNotificationId}`;
+          console.log('[DASHBOARD] Step 5: Using notifications API for non-rating activity');
+        }
+        
+        console.log('[DASHBOARD] Step 5: API URL:', apiEndpoint);
+        
+        // This is a notification/activity that should be deleted from the database
+        const response = await fetch(apiEndpoint, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('[DASHBOARD] Step 6: API response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        let responseData;
+        try {
+          responseData = await response.json();
+          console.log('[DASHBOARD] Step 7: Response data:', responseData);
+        } catch (jsonError) {
+          console.error('[DASHBOARD] Step 7: Failed to parse JSON response:', jsonError);
+          responseData = null;
+        }
+        
+        if (response.ok) {
+          console.log('[DASHBOARD] Step 8: Deletion successful, updating local state...');
+          
+          // Remove from local activities state using original activity ID
+          const updatedActivities = activities.filter(activity => activity._id !== originalActivityId);
+          console.log('[DASHBOARD] Step 8a: Updating activities:', {
+            originalCount: activities.length,
+            newCount: updatedActivities.length,
+            removedItemId: originalActivityId
+          });
+          setActivities(updatedActivities);
+          
+          // Remove from feedItems using feed item ID
+          const updatedFeedItems = feedItems.filter(item => item.id !== itemId);
+          console.log('[DASHBOARD] Step 8b: Updating feedItems:', {
+            originalCount: feedItems.length,
+            newCount: updatedFeedItems.length,
+            removedItemId: itemId
+          });
+          setFeedItems(updatedFeedItems);
+          
+          console.log('[DASHBOARD] SUCCESS: Notification deleted from database and local state updated');
+          alert('Notification deleted successfully!');
+        } else {
+          console.error('[DASHBOARD] Step 8: FAILED - API deletion failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            responseData
+          });
+          alert(`Failed to delete notification: ${responseData?.message || response.statusText}`);
+        }
+      } else {
+        console.log('[DASHBOARD] Step 3: Non-deletable item, removing from local state only...');
+        console.log('[DASHBOARD] Step 3a: Item details:', {
+          itemId,
+          originalActivityId,
+          activityFound: !!activityToDelete,
+          activityType: activityToDelete?.type,
+          isDeletableType: activityToDelete ? ['notification', 'submission', 'badge', 'win', 'result', 'rating'].includes(activityToDelete.type) : false
+        });
+        
+        // For competition items or other non-deletable items, just remove from local state
+        const updatedFeedItems = feedItems.filter(item => item.id !== itemId);
+        console.log('[DASHBOARD] Step 3b: Local removal:', {
+          originalCount: feedItems.length,
+          newCount: updatedFeedItems.length,
+          removedItemId: itemId
+        });
+        setFeedItems(updatedFeedItems);
+        
+        console.log('[DASHBOARD] SUCCESS: Item removed from local state (non-deletable)');
+      }
+      
+    } catch (error: any) {
+      console.error('[DASHBOARD] ERROR: Exception during deletion:', {
+        error: error.message,
+        stack: error.stack,
+        itemId,
+        activityType: activities.find(a => a._id === itemId)?.type
+      });
+      alert(`Error deleting item: ${error.message}`);
+    }
+    
+    console.log('=== DASHBOARD DELETE ITEM END ===\n');
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -565,6 +731,12 @@ export default function DashboardPage() {
     if (status === 'authenticated' && (session?.user as any)?.role === 'admin') {
       console.log('User is admin, redirecting to admin dashboard');
       router.push('/admin/dashboard');
+    }
+    
+    // Check if user is judge and redirect to judge dashboard
+    if (status === 'authenticated' && (session?.user as any)?.role === 'judge') {
+      console.log('User is judge, redirecting to judge dashboard');
+      router.push('/judge');
     }
   }, [session, status, router]);
 

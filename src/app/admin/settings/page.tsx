@@ -439,6 +439,50 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Debug Tools Section */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg mt-8">
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Debug Tools</h3>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            Advanced debugging tools for troubleshooting application issues
+          </p>
+        </div>
+        
+        <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
+          <div className="space-y-6">
+            {/* Notification Preferences Debug */}
+            <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2L3 7v11c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V7l-7-5zM10 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+                  </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <h4 className="text-sm font-medium text-purple-800">Notification Preferences Debug Tool</h4>
+                  <p className="mt-1 text-sm text-purple-700">
+                    Diagnose and fix issues with user notification preferences. Use this tool if users are not receiving expected notifications.
+                  </p>
+                  <div className="mt-3">
+                    <a
+                      href="/admin/debug/notification-fix"
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-purple-700 bg-purple-100 hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                    >
+                      Open Debug Tool
+                    </a>
+                  </div>
+                  <div className="mt-2">
+                    <p className="text-xs text-purple-600">
+                      <strong>Use case:</strong> When new competition notifications are sent to fewer users than expected
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 

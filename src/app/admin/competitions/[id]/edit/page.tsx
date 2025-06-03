@@ -39,6 +39,14 @@ interface Competition {
   coverImage?: string;
   hideOtherSubmissions?: boolean;
   manualStatusOverride?: boolean;
+  judges?: string[];
+}
+
+interface Judge {
+  _id: string;
+  name: string;
+  email: string;
+  image?: string;
 }
 
 export default function EditCompetition() {
@@ -71,7 +79,8 @@ export default function EditCompetition() {
     copyrightNotice: '',
     status: 'upcoming',
     hideOtherSubmissions: false,
-    manualStatusOverride: false
+    manualStatusOverride: false,
+    judges: [] as string[]
   });
 
   const [coverImage, setCoverImage] = useState<File | null>(null);
@@ -83,6 +92,10 @@ export default function EditCompetition() {
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
 
   const [imageValidationError, setImageValidationError] = useState<string | null>(null);
+  
+  // Add state for judge management
+  const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
+  const [loadingJudges, setLoadingJudges] = useState(false);
 
   // Format date for input fields (YYYY-MM-DD)
   const formatDateForInput = (dateString: string) => {
@@ -215,7 +228,8 @@ export default function EditCompetition() {
           copyrightNotice: data.data.copyrightNotice || 'You maintain the copyrights to all photos you submit. You must own all submitted images.',
           status: data.data.status,
           hideOtherSubmissions: data.data.hideOtherSubmissions || false,
-          manualStatusOverride: data.data.manualStatusOverride || false
+          manualStatusOverride: data.data.manualStatusOverride || false,
+          judges: data.data.judges || []
         });
       } catch (error: any) {
         console.error('Error fetching competition:', error);
@@ -229,6 +243,40 @@ export default function EditCompetition() {
       fetchCompetition();
     }
   }, [competitionId, session, sessionStatus, router]);
+  
+  // Fetch available judges
+  useEffect(() => {
+    const fetchJudges = async () => {
+      try {
+        setLoadingJudges(true);
+        const response = await fetch('/api/users?role=judge');
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableJudges(data.users || []);
+        } else {
+          console.error('Failed to fetch judges');
+        }
+      } catch (error) {
+        console.error('Error fetching judges:', error);
+      } finally {
+        setLoadingJudges(false);
+      }
+    };
+
+    if (sessionStatus === 'authenticated' && session?.user?.role === 'admin') {
+      fetchJudges();
+    }
+  }, [sessionStatus, session]);
+
+  // Handle judge selection
+  const handleJudgeToggle = (judgeId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      judges: prev.judges.includes(judgeId)
+        ? prev.judges.filter(id => id !== judgeId)
+        : [...prev.judges, judgeId]
+    }));
+  };
   
   // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -489,7 +537,12 @@ export default function EditCompetition() {
       // Skip file-related fields
       if (key === 'coverImage' || key === 'coverImageUrl') return;
       
-      if (typeof value === 'boolean') {
+      if (key === 'judges') {
+        // Handle judges array specially
+        (value as string[]).forEach((judgeId, index) => {
+          formDataToSubmit.append(`judges[${index}]`, judgeId);
+        });
+      } else if (typeof value === 'boolean') {
         formDataToSubmit.append(key, value ? 'true' : 'false');
       } else if (value !== null && value !== undefined) {
         formDataToSubmit.append(key, String(value));
@@ -929,6 +982,124 @@ export default function EditCompetition() {
                   </p>
                 </div>
               </div>
+            </div>
+            
+            {/* Assign Judges */}
+            <div className="sm:col-span-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Assign Judges
+              </label>
+              <p className="text-sm text-gray-500 mb-4">
+                Option to assign multiple judges. This field is not mandatory.
+              </p>
+              
+              {loadingJudges ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                  <span className="ml-2 text-sm text-gray-600">Loading judges...</span>
+                </div>
+              ) : availableJudges.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Dropdown Interface */}
+                  <div className="relative">
+                    <div className="min-h-[42px] w-full border border-gray-300 rounded-md shadow-sm bg-white">
+                      <div className="p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700">
+                            {formData.judges.length === 0 
+                              ? 'Select judges...' 
+                              : `${formData.judges.length} judge${formData.judges.length !== 1 ? 's' : ''} selected`
+                            }
+                          </span>
+                          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                      
+                      {/* Dropdown Content */}
+                      <div className="border-t border-gray-200 bg-gray-50 rounded-b-md">
+                        <div className="max-h-60 overflow-y-auto">
+                          {availableJudges.map((judge) => (
+                            <div
+                              key={judge._id}
+                              className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                              onClick={() => handleJudgeToggle(judge._id)}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={formData.judges.includes(judge._id)}
+                                onChange={() => handleJudgeToggle(judge._id)}
+                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                              />
+                              <div className="ml-3 flex items-center flex-1">
+                                <div className="flex-shrink-0">
+                                  <div className="h-8 w-8 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center">
+                                    {judge.image ? (
+                                      <img
+                                        src={judge.image}
+                                        alt={judge.name}
+                                        className="h-8 w-8 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <span className="text-indigo-600 font-medium text-sm">
+                                        {judge.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="ml-3">
+                                  <p className="text-sm font-medium text-gray-900">{judge.name}</p>
+                                  <p className="text-xs text-gray-500">{judge.email}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Selected Judges Summary */}
+                  {formData.judges.length > 0 && (
+                    <div className="mt-3 p-3 bg-indigo-50 rounded-md">
+                      <p className="text-sm font-medium text-indigo-900">
+                        Selected Judges:
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {formData.judges.map((judgeId) => {
+                          const judge = availableJudges.find(j => j._id === judgeId);
+                          return judge ? (
+                            <span
+                              key={judgeId}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                            >
+                              {judge.name}
+                              <button
+                                type="button"
+                                onClick={() => handleJudgeToggle(judgeId)}
+                                className="ml-1 inline-flex items-center justify-center h-4 w-4 rounded-full text-indigo-400 hover:bg-indigo-200 hover:text-indigo-500"
+                              >
+                                <svg className="h-2 w-2" stroke="currentColor" fill="none" viewBox="0 0 8 8">
+                                  <path strokeLinecap="round" strokeWidth="1.5" d="m1 1 6 6m0-6L1 7" />
+                                </svg>
+                              </button>
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-500">No judges available</p>
+                  <p className="text-xs text-gray-400 mt-1">Create judge accounts in User Management first</p>
+                </div>
+              )}
             </div>
             
             {/* Voting Criteria */}
