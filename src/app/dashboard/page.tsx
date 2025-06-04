@@ -727,6 +727,10 @@ export default function DashboardPage() {
 
   // Add admin redirect check
   useEffect(() => {
+    // Check for "View as User" mode
+    const urlParams = new URLSearchParams(window.location.search);
+    const isViewingAsUser = urlParams.get('viewAsUser') === 'true';
+    
     // Check if user is admin and redirect to admin dashboard
     if (status === 'authenticated' && (session?.user as any)?.role === 'admin') {
       console.log('User is admin, redirecting to admin dashboard');
@@ -734,9 +738,15 @@ export default function DashboardPage() {
     }
     
     // Check if user is judge and redirect to judge dashboard
-    if (status === 'authenticated' && (session?.user as any)?.role === 'judge') {
+    // BUT skip redirect if they're in "View as User" mode
+    if (status === 'authenticated' && (session?.user as any)?.role === 'judge' && !isViewingAsUser) {
       console.log('User is judge, redirecting to judge dashboard');
       router.push('/judge');
+    }
+    
+    // Log when judge is in "View as User" mode
+    if (status === 'authenticated' && (session?.user as any)?.role === 'judge' && isViewingAsUser) {
+      console.log('Judge is in "View as User" mode, staying on dashboard');
     }
   }, [session, status, router]);
 

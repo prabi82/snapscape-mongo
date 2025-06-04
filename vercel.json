@@ -15,6 +15,18 @@
       "memory": 1024,
       "maxDuration": 60
     },
+    "src/app/api/admin/send-new-competition-notifications/route.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/admin/send-voting-notifications/route.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/cron/competition-reminders/route.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
     "src/app/api/**/*": {
       "memory": 512,
       "maxDuration": 30

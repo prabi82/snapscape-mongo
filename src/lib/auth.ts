@@ -233,4 +233,26 @@ export const authOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   // Enable debug in development
   debug: process.env.NODE_ENV === 'development',
+};
+
+// Utility function to check if user is in "View as User" mode
+export const isViewingAsUser = (req?: Request): boolean => {
+  if (typeof window !== 'undefined') {
+    // Client-side: check URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('viewAsUser') === 'true';
+  } else if (req) {
+    // Server-side: check request URL
+    const url = new URL(req.url);
+    return url.searchParams.get('viewAsUser') === 'true';
+  }
+  return false;
+};
+
+// Utility function to get effective user role (considers view as user mode)
+export const getEffectiveUserRole = (user: any): string => {
+  if (user.role === 'judge' && isViewingAsUser()) {
+    return 'user';
+  }
+  return user.role;
 }; 

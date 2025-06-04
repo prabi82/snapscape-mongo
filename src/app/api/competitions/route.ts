@@ -204,16 +204,24 @@ export async function POST(req: NextRequest) {
     // Send new competition notifications to all users (async, don't wait for completion)
     try {
       console.log('Sending new competition notifications...');
-      const notificationResult = await sendNewCompetitionNotifications(
-        competition._id.toString(),
-        competition.title,
-        competition.description,
-        competition.theme,
-        competition.startDate.toISOString(),
-        competition.endDate.toISOString()
-      );
       
-      console.log('New competition notification result:', notificationResult);
+      // Skip notifications during build time to prevent hanging
+      const isBuildTime = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === undefined;
+      
+      if (!isBuildTime) {
+        const notificationResult = await sendNewCompetitionNotifications(
+          competition._id.toString(),
+          competition.title,
+          competition.description,
+          competition.theme,
+          competition.startDate.toISOString(),
+          competition.endDate.toISOString()
+        );
+        
+        console.log('New competition notification result:', notificationResult);
+      } else {
+        console.log('Skipping new competition notifications during build time');
+      }
     } catch (notificationError: any) {
       // Log the error but don't fail the competition creation
       console.error('Error sending new competition notifications:', notificationError);

@@ -46,6 +46,7 @@ interface Competition {
   theme: string;
   status: 'upcoming' | 'active' | 'voting' | 'completed';
   hideOtherSubmissions?: boolean;
+  judges?: string[]; // Add judges field
 }
 
 export default function ViewSubmissions() {
@@ -73,8 +74,12 @@ export default function ViewSubmissions() {
   
   const showResults = competition?.status === 'completed' || searchParams?.get('result') === '1';
   
-  // Add state for results tabs
-  const [activeResultsTab, setActiveResultsTab] = useState<'submissions' | 'photographers'>('submissions');
+  // Add state for results tabs - now includes judges evaluation
+  const [activeResultsTab, setActiveResultsTab] = useState<'submissions' | 'photographers' | 'judges'>('submissions');
+  
+  // Add state for judge ratings
+  const [judgeRatings, setJudgeRatings] = useState<any[]>([]);
+  const [loadingJudgeRatings, setLoadingJudgeRatings] = useState(false);
   
   // Fetch competition and submissions data
   useEffect(() => {
@@ -678,6 +683,53 @@ export default function ViewSubmissions() {
     </div>
   );
 
+  // Add function to fetch judge ratings
+  const fetchJudgeRatings = async () => {
+    if (!competition?.judges || competition.judges.length === 0) return;
+    
+    setLoadingJudgeRatings(true);
+    try {
+      // Fetch all judge ratings for this competition's submissions
+      const submissionIds = submissions.map(s => s._id);
+      console.log('Fetching judge ratings for submissions:', submissionIds);
+      
+      const judgeRatingPromises = submissionIds.map(async (submissionId) => {
+        try {
+          console.log(`Fetching judge ratings for submission: ${submissionId}`);
+          const response = await fetch(`/api/ratings?photo=${submissionId}&type=judge`);
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`Judge ratings for ${submissionId}:`, data.data);
+            return {
+              submissionId,
+              ratings: data.data || []
+            };
+          } else {
+            console.error(`Failed to fetch judge ratings for ${submissionId}:`, response.status, response.statusText);
+          }
+        } catch (err) {
+          console.error('Error fetching judge ratings for submission:', submissionId, err);
+        }
+        return { submissionId, ratings: [] };
+      });
+      
+      const allJudgeRatings = await Promise.all(judgeRatingPromises);
+      console.log('All judge ratings fetched:', allJudgeRatings);
+      setJudgeRatings(allJudgeRatings);
+    } catch (err) {
+      console.error('Error fetching judge ratings:', err);
+    } finally {
+      setLoadingJudgeRatings(false);
+    }
+  };
+
+  // Fetch judge ratings when tab is switched to judges and data is available
+  useEffect(() => {
+    if (activeResultsTab === 'judges' && competition?.judges && submissions.length > 0) {
+      fetchJudgeRatings();
+    }
+  }, [activeResultsTab, competition?.judges, submissions]);
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -775,6 +827,19 @@ export default function ViewSubmissions() {
                   >
                     Photographer Rank
                   </button>
+                  {/* Only show Judges Evaluation tab if competition has judges assigned */}
+                  {competition?.judges && competition.judges.length > 0 && (
+                    <button
+                      onClick={() => setActiveResultsTab('judges')}
+                      className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                        activeResultsTab === 'judges'
+                          ? 'border-indigo-500 text-indigo-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Judges Evaluation
+                    </button>
+                  )}
                 </nav>
               </div>
 
@@ -993,9 +1058,9 @@ export default function ViewSubmissions() {
                   <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h3 className="text-lg leading-6 font-medium text-gray-900">Photographer Rank</h3>
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">Photographer Rankings</h3>
                         <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                          Rankings based on each photographer's cumulative points from all submissions.
+                          Rankings based on photographers' total points across all submissions.
                         </p>
                       </div>
                       <div className="mt-3 sm:mt-0">
@@ -1003,11 +1068,11 @@ export default function ViewSubmissions() {
                       </div>
                     </div>
                   </div>
-                  <ul className="divide-y divide-gray-200">
+                  <div className="px-4 py-5 sm:px-6">
                     {(() => {
                       let currentRank = 0;
                       let lastTotalRating = -Infinity;
-
+                      
                       return photographerRankings.map((photographer, index) => {
                         // Calculate dense rank based on total points
                         if (photographer.totalPoints !== lastTotalRating) {
@@ -1047,9 +1112,9 @@ export default function ViewSubmissions() {
                         const isCurrentUser = session?.user?.id === photographer.photographer.id;
 
                         return (
-                          <li
+                          <div
                             key={photographer.photographer.id}
-                            className={`px-4 py-5 sm:px-6 ${isCurrentUser ? 'bg-indigo-50' : ''}`}
+                            className={`mb-4 p-4 rounded-lg border ${isCurrentUser ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-200'}`}
                           >
                             <div className="flex flex-col md:flex-row md:items-start md:space-x-4">
                               {/* Best Submission Image */}
@@ -1067,112 +1132,336 @@ export default function ViewSubmissions() {
 
                               {/* Photographer Details */}
                               <div className="flex-1">
-                                {/* Mobile View */}
-                                <div className="flex flex-col items-center mt-3 md:hidden">
-                                  <div className="mb-2">
-                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${rankColor}`}>
-                                      {trophyIcon} {rankText} <span className="ml-1">Rank</span>
-                                    </span>
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1 mr-4">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-1">
+                                      {photographer.photographer.name}
+                                    </h4>
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      Best submission: "{photographer.bestSubmission.title}"
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                      {photographer.totalSubmissions} submission{photographer.totalSubmissions !== 1 ? 's' : ''} • Average rating: {photographer.averageRating.toFixed(1)}
+                                    </p>
                                   </div>
-                                  <h4 className="text-center text-md sm:text-lg font-medium text-gray-900 mb-2">
-                                    {photographer.photographer.name}
-                                  </h4>
-                                  <div className="flex flex-col items-center space-y-2 mb-2">
+                                  <div className="text-right flex-shrink-0">
+                                    {/* Rank Badge */}
+                                    <div className="mb-2">
+                                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${rankColor}`}>
+                                        {trophyIcon} {rankText} <span className="ml-1">Rank</span>
+                                      </span>
+                                    </div>
                                     {/* Total Points */}
-                                    <div className="flex items-center justify-center">
-                                      <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full">
+                                    <div className="flex items-center justify-end mb-2">
+                                      <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
                                         <span className="font-bold">{photographer.totalPoints}</span>
                                         <span className="ml-1">(Total Points)</span>
                                       </div>
                                     </div>
                                     {/* Total Votes */}
-                                    <div className="flex items-center">
-                                      <svg className="text-blue-500 h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <div className="flex items-center justify-end">
+                                      <svg className="text-blue-500 h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                       </svg>
-                                      <span className="text-xs sm:text-sm font-medium">
+                                      <span className="text-sm font-medium">
                                         {photographer.totalVotes} (Total Votes)
                                       </span>
                                     </div>
-                                    {/* Total Rating */}
-                                    <div className="flex items-center">
-                                      <svg className="text-green-500 h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                      </svg>
-                                      <span className="text-xs sm:text-sm text-gray-500">
-                                        {photographer.totalRating.toFixed(1)} (Total Rating)
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="text-center text-xs text-gray-500">
-                                    {photographer.totalSubmissions} submission{photographer.totalSubmissions !== 1 ? 's' : ''} • Avg: {photographer.averageRating.toFixed(1)}
-                                  </div>
-                                </div>
-
-                                {/* Desktop View */}
-                                <div className="hidden md:block">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 mr-4">
-                                      <h4 className="text-lg font-medium text-gray-900 mb-1">
-                                        {photographer.photographer.name}
-                                      </h4>
-                                      <p className="text-sm text-gray-600 mb-2">
-                                        Best submission: "{photographer.bestSubmission.title}"
-                                      </p>
-                                      <p className="text-sm text-gray-500">
-                                        {photographer.totalSubmissions} submission{photographer.totalSubmissions !== 1 ? 's' : ''} • Average rating: {photographer.averageRating.toFixed(1)}
-                                      </p>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                      {/* Total Points */}
-                                      <div className="flex items-center justify-end mb-2">
-                                        <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
-                                          <span className="font-bold">{photographer.totalPoints}</span>
-                                          <span className="ml-1">(Total Points)</span>
-                                        </div>
-                                      </div>
-                                      {/* Total Votes */}
-                                      <div className="flex items-center justify-end">
-                                        <svg className="text-blue-500 h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span className="text-lg font-medium">
-                                          {photographer.totalVotes} (Total Votes)
-                                        </span>
-                                      </div>
-                                      {/* Total Rating */}
-                                      <div className="flex items-center justify-end mt-1">
-                                        <svg className="text-green-500 h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                        </svg>
-                                        <span className="text-sm text-gray-500">
-                                          {photographer.totalRating.toFixed(1)} (Total Rating)
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center mt-2">
-                                    <span className={`inline-flex items-center px-2 py-1 mr-2 rounded text-xs font-bold text-white ${rankColor}`}>
-                                      {trophyIcon} {rankText} <span className="ml-1">Rank</span>
-                                    </span>
-                                    {photographer.photographer.profileImage && (
-                                      <Image
-                                        src={photographer.photographer.profileImage}
-                                        alt={photographer.photographer.name}
-                                        width={32}
-                                        height={32}
-                                        className="rounded-full mr-2"
-                                      />
-                                    )}
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </li>
+                          </div>
                         );
                       });
                     })()}
-                  </ul>
+                  </div>
+                </>
+              )}
+
+              {/* New Judges Evaluation Tab Content */}
+              {activeResultsTab === 'judges' && (
+                <>
+                  <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">Judges Evaluation</h3>
+                        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                          Professional judge ratings and evaluations for all submissions.
+                        </p>
+                      </div>
+                      <div className="mt-3 sm:mt-0 flex items-center space-x-2">
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">{competition?.judges?.length || 0}</span> Judge{(competition?.judges?.length || 0) !== 1 ? 's' : ''} Assigned
+                        </div>
+                        <ShareButtons tabType="submissions" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="px-4 py-5 sm:px-6">
+                    {loadingJudgeRatings ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                        <span className="ml-3 text-gray-600">Loading judge evaluations...</span>
+                      </div>
+                    ) : (
+                      (() => {
+                        // Calculate judge ratings data for each submission
+                        const submissionsWithJudgeData = resultsSubmissions.map(submission => {
+                          const submissionJudgeRatings = judgeRatings.find(jr => jr.submissionId === submission._id)?.ratings || [];
+                          const averageJudgeRating = submissionJudgeRatings.length > 0 
+                            ? submissionJudgeRatings.reduce((sum: number, rating: any) => sum + rating.score, 0) / submissionJudgeRatings.length
+                            : 0;
+                          const judgeRatingCount = submissionJudgeRatings.length;
+                          const totalJudgeRating = averageJudgeRating * judgeRatingCount;
+                          
+                          return {
+                            ...submission,
+                            judgeRatings: submissionJudgeRatings,
+                            averageJudgeRating,
+                            judgeRatingCount,
+                            totalJudgeRating
+                          };
+                        });
+
+                        // Sort by total judge rating (similar to user voting logic)
+                        const sortedByJudgeRatings = submissionsWithJudgeData.sort((a, b) => {
+                          // Sort by total judge rating first (descending)
+                          if (b.totalJudgeRating !== a.totalJudgeRating) {
+                            return b.totalJudgeRating - a.totalJudgeRating;
+                          }
+                          
+                          // If total judge ratings are equal, sort by average judge rating as tiebreaker (descending)
+                          if (b.averageJudgeRating !== a.averageJudgeRating) {
+                            return b.averageJudgeRating - a.averageJudgeRating;
+                          }
+                          
+                          // If both are equal, sort by judge rating count (descending)
+                          return b.judgeRatingCount - a.judgeRatingCount;
+                        });
+
+                        return (
+                          <ul className="divide-y divide-gray-200">
+                            {(() => {
+                              let currentJudgeRank = 0;
+                              let lastTotalJudgeRating = -Infinity;
+
+                              return sortedByJudgeRatings.map((submission, index) => {
+                                // Determine actual dense rank based on total judge rating
+                                if (submission.totalJudgeRating !== lastTotalJudgeRating) {
+                                  currentJudgeRank++;
+                                }
+                                lastTotalJudgeRating = submission.totalJudgeRating;
+                                
+                                const rankToDisplay = currentJudgeRank;
+                                
+                                // Apply ranking multiplier based on position (same as user voting)
+                                let multiplier = 1; // Default for 4th place and beyond
+                                if (rankToDisplay === 1) {
+                                  multiplier = 5;
+                                } else if (rankToDisplay === 2) {
+                                  multiplier = 3;
+                                } else if (rankToDisplay === 3) {
+                                  multiplier = 2;
+                                }
+                                
+                                // Calculate total judge points with the multiplier
+                                const totalJudgePoints = Math.round(submission.totalJudgeRating * multiplier);
+
+                                let rankText = '';
+                                let rankColor = 'bg-gray-500'; // Default for ranks > 3
+                                let trophyIcon: React.ReactNode = null;
+
+                                if (rankToDisplay === 1) { 
+                                  rankText = '1st'; 
+                                  rankColor = 'bg-yellow-400'; 
+                                  trophyIcon = <span className="mr-1" role="img" aria-label="gold trophy">🥇</span>; 
+                                } else if (rankToDisplay === 2) { 
+                                  rankText = '2nd'; 
+                                  rankColor = 'bg-gray-300'; 
+                                  trophyIcon = <span className="mr-1" role="img" aria-label="silver trophy">🥈</span>; 
+                                } else if (rankToDisplay === 3) { 
+                                  rankText = '3rd'; 
+                                  rankColor = 'bg-orange-400'; 
+                                  trophyIcon = <span className="mr-1" role="img" aria-label="bronze trophy">🥉</span>; 
+                                } else {
+                                  if (rankToDisplay % 100 >= 11 && rankToDisplay % 100 <= 13) {
+                                    rankText = `${rankToDisplay}th`;
+                                  } else {
+                                    switch (rankToDisplay % 10) {
+                                      case 1: rankText = `${rankToDisplay}st`; break;
+                                      case 2: rankText = `${rankToDisplay}nd`; break;
+                                      case 3: rankText = `${rankToDisplay}rd`; break;
+                                      default: rankText = `${rankToDisplay}th`; break;
+                                    }
+                                  }
+                                }
+                                
+                                const isCurrentUserSubmission = session?.user?.id === submission.user?._id;
+
+                                return (
+                                  <li 
+                                    key={submission._id} 
+                                    className={`px-4 py-5 sm:px-6 ${isCurrentUserSubmission ? 'bg-indigo-50' : ''}`}
+                                  >
+                                    {/* Main container for a submission item: flex-col on mobile, md:flex-row on desktop */}
+                                    <div className="flex flex-col md:flex-row md:items-start md:space-x-4">
+                                      {/* Image Section: full width on mobile, fixed on desktop */}
+                                      <div className="w-full md:w-32 flex-shrink-0 mb-3 md:mb-0">
+                                        <div 
+                                          className="relative h-48 sm:h-32 md:h-24 w-full md:w-32 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
+                                        >
+                                          <Image
+                                            src={submission.thumbnailUrl || submission.imageUrl}
+                                            alt={submission.title}
+                                            fill
+                                            sizes="(max-width: 768px) 100vw, 128px"
+                                            className="object-cover"
+                                          />
+                                        </div>
+                                      </div>
+                                      {/* Details Section Wrapper */}
+                                      <div className="flex-1">
+                                        {/* Mobile View Details - visible by default, hidden on md and up */}
+                                        <div className="flex flex-col items-center mt-3 md:hidden">
+                                          {/* 1. Rank Badge (centered) */}
+                                          <div className="mb-2">
+                                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold text-white ${rankColor}`}>
+                                              {trophyIcon} {rankText} <span className="ml-1">Judge Rank</span>
+                                            </span>
+                                          </div>
+                                          {/* 2. Title (centered) */}
+                                          <h4 className="text-center text-md sm:text-lg font-medium text-gray-900 mb-2 truncate w-full px-1">{submission.title}</h4>
+                                          {/* 3. Description (centered, full text) */}
+                                          {submission.description && (
+                                            <p className="text-center text-xs text-gray-600 mb-3 px-2">
+                                              {submission.description}
+                                            </p>
+                                          )}
+                                          {/* 4. Judge Ratings (centered row) */}
+                                          <div className="flex flex-row items-center justify-center space-x-3 mb-2">
+                                            {/* Avg Judge Rating */}
+                                            <div className="flex items-center">
+                                              <svg className="text-purple-400 h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                                              <span className="text-xs sm:text-sm font-medium">
+                                                {submission.averageJudgeRating > 0 ? submission.averageJudgeRating.toFixed(1) : 'No ratings'} ({submission.judgeRatingCount} judge{submission.judgeRatingCount !== 1 ? 's' : ''})
+                                              </span>
+                                            </div>
+                                            {/* Total Judge Rating */}
+                                            <div className="flex items-center">
+                                              <svg className="text-purple-500 h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                                              <span className="text-xs sm:text-sm text-gray-500">
+                                                {submission.totalJudgeRating.toFixed(1)} (Total Judge Rating)
+                                              </span>
+                                            </div>
+                                          </div>
+                                          {/* 5. Total Judge Points - Add this section */}
+                                          <div className="flex items-center justify-center mt-2">
+                                            <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full">
+                                              <span className="font-bold">{totalJudgePoints}</span>
+                                              <span className="ml-1">(Total Judge Points)</span>
+                                              <span className="ml-1 text-xs">×{multiplier}</span>
+                                            </div>
+                                          </div>
+                                          {/* 6. User Name (centered, no avatar) */}
+                                          <div className="flex justify-center items-center mt-1">
+                                            <div className="text-sm font-medium text-gray-900">{submission.user?.name || 'Unknown'}</div>
+                                          </div>
+                                        </div>
+
+                                        {/* Desktop View Details - hidden by default, visible as block on md and up */}
+                                        <div className="hidden md:block">
+                                          {/* Row 1: Title | Judge Ratings */}
+                                          <div className="flex items-start justify-between">
+                                            <div className="flex-1 mr-4">
+                                              <h4 className="text-lg font-medium text-gray-900 mb-1 truncate">{submission.title}</h4>
+                                              {/* Description below title with full text */}
+                                              {submission.description && (
+                                                <p className="text-sm text-gray-600 leading-tight mb-2">
+                                                  {submission.description}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                              <div className="flex items-center justify-end">
+                                                <svg className="text-purple-400 h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                                                <span className="text-lg font-medium">
+                                                  {submission.averageJudgeRating > 0 ? submission.averageJudgeRating.toFixed(1) : 'No ratings'} ({submission.judgeRatingCount} judge{submission.judgeRatingCount !== 1 ? 's' : ''})
+                                                </span>
+                                              </div>
+                                              {/* Total Judge Rating */}
+                                              <div className="flex items-center justify-end mt-1">
+                                                <svg className="text-purple-500 h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                                                <span className="text-sm text-gray-500">
+                                                  {submission.totalJudgeRating.toFixed(1)} (Total Judge Rating)
+                                                </span>
+                                              </div>
+                                              {/* Total Judge Points - Desktop view */}
+                                              <div className="flex items-center justify-end mt-2">
+                                                <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm">
+                                                  <span className="font-bold">{totalJudgePoints}</span>
+                                                  <span className="ml-1">(Total Judge Points)</span>
+                                                  <span className="ml-1 text-xs">×{multiplier}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          {/* Row 2: Rank | Avatar | User Name */}
+                                          <div className="flex items-center mt-2">
+                                            <span className={`inline-flex items-center px-2 py-1 mr-2 rounded text-xs font-bold text-white ${rankColor}`}>
+                                              {trophyIcon} {rankText} <span className="ml-1">Judge Rank</span>
+                                            </span>
+                                            {submission.user?.profileImage && typeof submission.user.profileImage === 'string' && (
+                                              <Image src={submission.user.profileImage || '/default-profile.png'} alt={submission.user.name || 'User'} width={32} height={32} className="rounded-full mr-2" />
+                                            )}
+                                            <div>
+                                              <div className="text-sm font-medium text-gray-900">{submission.user?.name || 'Unknown'}</div>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Individual Judge Ratings Section - Desktop only */}
+                                          {submission.judgeRatings.length > 0 && (
+                                            <div className="mt-4 border-t border-gray-200 pt-3">
+                                              <h5 className="text-sm font-medium text-gray-700 mb-2">Individual Judge Ratings:</h5>
+                                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+                                                {submission.judgeRatings.map((rating: any, judgeIndex: number) => (
+                                                  <div key={judgeIndex} className="bg-white p-2 rounded border border-gray-100 text-center">
+                                                    <div className="flex items-center justify-center mb-1">
+                                                      <span className="text-xs font-medium text-gray-600 mr-2">
+                                                        Judge {judgeIndex + 1}
+                                                      </span>
+                                                      <div className="flex items-center">
+                                                        <svg className="w-3 h-3 text-purple-500 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                                        </svg>
+                                                        <span className="text-xs font-bold text-purple-700">{rating.score}</span>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </li>
+                                );
+                              });
+                            })()}
+                          </ul>
+                        );
+                      })()
+                    )}
+                    
+                    {/* No Submissions Message */}
+                    {resultsSubmissions.length === 0 && !loadingJudgeRatings && (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500">No submissions available for judge evaluation.</p>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

@@ -45,6 +45,7 @@ interface Competition {
   coverImage?: string;
   submissionCount: number;
   hideOtherSubmissions: boolean;
+  judges?: string[];
 }
 
 interface Submission {
@@ -156,6 +157,23 @@ function ExpandableSection({ title, content, defaultContent, maxLines = 3, isExp
   );
 }
 
+// Utility function to check if user is in "View as User" mode
+const isViewingAsUser = (): boolean => {
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('viewAsUser') === 'true';
+  }
+  return false;
+};
+
+// Utility function to get effective user role (considers view as user mode)
+const getEffectiveUserRole = (user: ExtendedUser): string => {
+  if (user.role === 'judge' && isViewingAsUser()) {
+    return 'user';
+  }
+  return user.role || 'user';
+};
+
 export default function CompetitionDetail() {
   const { data: session, status } = useSession() as { data: ExtendedSession | null, status: string };
   const params = useParams();
@@ -167,6 +185,34 @@ export default function CompetitionDetail() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Add judge role detection - consider "View as User" mode
+  const effectiveRole = session?.user ? getEffectiveUserRole(session.user) : 'user';
+  const isJudge = effectiveRole === 'judge';
+  const [isAssignedJudge, setIsAssignedJudge] = useState(false);
+  
+  // Detect if judge is in normal judge mode (not "View as User" mode)
+  const [isJudgeMode, setIsJudgeMode] = useState(false);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewAsUser = urlParams.get('viewAsUser') === 'true';
+      const userRole = (session?.user as any)?.role;
+      
+      // Judge is in "judge mode" if they're a judge but NOT in "View as User" mode
+      const newJudgeMode = userRole === 'judge' && !viewAsUser;
+      
+      console.log('Judge mode state update:', {
+        userRole,
+        viewAsUser,
+        newJudgeMode,
+        currentJudgeMode: isJudgeMode
+      });
+      
+      setIsJudgeMode(newJudgeMode);
+    }
+  }, [session, searchParams]);
   
   // Expandable sections state
   const [expandedSections, setExpandedSections] = useState({
@@ -255,6 +301,14 @@ export default function CompetitionDetail() {
       const competitionData = await competitionRes.json();
       setCompetition(competitionData.data);
       
+      // Check if current judge is assigned to this competition
+      if (session?.user?.role === 'judge' && session?.user?.id && competitionData.data?.judges) {
+        const isAssigned = competitionData.data.judges.includes(session.user.id);
+        setIsAssignedJudge(isAssigned);
+      } else {
+        setIsAssignedJudge(false);
+      }
+      
       // Fetch submissions for this competition if it's in voting or completed status
       if (competitionData.data.status === 'voting' || competitionData.data.status === 'completed') {
         const submissionsRes = await fetch(`/api/photo-submissions?competition=${competitionId}`);
@@ -277,6 +331,18 @@ export default function CompetitionDetail() {
       fetchCompetitionData();
     }
   }, [competitionId, status]);
+
+  // Separate useEffect to handle judge assignment when mode changes
+  useEffect(() => {
+    if (competition && session?.user?.role === 'judge' && session?.user?.id) {
+      if (competition.judges) {
+        const isAssigned = competition.judges.includes(session.user.id);
+        setIsAssignedJudge(isAssigned);
+      } else {
+        setIsAssignedJudge(false);
+      }
+    }
+  }, [competition, session, isJudgeMode]);
 
   // Fetch user's submissions for this competition
   useEffect(() => {
@@ -907,201 +973,257 @@ export default function CompetitionDetail() {
             {competition.status === 'active' && (
               <div className="w-full px-4 py-4 bg-[#fffbe6] border-2 border-[#e0c36a] rounded-lg">
                 <div className="text-center">
-                  {/* Show submission count */}
-                  <div className="mb-2">
-                    <p className="text-[#1a4d5c] font-semibold">
-                      Your submissions: <span className="font-bold">{competition.userSubmissionsCount}</span> of <span className="font-bold">{competition.submissionLimit}</span>
-                    </p>
-                    {competition.hasSubmitted && !competition.canSubmitMore && (
-                      <p className="text-red-600 font-semibold mt-1 text-sm">
-                        You've reached the maximum number of submissions for this competition.
-                      </p>
-                    )}
-                    {competition.hasSubmitted && competition.canSubmitMore && (
-                      <p className="text-green-600 font-semibold mt-1 text-sm">
-                        You can submit {competition.submissionLimit - competition.userSubmissionsCount} more photo{competition.submissionLimit - competition.userSubmissionsCount !== 1 ? 's' : ''}.
-                      </p>
-                    )}
-                  </div>
-
-                  {showSubmitForm ? (
-                    <div>
-                      <h3 className="text-lg font-bold text-[#1a4d5c] mb-2">Submit Your Photo</h3>
-                      
-                      {submitError && (
-                        <div className="bg-red-50 border-l-4 border-red-400 p-3 mb-3 text-left rounded-md">
-                          <p className="text-red-700 font-semibold">{submitError}</p>
-                        </div>
-                      )}
-                      
-                      {fileSizeError && (
-                        <div className="bg-red-50 border-l-4 border-red-400 p-2 mt-2 rounded-md">
-                          <p className="text-red-700 text-sm font-semibold">{fileSizeError}</p>
-                        </div>
-                      )}
-                      
-                      <form onSubmit={handleSubmitPhoto} className="max-w-md mx-auto text-left">
-                        <div className="mb-3">
-                          <label htmlFor="photoTitle" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
-                            Photo Title <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            id="photoTitle"
-                            value={photoTitle}
-                            onChange={(e) => setPhotoTitle(e.target.value)}
-                            className="mt-1 block w-full px-3 py-2 text-[#1a4d5c] bg-white border border-[#e0c36a] rounded-lg shadow-sm focus:ring-2 focus:ring-[#2699a6] focus:border-[#2699a6] text-base"
-                            required
-                          />
-                        </div>
-                        
-                        <div className="mb-3">
-                          <label htmlFor="photoDescription" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
-                            Description <span className="text-red-500">*</span>
-                          </label>
-                          <textarea
-                            id="photoDescription"
-                            value={photoDescription}
-                            onChange={(e) => setPhotoDescription(e.target.value)}
-                            rows={3}
-                            className={`mt-1 block w-full px-3 py-2 text-[#1a4d5c] bg-white border rounded-lg shadow-sm focus:ring-2 focus:ring-[#2699a6] focus:border-[#2699a6] text-base resize-vertical ${
-                              photoDescription.length > 500 ? 'border-red-500' : 'border-[#e0c36a]'
-                            }`}
-                            maxLength={500}
-                            required
-                          />
-                          <div className="flex justify-between items-center mt-1">
-                            <p className={`text-xs ${
-                              photoDescription.length > 500 ? 'text-red-500' : 
-                              photoDescription.length > 450 ? 'text-yellow-600' : 'text-gray-500'
-                            }`}>
-                              {photoDescription.length}/500 characters
+                  {/* Judge restrictions - only apply when judge is not in "View as User" mode */}
+                  {isJudgeMode ? (
+                    <div className="mb-4">
+                      <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mb-4">
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-purple-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm text-purple-700">
+                              <strong>Judge Notice:</strong> As a judge{isAssignedJudge ? ' assigned to this competition' : ''}, you cannot submit photos. 
+                              {!isAssignedJudge && (
+                                <span> Click "Participate as User" below if you want to submit photos to this competition.</span>
+                              )}
+                              {isAssignedJudge && (
+                                <span> Your role is to evaluate submissions professionally.</span>
+                              )}
                             </p>
-                            {photoDescription.length > 500 && (
-                              <p className="text-xs text-red-500 font-medium">
-                                Description exceeds maximum length
-                              </p>
-                            )}
                           </div>
                         </div>
-                        
-                        <div className="mb-3">
-                          <label htmlFor="photoFile" className="block text-sm font-semibold text-[#1a4d5c] mb-1">
-                            Photo <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="file"
-                            id="photoFile"
-                            accept="image/*"
-                            onChange={handlePhotoFileChange}
-                            className="mt-1 block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border-[#e0c36a]"
-                            required
-                            disabled={isCompressing}
-                          />
-                          <p className="mt-1 text-xs text-gray-500">
-                            JPG, PNG or WebP up to 10MB (images over 3MB automatically optimized for high-quality desktop viewing)
-                          </p>
-                          
-                          {/* Compression status */}
-                          {showCompressionInfo && isCompressing && (
-                            <div className="mt-2 flex items-center text-sm text-[#2699a6]">
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#2699a6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Compressing image...
-                            </div>
-                          )}
-                          
-                          {/* Compression info */}
-                          {showCompressionInfo && compressionInfo && !isCompressing && (
-                            <div className="mt-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md p-2">
-                              ✓ {compressionInfo}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Terms and Conditions Agreement */}
-                        <div className="mb-4 p-3 bg-[#fffbe6] border border-[#e0c36a] rounded-lg">
-                          <div className="flex items-start space-x-3">
-                            <input
-                              type="checkbox"
-                              id="agreedToTerms"
-                              checked={agreedToTerms}
-                              onChange={(e) => setAgreedToTerms(e.target.checked)}
-                              className="mt-1 h-4 w-4 text-[#2699a6] focus:ring-[#2699a6] border-[#e0c36a] rounded"
-                              required
-                            />
-                            <label htmlFor="agreedToTerms" className="text-sm text-[#1a4d5c] leading-relaxed">
-                              <span className="font-semibold text-red-600">*</span> I confirm that I have carefully reviewed and agree to this competition's{' '}
-                              <button
-                                type="button"
-                                onClick={() => toggleSection('description')}
-                                className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
-                              >
-                                description
-                              </button>
-                              ,{' '}
-                              <button
-                                type="button"
-                                onClick={() => toggleSection('rules')}
-                                className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
-                              >
-                                rules & regulations
-                              </button>
-                              , and{' '}
-                              <button
-                                type="button"
-                                onClick={() => toggleSection('copyright')}
-                                className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
-                              >
-                                copyright terms
-                              </button>
-                              . I understand that by submitting my photo, I am bound by these terms and confirm that I own all rights to the submitted image.
-                            </label>
+                      </div>
+                      
+                      {/* Judge-specific action buttons */}
+                      <div className="text-center space-y-3">
+                        {!isAssignedJudge && (
+                          <div>
+                            <Link 
+                              href={`/dashboard/competitions/${competitionId}?viewAsUser=true`}
+                              className="inline-block px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold mr-3"
+                            >
+                              🎯 Participate as User
+                            </Link>
+                            <p className="text-xs text-gray-600 mt-2">
+                              Switch to user mode to submit photos to this competition
+                            </p>
                           </div>
-                        </div>
-                        
-                        <div className="flex justify-end space-x-3">
-                          <button
-                            type="button"
-                            onClick={() => setShowSubmitForm(false)}
-                            className="inline-flex items-center px-4 py-2 border-2 border-[#e0c36a] shadow-sm text-sm font-semibold rounded-lg text-[#1a4d5c] bg-[#fffbe6] hover:bg-[#e6f0f3]"
-                            disabled={isSubmitting || isCompressing}
+                        )}
+                        <div>
+                          <Link 
+                            href="/judge" 
+                            className="inline-block px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
                           >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={isSubmitting || isCompressing || !agreedToTerms || photoDescription.length > 500}
-                            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isSubmitting ? 'Submitting...' : isCompressing ? 'Processing...' : 'Submit Photo'}
-                          </button>
+                            Return to Judge Dashboard
+                          </Link>
                         </div>
-                      </form>
+                      </div>
                     </div>
                   ) : (
-                    <div>
-                      {submitSuccess && (
-                        <div className="bg-green-50 border-l-4 border-green-400 p-3 mb-3 rounded-md">
-                          <p className="text-green-700 font-semibold">{submitSuccess}</p>
+                    /* Regular user submission interface */
+                    <>
+                      {/* Show indicator when judge is in "View as User" mode */}
+                      {(session?.user as any)?.role === 'judge' && !isJudgeMode && (
+                        <div className="mb-4 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-blue-700">
+                                <strong>👤 User Mode:</strong> You're participating as a regular user. 
+                                <a href="/judge" className="underline font-semibold ml-1">Return to Judge Dashboard</a>
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       )}
                       
-                      {competition.canSubmitMore ? (
-                        <button
-                          onClick={() => setShowSubmitForm(true)}
-                          className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c]"
-                        >
-                          {competition.hasSubmitted ? 'Submit Another Photo' : 'Submit Your Photo'}
-                        </button>
-                      ) : null}
-                      
-                      <p className="mt-2 text-sm text-gray-500">
-                        Submission period ends on {formatDate(competition.endDate)}
-                      </p>
-                    </div>
+                      {userSubmissions.length < 3 ? (
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2">Submit Your Photo</h3>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Share your creativity with the community. You can submit up to 3 photos.
+                          </p>
+                          
+                          {/* Show submit form */}
+                          <form onSubmit={handleSubmitPhoto} className="space-y-4">
+                            {/* Photo upload section */}
+                            <div>
+                              <label htmlFor="photoFile" className="block text-sm font-medium text-[#1a4d5c] mb-2">
+                                Select Photo *
+                              </label>
+                              <input
+                                type="file"
+                                id="photoFile"
+                                accept="image/*"
+                                onChange={handlePhotoFileChange}
+                                className="block w-full text-sm text-[#1a4d5c] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#e6f0f3] file:text-[#1a4d5c] hover:file:bg-[#d1e6ed] border border-[#e0c36a] rounded-lg"
+                                disabled={isSubmitting || isCompressing}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                JPG, PNG or WebP up to 10MB
+                              </p>
+                              
+                              {/* File size error */}
+                              {fileSizeError && (
+                                <div className="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
+                                  ⚠️ {fileSizeError}
+                                </div>
+                              )}
+                              
+                              {/* Compression status */}
+                              {showCompressionInfo && isCompressing && (
+                                <div className="mt-2 flex items-center text-sm text-[#2699a6]">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#2699a6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Compressing image...
+                                </div>
+                              )}
+                              
+                              {/* Compression info */}
+                              {showCompressionInfo && compressionInfo && !isCompressing && (
+                                <div className="mt-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md p-2">
+                                  ✓ {compressionInfo}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Photo title */}
+                            <div>
+                              <label htmlFor="photoTitle" className="block text-sm font-medium text-[#1a4d5c] mb-2">
+                                Photo Title *
+                              </label>
+                              <input
+                                type="text"
+                                id="photoTitle"
+                                value={photoTitle}
+                                onChange={(e) => setPhotoTitle(e.target.value)}
+                                className="block w-full px-3 py-2 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c]"
+                                placeholder="Enter a catchy title for your photo"
+                                maxLength={100}
+                                disabled={isSubmitting || isCompressing}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">{photoTitle.length}/100 characters</p>
+                            </div>
+
+                            {/* Photo description */}
+                            <div>
+                              <label htmlFor="photoDescription" className="block text-sm font-medium text-[#1a4d5c] mb-2">
+                                Photo Description *
+                              </label>
+                              <textarea
+                                id="photoDescription"
+                                value={photoDescription}
+                                onChange={(e) => setPhotoDescription(e.target.value)}
+                                rows={3}
+                                className="block w-full px-3 py-2 border border-[#1a4d5c] rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4d5c] focus:border-[#1a4d5c] text-[#1a4d5c]"
+                                placeholder="Tell us about your photo, the story behind it, or your creative process..."
+                                maxLength={500}
+                                disabled={isSubmitting || isCompressing}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">{photoDescription.length}/500 characters</p>
+                            </div>
+
+                            {/* Terms agreement */}
+                            <div className="flex items-start">
+                              <input
+                                type="checkbox"
+                                id="agreedToTerms"
+                                checked={agreedToTerms}
+                                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                className="mt-1 h-4 w-4 text-[#1a4d5c] focus:ring-[#1a4d5c] border-gray-300 rounded"
+                                disabled={isSubmitting || isCompressing}
+                              />
+                              <label htmlFor="agreedToTerms" className="ml-2 text-sm text-gray-700">
+                                I confirm that I have reviewed and agree to the{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSection('rules')}
+                                  className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
+                                >
+                                  competition rules
+                                </button>
+                                {' '}and{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSection('copyright')}
+                                  className="text-[#2699a6] hover:text-[#1a4d5c] underline font-medium"
+                                >
+                                  copyright terms
+                                </button>
+                                .
+                              </label>
+                            </div>
+
+                            {/* Submit button */}
+                            <button
+                              type="submit"
+                              disabled={isSubmitting || isCompressing || !photoTitle.trim() || !photoDescription.trim() || !photoFile || !agreedToTerms}
+                              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-[#1a4d5c] to-[#2699a6] hover:from-[#2699a6] hover:to-[#1a4d5c] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1a4d5c] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Submitting...
+                                </>
+                              ) : isCompressing ? (
+                                'Processing Image...'
+                              ) : (
+                                'Submit Photo'
+                              )}
+                            </button>
+
+                            {/* Submit error */}
+                            {submitError && (
+                              <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-md">
+                                <div className="flex">
+                                  <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414-1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                  <div className="ml-3">
+                                    <p className="text-sm text-red-700">{submitError}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Submit success */}
+                            {submitSuccess && (
+                              <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-md">
+                                <div className="flex">
+                                  <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                  <div className="ml-3">
+                                    <p className="text-sm text-green-700">{submitSuccess}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </form>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <h3 className="text-lg font-semibold mb-2">Submission Limit Reached</h3>
+                          <p className="text-gray-600">You have already submitted the maximum of 3 photos for this competition.</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

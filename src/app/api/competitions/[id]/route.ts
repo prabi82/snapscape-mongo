@@ -36,16 +36,14 @@ export const config = {
 // GET a single competition
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
-
-    // Get the user session for user-specific data
     const session = await getServerSession(authOptions) as ExtendedSession | null;
     const userId = session?.user?.id;
 
-    const { id } = params;
+    const { id } = await params;
     if (!id) {
       return NextResponse.json(
         { success: false, message: 'Competition ID is required' },

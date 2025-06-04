@@ -6,11 +6,25 @@ import Rating from '@/models/Rating';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Competition from '@/models/Competition';
 
+// Define extended session types
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+}
+
+interface ExtendedSession {
+  user?: ExtendedUser;
+  expires: string;
+}
+
 // GET ratings (for a specific submission or by user)
 export async function GET(request: NextRequest) {
   try {
     // Check if user is authenticated
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     if (!session || !session.user) {
       return NextResponse.json(
         { success: false, message: 'Unauthorized' },
@@ -23,6 +37,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const photoId = url.searchParams.get('photo');
     const detailed = url.searchParams.get('detailed') === 'true';
+    const type = url.searchParams.get('type'); // 'judge' or undefined
 
     if (!photoId) {
       return NextResponse.json(
@@ -32,7 +47,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if admin and detailed mode
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = session.user?.role === 'admin';
     
     if (isAdmin && detailed) {
       // For admins requesting detailed ratings, return all ratings for the photo with user details
@@ -44,11 +59,32 @@ export async function GET(request: NextRequest) {
         success: true,
         data: ratings
       });
+    } else if (type === 'judge') {
+      // For judge evaluation tab - return ratings from judges only
+      const mongoose = require('mongoose');
+      const User = mongoose.model('User');
+      
+      // First get all judges
+      const judges = await User.find({ role: 'judge' }).select('_id');
+      const judgeIds = judges.map(judge => judge._id);
+      
+      // Then find ratings from judges for this photo
+      const judgeRatings = await Rating.find({ 
+        photo: photoId,
+        user: { $in: judgeIds }
+      })
+      .populate('user', 'name email role')
+      .sort({ createdAt: -1 });
+      
+      return NextResponse.json({
+        success: true,
+        data: judgeRatings
+      });
     } else {
       // Regular behavior - find the user's rating for this photo
       const rating = await Rating.findOne({
         photo: photoId,
-        user: session.user.id,
+        user: session.user?.id,
       });
 
       return NextResponse.json({
@@ -69,7 +105,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Check if user is authenticated
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     if (!session || !session.user) {
       return NextResponse.json(
         { success: false, message: 'Unauthorized' },
@@ -82,7 +118,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { photo: photoId, score } = body;
 
-    console.log('Received rating request:', { photoId, score, userId: session.user.id }); // Debug log
+    console.log('Received rating request:', { photoId, score, userId: session.user?.id }); // Debug log
 
     // Validate input
     if (!photoId || !score) {
@@ -118,7 +154,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is voting on their own photo
-    if (photo.user.toString() === session.user.id) {
+    if (photo.user.toString() === session.user?.id) {
       return NextResponse.json(
         { success: false, message: 'You cannot vote on your own photo' },
         { status: 400 }
@@ -128,7 +164,7 @@ export async function POST(request: NextRequest) {
     // Check if user has already rated this photo
     const existingRating = await Rating.findOne({
       photo: photoId,
-      user: session.user.id,
+      user: session.user?.id,
     });
 
     let rating;
@@ -141,7 +177,7 @@ export async function POST(request: NextRequest) {
       // Create new rating
       rating = await Rating.create({
         photo: photoId,
-        user: session.user.id,
+        user: session.user?.id,
         score,
       });
     }

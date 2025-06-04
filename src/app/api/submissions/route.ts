@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import PhotoSubmission from '@/models/PhotoSubmission';
 import Competition from '@/models/Competition';
 import dbConnect from '@/lib/dbConnect';
+import { authOptions } from '@/lib/auth';
+
+// Define a proper session type to fix TypeScript errors
+interface ExtendedSession {
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    image?: string;
+    role?: string;
+  };
+}
 
 // GET photo submissions
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions as any) as ExtendedSession | null;
     
     console.log('[API DEBUG] /api/submissions GET request URL:', req.url);
     console.log('[API DEBUG] Resolved session user ID:', session?.user?.id);
@@ -147,13 +159,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions as any) as ExtendedSession | null;
     
     // Check authentication
     if (!session || !session.user) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
+      );
+    }
+    
+    // Check for "View as User" mode in URL or referrer
+    const url = new URL(req.url);
+    const referer = req.headers.get('referer') || '';
+    const isViewingAsUser = url.searchParams.get('viewAsUser') === 'true' || referer.includes('viewAsUser=true');
+    
+    // Check if user is a judge - judges cannot submit photos to competitions
+    // UNLESS they are in "View as User" mode
+    if (session.user.role === 'judge' && !isViewingAsUser) {
+      return NextResponse.json(
+        { success: false, message: 'Judges are not allowed to submit photos to competitions. Please use "View as User" if you are not assigned as a judge for this competition.' },
+        { status: 403 }
       );
     }
     
@@ -183,6 +209,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, message: 'Competition is not active' },
         { status: 400 }
+      );
+    }
+    
+    // Additional check: If user was previously a judge and is assigned to this competition, prevent submission
+    // This handles the case where someone uses "View as User" but is still assigned as a judge
+    // Only block if they're NOT in "View as User" mode OR if they're assigned as judge to this specific competition
+    if (session.user.role === 'judge' && competition.judges && competition.judges.includes(session.user.id)) {
+      return NextResponse.json(
+        { success: false, message: 'You are assigned as a judge for this competition and cannot submit photos, even in "View as User" mode.' },
+        { status: 403 }
       );
     }
     

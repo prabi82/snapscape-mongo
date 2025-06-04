@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Image from 'next/image';
+import ProfileIncompleteNotification from '@/components/ProfileIncompleteNotification';
 
 // Icons for navigation
 const HomeIcon = () => (
@@ -106,10 +107,7 @@ export default function JudgeLayout({
   
   const navigation = [
     { name: 'Judge Dashboard', href: '/judge', icon: HomeIcon },
-    { name: 'Competitions', href: '/competitions', icon: CompetitionsIcon },
-    { name: 'Judge Submissions', href: '/competitions?status=voting', icon: JudgeIcon },
-    { name: 'All Submissions', href: '/submissions', icon: SubmissionsIcon },
-    { name: 'View as User', href: '/dashboard', icon: UserViewIcon },
+    { name: 'View as User', href: '/dashboard?viewAsUser=true', icon: UserViewIcon },
     { name: 'Profile', href: '/dashboard/profile', icon: ProfileIcon },
     { 
       name: 'Notifications', 
@@ -341,6 +339,45 @@ export default function JudgeLayout({
       {/* Main content */}
       <div className="lg:pl-64">
         <main className="py-6">
+          {/* Judge Mode Indicator & Role Switcher */}
+          <div className="mx-4 mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-400 p-4 rounded-lg shadow-md">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-purple-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-purple-800">
+                    Judge Mode Active
+                  </h3>
+                  <p className="text-sm text-purple-700">
+                    You have access to competition evaluation tools and judge-specific features.
+                  </p>
+                </div>
+              </div>
+              <div className="flex-shrink-0 flex gap-2">
+                <Link
+                  href="/dashboard?viewAsUser=true"
+                  className="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Switch to User Mode
+                </Link>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('preferredRole');
+                    window.location.href = '/role-selection';
+                  }}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Change Role
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <ProfileIncompleteNotification />
           {children}
         </main>
       </div>
@@ -351,15 +388,15 @@ export default function JudgeLayout({
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
           <span className="text-xs">Judge</span>
         </Link>
-        <Link href="/competitions" className="flex flex-col items-center text-[#1a4d5c]">
-          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} /></svg>
-          <span className="text-xs">Competitions</span>
+        <Link href="/dashboard/profile" className="flex flex-col items-center text-[#1a4d5c]">
+          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+          <span className="text-xs">Profile</span>
         </Link>
-        <Link href="/competitions?status=voting" className="flex flex-col items-center text-[#1a4d5c]">
-          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          <span className="text-xs">Judge</span>
+        <Link href="/dashboard/notifications" className="flex flex-col items-center text-[#1a4d5c]">
+          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+          <span className="text-xs">Notifications</span>
         </Link>
-        <Link href="/dashboard" className="flex flex-col items-center text-[#1a4d5c]">
+        <Link href="/dashboard?viewAsUser=true" className="flex flex-col items-center text-[#1a4d5c]">
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
           <span className="text-xs">User View</span>
         </Link>

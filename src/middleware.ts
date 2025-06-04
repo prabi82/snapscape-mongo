@@ -5,11 +5,17 @@ import { getToken } from 'next-auth/jwt';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
+  // Check for "View as User" mode for judges
+  const viewAsUser = request.nextUrl.searchParams.get('viewAsUser') === 'true';
+  
   // Check if the path is protected (dashboard, admin, or judge routes)
   const isProtectedRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/judge');
   const isAdminRoute = pathname.startsWith('/admin');
   const isJudgeRoute = pathname.startsWith('/judge');
   const isRootDashboard = pathname === '/dashboard' || pathname === '/dashboard/';
+  
+  // Check if this is a competition detail page that judges should be able to access
+  const isCompetitionDetailPage = pathname.match(/^\/dashboard\/competitions\/[^\/]+(?:\/.*)?$/);
   
   if (isProtectedRoute) {
     const token = await getToken({ 
@@ -26,7 +32,7 @@ export async function middleware(request: NextRequest) {
     
     // Debug: Log user role and path
     if (process.env.NODE_ENV === 'development') {
-      console.log(`Middleware: User ${token.email} with role ${token.role} accessing ${pathname}`);
+      console.log(`Middleware: User ${token.email} with role ${token.role} accessing ${pathname}${viewAsUser ? ' (View as User mode)' : ''}`);
     }
     
     // If admin route but user is not admin
@@ -59,17 +65,45 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(adminDashboardUrl);
     }
     
-    // Redirect judges to judge dashboard when they visit root dashboard
-    if (isRootDashboard && token.role === 'judge') {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Middleware: Judge user at /dashboard, redirecting to judge dashboard`);
+    // Judge-specific routing logic
+    if (token.role === 'judge') {
+      // Check if this is the role selection page itself
+      const isRoleSelectionPage = pathname === '/role-selection';
+      
+      // If judge is explicitly in "View as User" mode, allow dashboard access
+      if (viewAsUser) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Middleware: Judge in "View as User" mode, allowing dashboard access');
+        }
+        const response = NextResponse.next();
+        response.headers.set('X-View-As-User', 'true');
+        return response;
       }
       
-      const judgeDashboardUrl = new URL('/judge', request.url);
-      judgeDashboardUrl.searchParams.set('refresh', Date.now().toString());
-      judgeDashboardUrl.searchParams.set('source', 'middleware');
+      // If judge is accessing competition details (not in view as user mode), allow it but keep them in judge context
+      if (isCompetitionDetailPage) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Middleware: Judge accessing competition details, allowing access');
+        }
+        return NextResponse.next();
+      }
       
-      return NextResponse.redirect(judgeDashboardUrl);
+      // If judge tries to access root dashboard and it's not from role selection, redirect to role selection
+      if (isRootDashboard && !isRoleSelectionPage) {
+        // Check if they have a role preference (this should be handled by the client-side logic)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Middleware: Judge accessing dashboard, redirecting to role selection');
+        }
+        return NextResponse.redirect(new URL('/role-selection', request.url));
+      }
+      
+      // If judge is accessing other dashboard routes (not view as user mode) and not from role selection, redirect to role selection
+      if (pathname.startsWith('/dashboard') && !viewAsUser && !isRoleSelectionPage) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Middleware: Judge accessing dashboard route, redirecting to role selection');
+        }
+        return NextResponse.redirect(new URL('/role-selection', request.url));
+      }
     }
   }
   
@@ -99,6 +133,7 @@ export const config = {
     '/dashboard/:path*',
     '/admin/:path*',
     '/judge/:path*',
+    '/role-selection',
     '/api/:path*',
     '/profile/:path*',
   ],

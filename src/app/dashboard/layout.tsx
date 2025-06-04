@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Image from 'next/image';
@@ -68,6 +68,23 @@ export default function DashboardLayout({
   const pathname = usePathname() || '/dashboard';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  
+  // Check if user is a judge in "View as User" mode
+  const isJudgeViewingAsUser = () => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return (session?.user as any)?.role === 'judge' && urlParams.get('viewAsUser') === 'true';
+    }
+    return false;
+  };
+  
+  // Function to get URL with viewAsUser parameter preserved
+  const getNavigationUrl = (href: string) => {
+    if (isJudgeViewingAsUser()) {
+      return `${href}?viewAsUser=true`;
+    }
+    return href;
+  };
   
   useEffect(() => {
     // Redirect to homepage if not authenticated
@@ -155,7 +172,7 @@ export default function DashboardLayout({
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
-                    href={item.href}
+                    href={getNavigationUrl(item.href)}
                     className={`
                       flex items-center gap-3 px-4 py-3 text-base font-semibold rounded-xl transition-all
                       ${
@@ -253,7 +270,7 @@ export default function DashboardLayout({
                   {navigation.map((item) => (
                     <Link
                       key={item.name}
-                      href={item.href}
+                      href={getNavigationUrl(item.href)}
                       className={`
                         flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group
                         ${pathname.startsWith(item.href) 
@@ -329,25 +346,105 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="lg:pl-64">
         <main className="py-6">
+          {/* View as User Mode Indicator */}
+          {isJudgeViewingAsUser() && (
+            <div className="mx-4 mb-6 bg-gradient-to-r from-purple-50 to-blue-50 border-l-4 border-purple-400 p-4 rounded-lg shadow-md">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-purple-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-purple-800">
+                      Judge - View as User Mode
+                    </h3>
+                    <p className="text-sm text-purple-700">
+                      You are currently viewing the platform as a regular user. You can submit photos to competitions where you are not assigned as a judge.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 flex gap-2">
+                  <Link
+                    href="/judge"
+                    className="inline-flex items-center px-3 py-2 border border-purple-300 shadow-sm text-sm leading-4 font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                  >
+                    Return to Judge Mode
+                  </Link>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('preferredRole');
+                      window.location.href = '/role-selection';
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Switch Role
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Role Switcher for Judges (when not in View as User mode) */}
+          {(session?.user as any)?.role === 'judge' && !isJudgeViewingAsUser() && pathname.startsWith('/dashboard') && (
+            <div className="mx-4 mb-6 bg-gradient-to-r from-green-50 to-teal-50 border-l-4 border-green-400 p-4 rounded-lg shadow-md">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-green-800">
+                      Judge Access Detected
+                    </h3>
+                    <p className="text-sm text-green-700">
+                      You have judge privileges. Switch to judge mode for full judging features.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 flex gap-2">
+                  <Link
+                    href="/judge"
+                    className="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Switch to Judge Mode
+                  </Link>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('preferredRole');
+                      window.location.href = '/role-selection';
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Change Role
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <ProfileIncompleteNotification />
           {children}
         </main>
       </div>
       {/* Mobile Bottom Nav - visible on all dashboard pages */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#e0c36a] flex justify-around items-center py-2 md:hidden">
-        <Link href="/dashboard" className="flex flex-col items-center text-[#1a4d5c]">
+        <Link href={getNavigationUrl("/dashboard")} className="flex flex-col items-center text-[#1a4d5c]">
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
           <span className="text-xs">Feed</span>
         </Link>
-        <Link href="/dashboard/competitions" className="flex flex-col items-center text-[#1a4d5c]">
+        <Link href={getNavigationUrl("/dashboard/competitions")} className="flex flex-col items-center text-[#1a4d5c]">
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} /></svg>
           <span className="text-xs">Competitions</span>
         </Link>
-        <Link href="/dashboard/feedback" className="flex flex-col items-center text-[#1a4d5c]">
+        <Link href={getNavigationUrl("/dashboard/feedback")} className="flex flex-col items-center text-[#1a4d5c]">
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
           <span className="text-xs">Feedback</span>
         </Link>
-        <Link href="/dashboard/profile" className="flex flex-col items-center text-[#1a4d5c]">
+        <Link href={getNavigationUrl("/dashboard/profile")} className="flex flex-col items-center text-[#1a4d5c]">
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
           <span className="text-xs">Profile</span>
         </Link>
