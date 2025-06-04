@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Image from 'next/image';
 import ProfileIncompleteNotification from '@/components/ProfileIncompleteNotification';
+import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 // Icons for navigation
 const HomeIcon = () => (
@@ -208,33 +209,44 @@ export default function DashboardLayout({
           </div>
           <div className="p-5 border-t-2 border-[#e0c36a] bg-white rounded-br-3xl">
             {session?.user && (
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-full overflow-hidden bg-[#e0c36a]/20 flex items-center justify-center border-2 border-[#e0c36a]">
-                    {session.user.image ? (
-                      <Image
-                        src={session.user.image}
-                        alt={session.user.name || 'User'}
-                        width={40}
-                        height={40}
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      <span className="text-[#1a4d5c] font-bold text-lg">
-                        {session.user.name?.charAt(0).toUpperCase() || '?'}
-                      </span>
-                    )}
+              <>
+                <div className="flex items-center mb-3">
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-full overflow-hidden bg-[#e0c36a]/20 flex items-center justify-center border-2 border-[#e0c36a]">
+                      {session.user.image ? (
+                        <Image
+                          src={session.user.image}
+                          alt={session.user.name || 'User'}
+                          width={40}
+                          height={40}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <span className="text-[#1a4d5c] font-bold text-lg">
+                          {session.user.name?.charAt(0).toUpperCase() || '?'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-base font-semibold text-[#1a4d5c] truncate">
+                      {session.user.name}
+                    </p>
+                    <p className="text-xs font-medium text-[#2699a6] truncate">
+                      {session.user.email}
+                    </p>
                   </div>
                 </div>
-                <div className="ml-3">
-                  <p className="text-base font-semibold text-[#1a4d5c] truncate">
-                    {session.user.name}
-                  </p>
-                  <p className="text-xs font-medium text-[#2699a6] truncate">
-                    {session.user.email}
-                  </p>
+                
+                {/* PWA Install Prompt */}
+                <div className="flex justify-center">
+                  <PWAInstallPrompt 
+                    showText={true}
+                    buttonClass="text-xs px-3 py-2 bg-[#2699a6] hover:bg-[#1a4d5c] border-[#e0c36a]"
+                    iconSize={16}
+                  />
                 </div>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -308,7 +320,7 @@ export default function DashboardLayout({
             
             {session?.user && (
               <div className="p-4 border-t border-gray-200">
-                <div className="flex items-center">
+                <div className="flex items-center mb-3">
                   <div className="flex-shrink-0">
                     <div className="h-8 w-8 rounded-full overflow-hidden bg-indigo-200 flex items-center justify-center">
                       {session.user.image ? (
@@ -334,6 +346,15 @@ export default function DashboardLayout({
                       {session.user.email}
                     </p>
                   </div>
+                </div>
+                
+                {/* PWA Install Prompt for Mobile */}
+                <div className="flex justify-center">
+                  <PWAInstallPrompt 
+                    showText={true}
+                    buttonClass="text-xs px-3 py-2"
+                    iconSize={14}
+                  />
                 </div>
               </div>
             )}
