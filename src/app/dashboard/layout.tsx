@@ -242,6 +242,7 @@ export default function DashboardLayout({
                 <div className="flex justify-center">
                   <PWAInstallPrompt 
                     showText={true}
+                    showButton={true}
                     buttonClass="text-xs px-3 py-2 bg-[#2699a6] hover:bg-[#1a4d5c] border-[#e0c36a]"
                     iconSize={16}
                   />
@@ -352,6 +353,7 @@ export default function DashboardLayout({
                 <div className="flex justify-center">
                   <PWAInstallPrompt 
                     showText={true}
+                    showButton={true}
                     buttonClass="text-xs px-3 py-2"
                     iconSize={14}
                   />

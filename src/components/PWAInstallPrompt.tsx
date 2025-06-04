@@ -12,12 +12,14 @@ interface PWAInstallPromptProps {
   showText?: boolean;
   buttonClass?: string;
   iconSize?: number;
+  showButton?: boolean;
 }
 
 export default function PWAInstallPrompt({ 
   showText = true, 
   buttonClass = "",
-  iconSize = 20 
+  iconSize = 20,
+  showButton = false
 }: PWAInstallPromptProps) {
   const [isInstallable, setIsInstallable] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -139,21 +141,25 @@ export default function PWAInstallPrompt({
     return null;
   }
 
-  // Install button component
-  const InstallButton = () => (
-    <button
-      onClick={handleInstall}
-      className={`inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${buttonClass}`}
-      aria-label="Install SnapScape as an app"
-    >
-      <Download size={iconSize} />
-      {showText && (
-        <span className="font-medium">
-          Install App
-        </span>
-      )}
-    </button>
-  );
+  // Install button component (only for dashboard navigation)
+  const InstallButton = () => {
+    if (!showButton || !isInstallable) return null;
+    
+    return (
+      <button
+        onClick={handleInstall}
+        className={`inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${buttonClass}`}
+        aria-label="Install SnapScape as an app"
+      >
+        <Download size={iconSize} />
+        {showText && (
+          <span className="font-medium">
+            Install App
+          </span>
+        )}
+      </button>
+    );
+  };
 
   // Native installation banner (when Chrome provides beforeinstallprompt)
   const NativeInstallBanner = () => {
@@ -233,9 +239,9 @@ export default function PWAInstallPrompt({
 
   return (
     <>
-      <InstallButton />
       <NativeInstallBanner />
       <CustomInstallBanner />
+      <InstallButton />
     </>
   );
 } 
