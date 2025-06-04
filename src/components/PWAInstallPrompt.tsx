@@ -40,47 +40,81 @@ export default function PWAInstallPrompt({
 
     // Enhanced detection for already installed PWA
     const checkIfAppInstalled = () => {
+      console.log('🔍 Checking if SnapScape PWA is installed...');
+      
       // Method 1: Check if running in standalone mode (PWA is launched from home screen)
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      console.log('📱 Standalone mode:', isStandalone);
       
       // Method 2: iOS Safari specific check
       const isInWebAppiOS = (window.navigator as any).standalone === true;
+      console.log('🍎 iOS PWA mode:', isInWebAppiOS);
       
       // Method 3: Android app referrer check
       const isAndroidInstalled = document.referrer.includes('android-app://');
+      console.log('🤖 Android app referrer:', isAndroidInstalled);
       
       // Method 4: Check if launched from installed PWA (Chrome/Edge)
       const isLaunchedFromPWA = window.location.search.includes('source=pwa') || 
                                 window.location.search.includes('utm_source=homescreen');
+      console.log('🚀 Launched from PWA:', isLaunchedFromPWA);
       
       // Method 5: Check if the page was opened via app protocol
       const isAppProtocol = window.location.protocol === 'app:';
+      console.log('🔗 App protocol:', isAppProtocol);
       
       // Method 6: Additional check for standalone display mode via CSS media query
       const isStandaloneCSS = window.matchMedia('(display-mode: standalone)').matches ||
                               window.matchMedia('(display-mode: fullscreen)').matches ||
                               window.matchMedia('(display-mode: minimal-ui)').matches;
+      console.log('🎨 Standalone CSS:', isStandaloneCSS);
       
-      // Method 7: Check for PWA specific viewport (some browsers)
-      const isPWAViewport = window.outerWidth === window.innerWidth && 
-                           window.outerHeight === window.innerHeight;
-      
-      // Method 8: Check localStorage for previous installation
+      // Method 7: Check localStorage for previous installation
       const wasInstalled = localStorage.getItem('snapscape-pwa-installed') === 'true';
+      console.log('💾 LocalStorage installed:', wasInstalled);
       
-      return isStandalone || isInWebAppiOS || isAndroidInstalled || 
-             isLaunchedFromPWA || isAppProtocol || isStandaloneCSS || wasInstalled;
+      // Method 8: Check if PWA is in the list of installed apps (when available)
+      const checkInstalledApps = async () => {
+        if ('getInstalledRelatedApps' in navigator) {
+          try {
+            const relatedApps = await (navigator as any).getInstalledRelatedApps();
+            const isInInstalledApps = relatedApps.length > 0;
+            console.log('📱 Related apps check:', isInInstalledApps);
+            return isInInstalledApps;
+          } catch (error) {
+            console.log('❌ Related apps check failed:', error);
+            return false;
+          }
+        }
+        return false;
+      };
+      
+      // Method 9: Check display mode from window
+      const currentDisplayMode = window.matchMedia('(display-mode: standalone)').matches ? 'standalone' :
+                                 window.matchMedia('(display-mode: fullscreen)').matches ? 'fullscreen' :
+                                 window.matchMedia('(display-mode: minimal-ui)').matches ? 'minimal-ui' : 'browser';
+      console.log('🖥️ Current display mode:', currentDisplayMode);
+      
+      const isInstalled = isStandalone || isInWebAppiOS || isAndroidInstalled || 
+                         isLaunchedFromPWA || isAppProtocol || isStandaloneCSS || wasInstalled;
+      
+      console.log('✅ Final installation status:', isInstalled);
+      
+      return isInstalled;
     };
 
     // Check if app is already installed
     if (checkIfAppInstalled()) {
       setIsInstalled(true);
-      console.log('SnapScape PWA is already installed - hiding install prompts');
+      console.log('🎉 SnapScape PWA is already installed - hiding install prompts');
       return;
     }
 
+    console.log('📋 SnapScape PWA not detected as installed - showing install options');
+
     // Handle beforeinstallprompt event (Chrome's native prompt)
     const handler = (e: Event) => {
+      console.log('📥 beforeinstallprompt event received');
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setIsInstallable(true);
@@ -88,6 +122,7 @@ export default function PWAInstallPrompt({
       // Show install banner immediately when we get the native prompt
       setTimeout(() => {
         setShowBanner(true);
+        console.log('🔔 Showing native install banner');
       }, 1000);
     };
 
@@ -98,6 +133,7 @@ export default function PWAInstallPrompt({
     if ((window as any).deferredPrompt) {
       setDeferredPrompt((window as any).deferredPrompt);
       setIsInstallable(true);
+      console.log('📌 Found existing deferredPrompt');
     }
 
     // For mobile devices, show custom install banner even without native prompt
@@ -111,13 +147,16 @@ export default function PWAInstallPrompt({
         // Show custom banner after user has spent some time on the site
         setTimeout(() => {
           setShowCustomBanner(true);
+          console.log('📱 Showing custom mobile install banner');
         }, 5000); // Show after 5 seconds
+      } else {
+        console.log('🚫 Install banner recently dismissed, not showing');
       }
     }
 
     // Listen for app installation event to update state
     const handleAppInstalled = () => {
-      console.log('SnapScape PWA was just installed');
+      console.log('🎊 SnapScape PWA was just installed!');
       setIsInstalled(true);
       setShowBanner(false);
       setShowCustomBanner(false);
@@ -126,6 +165,7 @@ export default function PWAInstallPrompt({
       
       // Store installation status
       localStorage.setItem('snapscape-pwa-installed', 'true');
+      console.log('💾 Stored installation status in localStorage');
     };
 
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -140,11 +180,12 @@ export default function PWAInstallPrompt({
     if (deferredPrompt) {
       // Use native Chrome install prompt
       try {
+        console.log('🚀 Starting PWA installation process...');
         await deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         
         if (outcome === 'accepted') {
-          console.log('PWA installation accepted');
+          console.log('✅ PWA installation accepted by user');
           setDeferredPrompt(null);
           setIsInstallable(false);
           setShowBanner(false);
@@ -153,14 +194,19 @@ export default function PWAInstallPrompt({
           
           // Store installation status
           localStorage.setItem('snapscape-pwa-installed', 'true');
+          console.log('💾 Marked app as installed in localStorage');
+          
+          // Show success message
+          alert('🎉 SnapScape has been installed! You can now access it from your home screen.');
         } else {
-          console.log('PWA installation dismissed');
+          console.log('❌ PWA installation dismissed by user');
         }
       } catch (error) {
-        console.error('PWA installation error:', error);
+        console.error('💥 PWA installation error:', error);
       }
     } else {
       // Fallback: Show instructions for manual installation
+      console.log('📖 Showing manual installation instructions');
       showManualInstallInstructions();
     }
   };
@@ -178,15 +224,45 @@ export default function PWAInstallPrompt({
       instructions = 'Look for the install icon in your browser\'s address bar or check the browser menu';
     }
     
-    alert(`Install SnapScape as an app:\n\n${instructions}`);
+    // After showing instructions, assume they might install it manually
+    setTimeout(() => {
+      if (confirm(`Install SnapScape as an app:\n\n${instructions}\n\nDid you successfully install the app?`)) {
+        // User confirmed they installed it manually
+        localStorage.setItem('snapscape-pwa-installed', 'true');
+        setIsInstalled(true);
+        setShowBanner(false);
+        setShowCustomBanner(false);
+        console.log('✅ User confirmed manual installation');
+      }
+    }, 100);
   };
 
   const handleDismissBanner = () => {
+    console.log('🚫 User dismissed install banner');
     setShowBanner(false);
     setShowCustomBanner(false);
     // Remember dismissal for 24 hours
     localStorage.setItem('pwa-banner-dismissed', Date.now().toString());
   };
+
+  // Debug function to reset installation status (for testing)
+  const resetInstallationStatus = () => {
+    localStorage.removeItem('snapscape-pwa-installed');
+    localStorage.removeItem('pwa-banner-dismissed');
+    setIsInstalled(false);
+    console.log('🔄 Reset installation status for testing');
+  };
+
+  // Add keyboard shortcut for testing (Ctrl+Shift+R)
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        resetInstallationStatus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
 
   // Don't show if already installed
   if (isInstalled) {
