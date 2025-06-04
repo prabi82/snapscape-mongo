@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import ReCaptchaV3 from '@/components/ReCaptcha';
+import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 // Component that uses useSearchParams
 function HomeWithSearchParams() {
@@ -187,6 +188,9 @@ function HomeWithSearchParams() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-[#e6f0f3] to-[#1a4d5c]">
+      {/* PWA Install Banner for Mobile Users */}
+      <PWAInstallPrompt />
+      
       {/* Invisible reCAPTCHA v3 */}
       <ReCaptchaV3
         siteKey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LegLkMrAAAAAOSRdKTQ33Oa6UT4EzOvqdhsSpM3"}
