@@ -38,13 +38,44 @@ export default function PWAInstallPrompt({
     
     setIsMobile(checkMobile());
 
+    // Enhanced detection for already installed PWA
+    const checkIfAppInstalled = () => {
+      // Method 1: Check if running in standalone mode (PWA is launched from home screen)
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      
+      // Method 2: iOS Safari specific check
+      const isInWebAppiOS = (window.navigator as any).standalone === true;
+      
+      // Method 3: Android app referrer check
+      const isAndroidInstalled = document.referrer.includes('android-app://');
+      
+      // Method 4: Check if launched from installed PWA (Chrome/Edge)
+      const isLaunchedFromPWA = window.location.search.includes('source=pwa') || 
+                                window.location.search.includes('utm_source=homescreen');
+      
+      // Method 5: Check if the page was opened via app protocol
+      const isAppProtocol = window.location.protocol === 'app:';
+      
+      // Method 6: Additional check for standalone display mode via CSS media query
+      const isStandaloneCSS = window.matchMedia('(display-mode: standalone)').matches ||
+                              window.matchMedia('(display-mode: fullscreen)').matches ||
+                              window.matchMedia('(display-mode: minimal-ui)').matches;
+      
+      // Method 7: Check for PWA specific viewport (some browsers)
+      const isPWAViewport = window.outerWidth === window.innerWidth && 
+                           window.outerHeight === window.innerHeight;
+      
+      // Method 8: Check localStorage for previous installation
+      const wasInstalled = localStorage.getItem('snapscape-pwa-installed') === 'true';
+      
+      return isStandalone || isInWebAppiOS || isAndroidInstalled || 
+             isLaunchedFromPWA || isAppProtocol || isStandaloneCSS || wasInstalled;
+    };
+
     // Check if app is already installed
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    const isInWebAppiOS = (window.navigator as any).standalone === true;
-    const isAndroidInstalled = document.referrer.includes('android-app://');
-    
-    if (isStandalone || isInWebAppiOS || isAndroidInstalled) {
+    if (checkIfAppInstalled()) {
       setIsInstalled(true);
+      console.log('SnapScape PWA is already installed - hiding install prompts');
       return;
     }
 
@@ -70,7 +101,7 @@ export default function PWAInstallPrompt({
     }
 
     // For mobile devices, show custom install banner even without native prompt
-    if (checkMobile()) {
+    if (checkMobile() && !checkIfAppInstalled()) {
       // Check if user has dismissed the banner recently
       const lastDismissed = localStorage.getItem('pwa-banner-dismissed');
       const now = Date.now();
@@ -84,7 +115,25 @@ export default function PWAInstallPrompt({
       }
     }
 
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    // Listen for app installation event to update state
+    const handleAppInstalled = () => {
+      console.log('SnapScape PWA was just installed');
+      setIsInstalled(true);
+      setShowBanner(false);
+      setShowCustomBanner(false);
+      setDeferredPrompt(null);
+      setIsInstallable(false);
+      
+      // Store installation status
+      localStorage.setItem('snapscape-pwa-installed', 'true');
+    };
+
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
   }, []);
 
   const handleInstall = async () => {
@@ -101,6 +150,9 @@ export default function PWAInstallPrompt({
           setShowBanner(false);
           setShowCustomBanner(false);
           setIsInstalled(true);
+          
+          // Store installation status
+          localStorage.setItem('snapscape-pwa-installed', 'true');
         } else {
           console.log('PWA installation dismissed');
         }
